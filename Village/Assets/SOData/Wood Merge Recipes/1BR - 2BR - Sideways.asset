@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 835dbf8b0503983459892746a19b4bc8, type: 3}
+  m_Name: 1BR - 2BR - Sideways
+  m_EditorClassIdentifier: Assembly-CSharp::WoodMergeRecipe
+  InputA: 0
+  InputB: 1
+  Orientation: 1
+  ResultPrefab: {fileID: 2674382124876653722, guid: 634020ad2608c4d4eb368fe0db8a8a09, type: 3}

@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b88dd8840c5e824b8c41111951f1ad5, type: 3}
+  m_Name: Base
+  m_EditorClassIdentifier: Assembly-CSharp::PlacementSO
+  Entities:
+  - {fileID: 11400000, guid: 2339bc06ba77b6642a7f43cdbbc4b6f2, type: 2}

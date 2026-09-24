@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fca9e232c77ebe1449c1bbd8e3cfff7c, type: 3}
+  m_Name: Wood-2BR-1BR-Placeable Data
+  m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
+  Name: Wood-2BR-1BR
+  Icon: {fileID: -4520544496107484141, guid: 60e80b0fa23ea904b92263803d64319c, type: 3}
+  Size: {x: 2, y: 2}
+  mask: 01010000
+  Prefab: {fileID: 2674382124876653722, guid: 634020ad2608c4d4eb368fe0db8a8a09, type: 3}

@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fca9e232c77ebe1449c1bbd8e3cfff7c, type: 3}
+  m_Name: Tree- Placeable Data
+  m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
+  Name: Tree
+  Icon: {fileID: 21300000, guid: cd221d2235472c94491e607ae42942dd, type: 3}
+  Size: {x: 3, y: 3}
+  mask: 010101010101010101
+  Prefab: {fileID: -6530726596435198018, guid: 65e2a1285ff98574992636c29cc9d54e, type: 3}
