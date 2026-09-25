@@ -14,6 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
   Name: Wood-2BR
   Icon: {fileID: -4520544496107484141, guid: 60e80b0fa23ea904b92263803d64319c, type: 3}
-  Size: {x: 1, y: 1}
-  mask: 01
+  size: {x: 1, y: 2, z: 1}
+  layers:
+  - cells: 01
+  - cells: 01
+  layoutSize: {x: 1, y: 2, z: 1}
+  legacySize: {x: 1, y: 1}
+  legacyMask: 
   Prefab: {fileID: 473603992209207643, guid: f167de33ebc3e8f458583dc38a89ddb0, type: 3}

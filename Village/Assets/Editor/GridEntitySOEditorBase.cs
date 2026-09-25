@@ -1,34 +1,42 @@
 using UnityEditor;
 using UnityEngine;
 
-// DİKKAT: Bunda [CustomEditor] YOK — bu yüzden hiçbir SO'ya otomatik atanmıyor
 public abstract class GridEntitySOEditorBase : Editor
 {
     public override void OnInspectorGUI()
     {
+        var so = (GridEntitySOBase)target;
+        so.EnsureLayout();
         serializedObject.Update();
 
-        SerializedProperty sizeProp = serializedObject.FindProperty("Size");
-        EditorGUILayout.PropertyField(sizeProp);
-
-        int width = Mathf.Max(1, (int)sizeProp.vector2Value.x);
-        int height = Mathf.Max(1, (int)sizeProp.vector2Value.y);
-
-        SerializedProperty maskProp = serializedObject.FindProperty("mask");
-        int requiredLength = width * height;
-        if (maskProp.arraySize != requiredLength)
-            maskProp.arraySize = requiredLength;
-
-        EditorGUILayout.Space();
-        for (int y = height - 1; y >= 0; y--)
+        EditorGUI.BeginChangeCheck();
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("size"));
+        if (EditorGUI.EndChangeCheck())
         {
-            EditorGUILayout.BeginHorizontal();
-            for (int x = 0; x < width; x++)
+            serializedObject.ApplyModifiedProperties();
+            so.EnsureLayout();
+            serializedObject.Update();
+        }
+
+        Vector3Int size = so.Size;
+        SerializedProperty layersProp = serializedObject.FindProperty("layers");
+
+        for (int y = size.y - 1; y >= 0; y--) // üst katman en üstte görünsün
+        {
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField(y == 0 ? "Katman 0 (zemin)" : $"Katman {y}", EditorStyles.boldLabel);
+
+            SerializedProperty cells = layersProp.GetArrayElementAtIndex(y).FindPropertyRelative("cells");
+            for (int z = size.z - 1; z >= 0; z--)
             {
-                SerializedProperty cell = maskProp.GetArrayElementAtIndex(y * width + x);
-                cell.boolValue = GUILayout.Toggle(cell.boolValue, "", GUILayout.Width(30), GUILayout.Height(30));
+                EditorGUILayout.BeginHorizontal();
+                for (int x = 0; x < size.x; x++)
+                {
+                    SerializedProperty cell = cells.GetArrayElementAtIndex(z * size.x + x);
+                    cell.boolValue = GUILayout.Toggle(cell.boolValue, "", GUILayout.Width(30), GUILayout.Height(30));
+                }
+                EditorGUILayout.EndHorizontal();
             }
-            EditorGUILayout.EndHorizontal();
         }
         EditorGUILayout.Space();
 
@@ -37,7 +45,7 @@ public abstract class GridEntitySOEditorBase : Editor
         while (prop.NextVisible(enterChildren))
         {
             enterChildren = false;
-            if (prop.name == "Size" || prop.name == "mask" || prop.name == "m_Script")
+            if (prop.name == "size" || prop.name == "layers" || prop.name == "m_Script")
                 continue;
             EditorGUILayout.PropertyField(prop, true);
         }
@@ -46,8 +54,25 @@ public abstract class GridEntitySOEditorBase : Editor
     }
 }
 
-// Her concrete SO tipi için TEK SATIR
 [CustomEditor(typeof(GridBaseSO))]
 public class GridBaseSOEditor : GridEntitySOEditorBase { }
 [CustomEditor(typeof(GridPlaceableSO))]
 public class GridPlaceableSOEditor : GridEntitySOEditorBase { }
+
+public static class GridEntityMigration
+{
+    [MenuItem("Tools/Grid/Eski 2B Size'ları 3B'ye Çevir")]
+    private static void MigrateAll()
+    {
+        int count = 0;
+        foreach (string guid in AssetDatabase.FindAssets("t:GridEntitySOBase"))
+        {
+            var so = AssetDatabase.LoadAssetAtPath<GridEntitySOBase>(AssetDatabase.GUIDToAssetPath(guid));
+            so.EnsureLayout();
+            EditorUtility.SetDirty(so);
+            count++;
+        }
+        AssetDatabase.SaveAssets();
+        Debug.Log($"{count} grid entity asset'i güncellendi.");
+    }
+}

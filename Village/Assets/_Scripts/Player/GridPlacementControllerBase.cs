@@ -73,8 +73,7 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
         TEntity prefab = GetPrefab(obj - 1);
         if (prefab == null) return;
 
-        var (size, _) = prefab.GetFootprint();
-        float step = Mathf.Max(1f, size.x); // her entity arası boşluk, footprint genişliğine göre
+        float step = Mathf.Max(1, prefab.GetFootprint().Size.x); // her entity arası boşluk, footprint genişliğine göre
 
         Vector3 delta = end - start;
 

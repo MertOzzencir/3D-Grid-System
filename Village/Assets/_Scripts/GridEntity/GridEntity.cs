@@ -6,19 +6,17 @@ public abstract class GridEntity : MonoBehaviour
     [SerializeField] private GridEntitySOBase data;
     [SerializeField] private GridMaskRotator.Rotation rotation = GridMaskRotator.Rotation.Deg0;
 
-    public Vector2 PlacedSize { get; private set; }
-    public bool[] PlacedMask { get; private set; }
+    // Yerleştirildiği andaki footprint. Sonradan rotasyon değişse bile bu sabit kalır.
+    public GridFootprint PlacedFootprint { get; private set; }
 
     public virtual void OnPlaced(Vector3Int origin)
     {
         OriginWorldPosition = origin;
-        var (size, mask) = GetFootprint();
-        PlacedSize = size;
-        PlacedMask = mask; 
+        PlacedFootprint = GetFootprint();
     }
 
-    public (Vector2 size, bool[] mask) GetFootprint()
-        => GridMaskRotator.Rotate(data.Size, data.mask, rotation);
+    public GridFootprint GetFootprint()
+        => GridMaskRotator.Rotate(data.GetFootprint(), rotation);
 
     public void RotateFootprint()
         => rotation = (GridMaskRotator.Rotation)(((int)rotation + 1) % 4);

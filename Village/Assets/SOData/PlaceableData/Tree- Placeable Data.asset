@@ -14,6 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
   Name: Tree
   Icon: {fileID: 21300000, guid: cd221d2235472c94491e607ae42942dd, type: 3}
-  Size: {x: 3, y: 3}
-  mask: 010101010101010101
+  size: {x: 3, y: 4, z: 3}
+  layers:
+  - cells: 000100010101000100
+  - cells: 000100010101000100
+  - cells: 000100010101000100
+  - cells: 000000000100000000
+  layoutSize: {x: 3, y: 4, z: 3}
+  legacySize: {x: 3, y: 3}
+  legacyMask: 
   Prefab: {fileID: -6530726596435198018, guid: 65e2a1285ff98574992636c29cc9d54e, type: 3}

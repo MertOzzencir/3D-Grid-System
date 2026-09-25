@@ -14,6 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
   Name: Axe
   Icon: {fileID: 1287649992867056945, guid: 6eaa9958d83ec43499e946a21edba283, type: 3}
-  Size: {x: 1, y: 1}
-  mask: 01
+  size: {x: 1, y: 2, z: 1}
+  layers:
+  - cells: 01
+  - cells: 01
+  layoutSize: {x: 1, y: 2, z: 1}
+  legacySize: {x: 1, y: 1}
+  legacyMask: 
   Prefab: {fileID: 8068828346316012274, guid: b80b4de3ca977a7419707d0a0c719a50, type: 3}

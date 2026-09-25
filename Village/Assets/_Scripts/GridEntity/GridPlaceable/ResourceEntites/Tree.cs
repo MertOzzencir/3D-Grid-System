@@ -30,7 +30,7 @@ public class Tree : ResourceEntity, IToolTarget
         Vector3 point = ray.GetPoint(enter);
 
         float maxRadius = 2f;
-        Vector3 center = transform.position + new Vector3(PlacedSize.x / 2, 0, PlacedSize.y / 2);
+        Vector3 center = transform.position + new Vector3(PlacedFootprint.Size.x / 2f, 0, PlacedFootprint.Size.z / 2f);
         if (Vector3.Distance(point, center) > maxRadius)
             return transform.position;
 

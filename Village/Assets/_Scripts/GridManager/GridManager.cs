@@ -11,6 +11,9 @@ public class GridManager : MonoBehaviour
     public Dictionary<Vector3Int, GridData> Grids = new Dictionary<Vector3Int, GridData>();
 
     private GridSaveManager saveManager;
+
+    private Vector3Int ManagerPosition => Vector3Int.RoundToInt(transform.position);
+
     private void Awake()
     {
         saveManager = GetComponent<GridSaveManager>();
@@ -30,21 +33,12 @@ public class GridManager : MonoBehaviour
     private void CreateGridData()
     {
         for (int y = 0; y < GridSize.y; y++)
-        {
             for (int z = 0; z < GridSize.z; z++)
-            {
                 for (int x = 0; x < GridSize.x; x++)
                 {
-                    Vector3Int managerPos = new Vector3Int(
-    Mathf.RoundToInt(transform.position.x),
-    Mathf.RoundToInt(transform.position.y),
-    Mathf.RoundToInt(transform.position.z)
-);
-                    Grids[new Vector3Int(x, y, z)] = new GridData(managerPos + new Vector3Int(x, y, z));
+                    Vector3Int index = new Vector3Int(x, y, z);
+                    Grids[index] = new GridData(ManagerPosition + index);
                 }
-            }
-        }
-
     }
     public void CreateSavedGridEntities()
     {
@@ -58,21 +52,12 @@ public class GridManager : MonoBehaviour
 
     public bool CanPlaceGeneric<T>(T entity, Vector3 position, Func<GridData, object> slotGetter) where T : GridEntity
     {
-        var (size, mask) = entity.GetFootprint();
         Vector3Int origin = GetIndexFromWorldPosition(position);
-        int width = Mathf.Max(1, (int)size.x);
-        int depth = Mathf.Max(1, (int)size.y);
 
-        for (int z = 0; z < depth; z++)
+        foreach (Vector3Int offset in entity.GetFootprint().FilledCells())
         {
-            for (int x = 0; x < width; x++)
-            {
-                if (mask != null && !mask[z * width + x]) continue;
-
-                Vector3Int cell = new Vector3Int(origin.x + x, origin.y, origin.z + z);
-                if (!Grids.TryGetValue(cell, out GridData data)) return false;
-                if (slotGetter(data) != null) return false;
-            }
+            if (!Grids.TryGetValue(origin + offset, out GridData data)) return false;
+            if (slotGetter(data) != null) return false;
         }
         return true;
     }
@@ -81,55 +66,36 @@ public class GridManager : MonoBehaviour
         if (!CanPlaceGeneric(entity, position, slotGetter))
             return false;
 
-        var (size, mask) = entity.GetFootprint();
         Vector3Int origin = GetIndexFromWorldPosition(position);
-        int width = Mathf.Max(1, (int)size.x);
-        int depth = Mathf.Max(1, (int)size.y);
 
-        for (int z = 0; z < depth; z++)
+        foreach (Vector3Int offset in entity.GetFootprint().FilledCells())
         {
-            for (int x = 0; x < width; x++)
-            {
-                if (mask != null && !mask[z * width + x]) continue;
-
-                Vector3Int cell = new Vector3Int(origin.x + x, origin.y, origin.z + z);
-                slotSetter(Grids[cell], entity);
-                if (x == 0 && z == 0) Grids[cell].IsOrigin = true;
-            }
+            GridData data = Grids[origin + offset];
+            slotSetter(data, entity);
+            if (offset == Vector3Int.zero) data.IsOrigin = true;
         }
 
-        Vector3Int originWorldPos = Grids[origin].WorldPosition;
+        // Origin hücresi mask'te boş olsa bile doğru dünya pozisyonunu verir
+        Vector3Int originWorldPos = ManagerPosition + origin;
         entity.transform.position = originWorldPos;
         entity.OnPlaced(originWorldPos);
         return true;
     }
     public bool RemoveGeneric<T>(T entity, Func<GridData, object> slotGetter, Action<GridData> slotClearer, bool destroyObject = true) where T : GridEntity
     {
-        if (entity == null) return false;
+        if (entity == null || entity.PlacedFootprint == null) return false;
 
-        Vector2 size = entity.PlacedSize;
-        bool[] mask = entity.PlacedMask;
         Vector3Int origin = GetIndexFromWorldPosition(entity.OriginWorldPosition);
-        int width = Mathf.Max(1, (int)size.x);
-        int depth = Mathf.Max(1, (int)size.y);
-
         bool removedAny = false;
-        for (int z = 0; z < depth; z++)
+
+        foreach (Vector3Int offset in entity.PlacedFootprint.FilledCells())
         {
-            for (int x = 0; x < width; x++)
-            {
-                if (mask != null && !mask[z * width + x]) continue;
+            if (!Grids.TryGetValue(origin + offset, out GridData data)) continue;
+            if (!Equals(slotGetter(data), entity)) continue;
 
-                Vector3Int cell = new Vector3Int(origin.x + x, origin.y, origin.z + z);
-                if (!Grids.TryGetValue(cell, out GridData data)) continue;
-
-                if (Equals(slotGetter(data), entity))
-                {
-                    slotClearer(data);
-                    data.IsOrigin = false;
-                    removedAny = true;
-                }
-            }
+            slotClearer(data);
+            data.IsOrigin = false;
+            removedAny = true;
         }
 
         if (removedAny && destroyObject)
@@ -137,35 +103,30 @@ public class GridManager : MonoBehaviour
 
         return removedAny;
     }
+    // Entity'nin zemin katmanında, etrafındaki (ve altındaki) ilk boş hücreyi bulur
     public Vector3 GetEmptyGridFromEntityPosition(GridEntity entity, out bool success)
     {
-        Vector3 size = entity.GetData().Size;
-        float x = size.x;
-        float z = size.y;
-        success = false;
-        for (int zAxis = -1; zAxis < z + 1; zAxis++)
+        Vector3Int size = entity.PlacedFootprint.Size;
+        Vector3Int origin = GetIndexFromWorldPosition(entity.OriginWorldPosition);
+
+        for (int z = -1; z <= size.z; z++)
         {
-            for (int xAxis = -1; xAxis < x + 1; xAxis++)
+            for (int x = -1; x <= size.x; x++)
             {
-                Vector3Int checkingPosition = entity.OriginWorldPosition + new Vector3Int(xAxis, 0, zAxis);
-                GetGridData().TryGetValue(checkingPosition, out GridData value);
-                if (value == null || value.Placeable != null || value.Base != null) continue;
+                if (!Grids.TryGetValue(origin + new Vector3Int(x, 0, z), out GridData value)) continue;
+                if (value.Placeable != null || value.Base != null) continue;
 
                 success = true;
                 return value.WorldPosition;
             }
         }
+
+        success = false;
         return Vector3.zero;
     }
 
     private Vector3Int GetIndexFromWorldPosition(Vector3 worldPosition)
-    {
-        Vector3 local = worldPosition - transform.position;
-        int x = Mathf.RoundToInt(local.x);
-        int y = Mathf.RoundToInt(local.y);
-        int z = Mathf.RoundToInt(local.z);
-        return new Vector3Int(x, y, z);
-    }
+        => Vector3Int.RoundToInt(worldPosition - transform.position);
     public Vector3 GetGridWorldPosition(Vector3 worldPosition, out bool success)
     {
         Vector3Int index = GetIndexFromWorldPosition(worldPosition);
