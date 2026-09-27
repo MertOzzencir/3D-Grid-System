@@ -67,7 +67,7 @@ public static class BlueprintBuilder
         var slotObject = new GameObject($"Slot {index} ({signature})");
         Transform slot = slotObject.transform;
         slot.SetParent(root, false);
-        slot.localPosition = placeable.OriginWorldPosition; // root (0,0,0)'da, dünya pozisyonu = yerel pozisyon
+        slot.localPosition = placeable.OriginWorldPosition - Vector3.up; // root (0,0,0)'da, dünya pozisyonu = yerel pozisyon
         slot.localRotation = placeable.GridRotation;
         slotObject.AddComponent<BlueprintSlot>().EditorSetup(signature, placeable.Rotation);
 
@@ -75,7 +75,7 @@ public static class BlueprintBuilder
 
         foreach (Vector3Int offset in placeable.PlacedFootprint.FilledCells())
         {
-            Vector3Int cell = placeable.OriginWorldPosition + offset;
+            Vector3Int cell = placeable.OriginWorldPosition + offset - Vector3Int.up;
             allCells.Add(cell);
 
             var box = slotObject.AddComponent<BoxCollider>();
