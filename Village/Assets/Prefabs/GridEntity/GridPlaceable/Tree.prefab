@@ -87,6 +87,7 @@ MonoBehaviour:
   - {fileID: 517392376609033704}
   animatedPart: {fileID: 2779646710620733652}
   selectedActiveTransform: {fileID: 3835601260122564382}
+  maxHealth: 3
   isUsed: 0
   sizeAnimationCurve:
     serializedVersion: 2
@@ -732,6 +733,7 @@ MonoBehaviour:
   openVisuals: []
   animatedPart: {fileID: 8960786181482754015}
   selectedActiveTransform: {fileID: 7180912478851743527}
+  maxHealth: 3
   isUsed: 0
 --- !u!1 &7745170792184922254
 GameObject:
@@ -811,6 +813,18 @@ MonoBehaviour:
   mainVisual: {fileID: 3825020336649192257}
   cutedVisual: {fileID: 517392376609033704}
   chopEffect: {fileID: 1730389791503193954, guid: eb8080ea09e95584aa4f30de2aa8312c, type: 3}
+  trunkRadius: 0.3
+  hitShake:
+    angle: 5
+    duration: 0.45
+    frequency: 5
+  chopDent:
+    depth: 0.35
+    horizontalRadius: 0.8
+    verticalRadius: 0.8
+    pushInDuration: 0.15
+    returnDuration: 0.15
+    springCount: 1
 --- !u!1 &7857285809937519307
 GameObject:
   m_ObjectHideFlags: 0

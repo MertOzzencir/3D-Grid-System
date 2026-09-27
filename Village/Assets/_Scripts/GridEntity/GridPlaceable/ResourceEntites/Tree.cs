@@ -12,10 +12,14 @@ public class Tree : ResourceEntity, IToolTarget
     [Tooltip("Efekt gövdenin merkezinden bu kadar dışarıda, yani gövdenin yüzeyinde çıkar")]
     [SerializeField] private float trunkRadius = 0.3f;
     [SerializeField] private HitShake hitShake = new HitShake();
+    [Tooltip("Vurulan tarafın içeri göçmesi. Ağacın materyali 'Village/Tree Chop Lit' shader'ını kullanmalı.")]
+    [SerializeField] private ChopDent chopDent = new ChopDent();
 
     private Coroutine shakeRoutine;
     private Transform shakingVisual;
     private Quaternion shakeRestRotation;
+
+    private Coroutine dentRoutine;
 
     public static Vector3 ArrowLocalPosition;
     public static Vector3 ArrowLocalRotation;
@@ -69,9 +73,11 @@ public class Tree : ResourceEntity, IToolTarget
 
         ArrowBase hitArrow = selectedArrow;
 
-        // Her vuruşta: talaş efekti + sarsılma
+        // Her vuruşta: talaş efekti + göçük + sarsılma
         GetHitFrame(hitArrow.GetTransform().position, out Vector3 trunkCenter, out Vector3 outward);
         PlayChopEffect(trunkCenter, outward);
+        StopShake(); // göçük noktası, ağacın düz (sallanmayan) haline göre hesaplansın
+        Dent(trunkCenter + outward * trunkRadius, -outward);
         Shake(-outward); // baltadan uzağa doğru yatar
 
         // Okun canı bitmediyse sadece vuruş sayılır, ok seçili kalır
@@ -111,21 +117,42 @@ public class Tree : ResourceEntity, IToolTarget
         if (visual == null) return;
 
         // Önceki sallanma bitmeden yeni vuruş gelirse: önce düz haline döndür, sonra yeniden başlat
-        if (shakeRoutine != null)
-        {
-            StopCoroutine(shakeRoutine);
-            shakingVisual.localRotation = shakeRestRotation;
-        }
+        StopShake();
 
         shakingVisual = visual.transform;
         shakeRestRotation = shakingVisual.localRotation;
         shakeRoutine = StartCoroutine(ShakeRoutine(pushDirection));
     }
 
+    private void StopShake()
+    {
+        if (shakeRoutine == null) return;
+        StopCoroutine(shakeRoutine);
+        shakeRoutine = null;
+        shakingVisual.localRotation = shakeRestRotation;
+    }
+
     private System.Collections.IEnumerator ShakeRoutine(Vector3 pushDirection)
     {
         yield return hitShake.Play(shakingVisual, shakeRestRotation, pushDirection);
         shakeRoutine = null;
+    }
+
+    // Yeni vuruş öncekinin yerine geçer; göçükler üst üste binmez
+    private void Dent(Vector3 surfacePoint, Vector3 inward)
+    {
+        if (dentRoutine != null) StopCoroutine(dentRoutine);
+        dentRoutine = StartCoroutine(chopDent.Play(CollectVisualRenderers(), surfacePoint, inward));
+    }
+
+    // Kesilmemiş ve kesilmiş görselin şu anki renderer'ları (oklar hariç).
+    // Her vuruşta yeniden toplanır: kesilen dallar görselden koparılıp siliniyor, saklanan liste bayatlardı.
+    private Renderer[] CollectVisualRenderers()
+    {
+        var renderers = new System.Collections.Generic.List<Renderer>();
+        if (mainVisual != null) renderers.AddRange(mainVisual.GetComponentsInChildren<Renderer>(true));
+        if (cutedVisual != null) renderers.AddRange(cutedVisual.GetComponentsInChildren<Renderer>(true));
+        return renderers.ToArray();
     }
 
     public void OnToolTargetExit()
