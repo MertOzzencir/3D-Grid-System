@@ -6,6 +6,17 @@ public class Tree : ResourceEntity, IToolTarget
     [SerializeField] private GameObject mainVisual;
     [SerializeField] private GameObject cutedVisual;
 
+    [Header("VFX")]
+    [Tooltip("Balta vurunca vuruş noktasında oynar. Particle'lar yerel +Z yönüne saçılmalı: +Z ağaçtan dışarı (baltaya doğru) bakar.")]
+    [SerializeField] private ParticleSystem chopEffect;
+    [Tooltip("Efekt gövdenin merkezinden bu kadar dışarıda, yani gövdenin yüzeyinde çıkar")]
+    [SerializeField] private float trunkRadius = 0.3f;
+    [SerializeField] private HitShake hitShake = new HitShake();
+
+    private Coroutine shakeRoutine;
+    private Transform shakingVisual;
+    private Quaternion shakeRestRotation;
+
     public static Vector3 ArrowLocalPosition;
     public static Vector3 ArrowLocalRotation;
 
@@ -20,7 +31,6 @@ public class Tree : ResourceEntity, IToolTarget
         accept = true;
         SetArrows(true);
         SetArrowLocalPositions();
-        Debug.Log("Interacted");
         if (!TryGetArrowPlane(out Plane plane))
             return transform.position;
 
@@ -57,12 +67,65 @@ public class Tree : ResourceEntity, IToolTarget
         if (!(tool is Axe)) return false;
         if (selectedArrow == null || selectedArrow.isUsed) return false;
 
-        ArrowBase usedArrow = selectedArrow;
-        selectedArrow = null;
+        ArrowBase hitArrow = selectedArrow;
 
-        usedArrow.transform.parent = null;
-        SpawnLogic(usedArrow, out bool success);
+        // Her vuruşta: talaş efekti + sarsılma
+        GetHitFrame(hitArrow.GetTransform().position, out Vector3 trunkCenter, out Vector3 outward);
+        PlayChopEffect(trunkCenter, outward);
+        Shake(-outward); // baltadan uzağa doğru yatar
+
+        // Okun canı bitmediyse sadece vuruş sayılır, ok seçili kalır
+        if (!hitArrow.TakeHit()) return true;
+
+        selectedArrow = null;
+        hitArrow.transform.parent = null;
+        SpawnLogic(hitArrow, out bool success);
         return success;
+    }
+
+    // Vuruş yüksekliğindeki gövde merkezi ve gövdeden dışarı (baltaya doğru) yatay yön
+    private void GetHitFrame(Vector3 hitPoint, out Vector3 trunkCenter, out Vector3 outward)
+    {
+        // Gövde footprint'in ortasında duruyor
+        trunkCenter = PlacedFootprint != null ? transform.position + PlacedFootprint.Center : transform.position;
+        trunkCenter.y = hitPoint.y;
+
+        outward = hitPoint - trunkCenter;
+        outward.y = 0f;
+        if (outward.sqrMagnitude < 0.0001f)
+            outward = Vector3.ProjectOnPlane(-Camera.main.transform.forward, Vector3.up); // tam merkezdeyse kameraya doğru
+        outward.Normalize();
+    }
+
+    // Gövdenin yüzeyinde; +Z gövdeden dışarı bakar
+    private void PlayChopEffect(Vector3 trunkCenter, Vector3 outward)
+    {
+        if (chopEffect == null) return;
+        VfxPool.Play(chopEffect, trunkCenter + outward * trunkRadius, Quaternion.LookRotation(outward, Vector3.up));
+    }
+
+    // Sadece görsel sallanır; ağacın root'u grid pozisyonu olduğu için ona dokunulmaz
+    private void Shake(Vector3 pushDirection)
+    {
+        GameObject visual = mainVisual != null && mainVisual.activeSelf ? mainVisual : cutedVisual;
+        if (visual == null) return;
+
+        // Önceki sallanma bitmeden yeni vuruş gelirse: önce düz haline döndür, sonra yeniden başlat
+        if (shakeRoutine != null)
+        {
+            StopCoroutine(shakeRoutine);
+            shakingVisual.localRotation = shakeRestRotation;
+        }
+
+        shakingVisual = visual.transform;
+        shakeRestRotation = shakingVisual.localRotation;
+        shakeRoutine = StartCoroutine(ShakeRoutine(pushDirection));
+    }
+
+    private System.Collections.IEnumerator ShakeRoutine(Vector3 pushDirection)
+    {
+        yield return hitShake.Play(shakingVisual, shakeRestRotation, pushDirection);
+        shakeRoutine = null;
     }
 
     public void OnToolTargetExit()
@@ -251,6 +314,16 @@ public class Tree : ResourceEntity, IToolTarget
 
         if (GridManager.Instance != null)
             GridManager.Instance.PlaceableRemoveOn(this);
+    }
+
+    // Kesilen oklar ağaçtan koparılıyor (parent = null), bu yüzden ağaçla birlikte otomatik silinmiyorlar.
+    // Ağaç yok olurken tüm oklarını da temizler.
+    private void OnDestroy()
+    {
+        if (!gameObject.scene.isLoaded) return; // sahne kapanıyorsa Unity zaten her şeyi siliyor
+
+        foreach (ArrowBase arrow in Arrows)
+            if (arrow != null) arrow.DestroyWithParts();
     }
 
     void OnDrawGizmos()

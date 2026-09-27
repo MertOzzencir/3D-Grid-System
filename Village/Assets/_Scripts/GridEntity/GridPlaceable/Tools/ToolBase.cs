@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public abstract class ToolBase : GridPlaceable, IInteractable
@@ -5,19 +6,73 @@ public abstract class ToolBase : GridPlaceable, IInteractable
     public Transform VisualTransform;
     [SerializeField] private float followSpeed = 10f;
 
+    [Header("Kullanım")]
+    [Tooltip("İki kullanım arasındaki en kısa süre (saniye). Tıklama anından itibaren sayılır.")]
+    [SerializeField] private float cooldown = 0.6f;
+    [SerializeField] private ToolSwingAnimation swing = new ToolSwingAnimation();
+
     private GridDragMotor drag;
+    private float nextUseTime;
+    private Coroutine useRoutine;
+    private Quaternion visualRestRotation;
 
-    protected virtual void Awake() => drag = new GridDragMotor(this, followSpeed);
+    // Cooldown doldu ve önceki sallanma bitti
+    public bool IsReady => Time.time >= nextUseTime && useRoutine == null;
 
+    protected virtual void Awake()
+    {
+        drag = new GridDragMotor(this, followSpeed);
+        if (VisualTransform != null)
+            visualRestRotation = VisualTransform.localRotation;
+    }
+
+    // Sol tık: hazırsa sallanmayı başlatır. Asıl kullanım (ağacı kesmek) vuruş anında olur.
     public void Interact(out bool finished)
     {
-        if (!drag.TryUseOnTarget(out finished))
-            finished = OnUseWithoutTarget();
+        finished = false;
+        if (!IsReady) return;
+
+        nextUseTime = Time.time + cooldown;
+        useRoutine = StartCoroutine(UseRoutine());
     }
 
     protected abstract bool OnUseWithoutTarget();
 
     public void InteractContractBeginnig() => drag.Begin();
     public void InteractContract(out bool success) { success = true; drag.Tick(); }
-    public void ContractCancel() => drag.Cancel();
+
+    public void ContractCancel()
+    {
+        StopUse();
+        drag.Cancel();
+    }
+
+    private IEnumerator UseRoutine()
+    {
+        if (VisualTransform != null)
+            yield return swing.Play(VisualTransform, visualRestRotation, Use);
+        else
+            Use();
+
+        useRoutine = null;
+    }
+
+    // Vuruş anı: hedef hâlâ varsa ona uygula, yoksa aletin kendi davranışı
+    private void Use()
+    {
+        if (!drag.TryUseOnTarget(out _))
+            OnUseWithoutTarget();
+    }
+
+    // Sallanırken bırakılırsa animasyonu kes, görseli düzelt
+    private void StopUse()
+    {
+        if (useRoutine != null)
+        {
+            StopCoroutine(useRoutine);
+            useRoutine = null;
+        }
+        if (VisualTransform != null)
+            VisualTransform.localRotation = visualRestRotation;
+    }
 }

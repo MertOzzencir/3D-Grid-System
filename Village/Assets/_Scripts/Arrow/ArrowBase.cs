@@ -10,7 +10,23 @@ public class ArrowBase : MonoBehaviour
     [SerializeField] protected Transform animatedPart;
     [SerializeField] private Transform selectedActiveTransform;
 
+    [Tooltip("Bu oku kesmek için gereken balta vuruşu sayısı")]
+    [SerializeField, Min(1)] private int maxHealth = 3;
+
+    private int hitsTaken;
+
     public bool isUsed;
+
+    public int MaxHealth => maxHealth;
+    public int Health => Mathf.Max(0, maxHealth - hitsTaken);
+
+    // Bir vuruş alır. Can bittiyse true döner (ok kesilmeye hazır).
+    public bool TakeHit()
+    {
+        if (isUsed) return false;
+        hitsTaken++;
+        return Health == 0;
+    }
     public Lenghts GetLength()
     {
         return length;
@@ -23,6 +39,14 @@ public class ArrowBase : MonoBehaviour
     {
         return selectedActiveTransform;
     }
+    // Oku ve ondan koparılmış parçayı (ArrowChild animatedPart'ı ayırıyor) birlikte yok eder
+    public void DestroyWithParts()
+    {
+        if (animatedPart != null && !animatedPart.IsChildOf(transform))
+            Destroy(animatedPart.gameObject);
+        Destroy(gameObject);
+    }
+
     public void OnUsed(Action<ArrowBase> logicCallBack)
     {
         isUsed = true;
