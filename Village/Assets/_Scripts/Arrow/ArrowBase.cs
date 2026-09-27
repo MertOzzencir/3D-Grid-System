@@ -52,10 +52,10 @@ public class ArrowBase : MonoBehaviour
     }
 }
 
+// Değerler sabit: Unity enum'ı sayı olarak kaydediyor, BR_3 = 3 kalmazsa kayıtlı oklar kayar
 public enum Lenghts
 {
-    BR_1,
-    BR_2,
-    BR_2_BR1,
-    BR_3
+    BR_1 = 0,
+    BR_2 = 1,
+    BR_3 = 3
 }

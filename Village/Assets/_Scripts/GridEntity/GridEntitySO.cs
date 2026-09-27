@@ -31,29 +31,39 @@ public abstract class GridEntitySOBase : ScriptableObject
     [SerializeField, HideInInspector, FormerlySerializedAs("Size")] private Vector2 legacySize;
     [SerializeField, HideInInspector, FormerlySerializedAs("mask")] private bool[] legacyMask;
 
-    [NonSerialized] private GridFootprint cachedFootprint;
+    // Her rotasyon için bir kez hesaplanır (index = (int)Rotation)
+    [NonSerialized] private GridFootprint[] cachedFootprints;
 
     public Vector3Int Size => size;
     public abstract GridEntity GetPrefabBase();
 
-    public GridFootprint GetFootprint()
+    public GridFootprint GetFootprint(GridMaskRotator.Rotation rotation = GridMaskRotator.Rotation.Deg0)
     {
-        if (cachedFootprint != null) return cachedFootprint;
+        if (cachedFootprints == null)
+        {
+            EnsureLayout();
+            cachedFootprints = GridMaskRotator.AllRotations(BuildFootprint());
+        }
+        return cachedFootprints[(int)rotation];
+    }
 
-        EnsureLayout();
-        bool[] cells = new bool[size.x * size.y * size.z];
+    // Katmanlardaki dolu hücreleri pivot'a (0,0,0) göre offset listesine çevirir
+    private GridFootprint BuildFootprint()
+    {
+        var cells = new List<Vector3Int>();
         for (int y = 0; y < size.y; y++)
             for (int z = 0; z < size.z; z++)
                 for (int x = 0; x < size.x; x++)
-                    cells[GridFootprint.Index(size, x, y, z)] = layers[y].cells[z * size.x + x];
+                    if (layers[y].cells[z * size.x + x])
+                        cells.Add(new Vector3Int(x, y, z));
 
-        return cachedFootprint = new GridFootprint(size, cells);
+        return new GridFootprint(cells.ToArray());
     }
 
     private void OnValidate()
     {
         EnsureLayout();
-        cachedFootprint = null;
+        cachedFootprints = null;
     }
 
     // Size değişince katmanları yeniden boyutlandırır. Eski hücreler koordinatına göre korunur, yeni hücreler dolu başlar.
@@ -77,7 +87,7 @@ public abstract class GridEntitySOBase : ScriptableObject
         }
 
         layoutSize = size;
-        cachedFootprint = null;
+        cachedFootprints = null;
     }
 
     private bool LayersMatchSize()

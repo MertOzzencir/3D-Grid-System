@@ -15,6 +15,7 @@ public class GridDragMotor
 
     private IToolTarget currentTarget;
     private Vector3 dragStartPosition;
+    private GridMaskRotator.Rotation dragStartRotation;
     private Vector3 lastValidGridPosition;
     private Coroutine placeRoutine;
 
@@ -33,6 +34,7 @@ public class GridDragMotor
     {
         StopPlaceRoutine();
         dragStartPosition = Transform.position;
+        dragStartRotation = owner.Rotation;
         lastValidGridPosition = Transform.position;
         GridManager.Instance.PlaceableRemoveOn(owner, false);
     }
@@ -67,7 +69,7 @@ public class GridDragMotor
         if (onGrid)
         {
             lastValidGridPosition = gridPos;
-            FollowTowards(gridPos, Quaternion.identity);
+            FollowTowards(gridPos, owner.GridRotation);
         }
     }
 
@@ -103,18 +105,18 @@ public class GridDragMotor
     {
         while (Vector3.Distance(Transform.position, targetPos) > 0.05f)
         {
-            FollowTowards(targetPos, Quaternion.identity);
+            FollowTowards(targetPos, owner.GridRotation);
             yield return null;
         }
 
-        Transform.SetPositionAndRotation(targetPos, Quaternion.identity);
         placeRoutine = null;
 
-        if (!GridManager.Instance.PlaceablePlaceOn(owner, targetPos) &&
-            !GridManager.Instance.PlaceablePlaceOn(owner, dragStartPosition))
-        {
+        if (GridManager.Instance.PlaceablePlaceOn(owner, targetPos)) yield break;
+
+        // Döndürülmüş hali sığmadıysa: aldığımız yere, aldığımız rotasyonla geri koy
+        owner.Rotation = dragStartRotation;
+        if (!GridManager.Instance.PlaceablePlaceOn(owner, dragStartPosition))
             Debug.LogWarning($"{owner.name} could not be placed back on the grid", owner);
-        }
     }
 
     private void FollowTowards(Vector3 position, Quaternion rotation)

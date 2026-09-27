@@ -4,35 +4,43 @@ public static class GridMaskRotator
 {
     public enum Rotation { Deg0, Deg90, Deg180, Deg270 }
 
-    // Sadece yatay düzlemde döndürür; y (katman) değişmez.
+    public static Rotation Next(Rotation rotation) => (Rotation)(((int)rotation + 1) % 4);
+
+    // Modele uygulanacak görsel rotasyon. RotateOffset ile birebir aynı yönde döner.
+    public static Quaternion ToQuaternion(Rotation rotation) => Quaternion.Euler(0, 90 * (int)rotation, 0);
+
+    // Her hücreyi pivot etrafında döndürür; y (katman) değişmez.
     public static GridFootprint Rotate(GridFootprint source, Rotation rotation)
     {
         if (rotation == Rotation.Deg0) return source;
 
-        Vector3Int s = source.Size;
-        bool swapXZ = rotation == Rotation.Deg90 || rotation == Rotation.Deg270;
-        Vector3Int newSize = swapXZ ? new Vector3Int(s.z, s.y, s.x) : s;
-        bool[] result = new bool[s.x * s.y * s.z];
+        var cells = source.FilledCells();
+        var result = new Vector3Int[cells.Count];
+        for (int i = 0; i < cells.Count; i++)
+            result[i] = RotateOffset(cells[i], rotation);
 
-        for (int y = 0; y < s.y; y++)
-            for (int z = 0; z < s.z; z++)
-                for (int x = 0; x < s.x; x++)
-                {
-                    Vector2Int n = RotateXZ(x, z, s.x, s.z, rotation);
-                    result[GridFootprint.Index(newSize, n.x, y, n.y)] = source.IsFilled(x, y, z);
-                }
-
-        return new GridFootprint(newSize, result);
+        return new GridFootprint(result);
     }
 
-    private static Vector2Int RotateXZ(int x, int z, int width, int depth, Rotation rotation)
+    // 4 rotasyonun hepsini bir kerede hesaplar (index = (int)Rotation). Footprint'i önbelleğe almak için.
+    public static GridFootprint[] AllRotations(GridFootprint unrotated)
+    {
+        var result = new GridFootprint[4];
+        for (int i = 0; i < 4; i++)
+            result[i] = Rotate(unrotated, (Rotation)i);
+        return result;
+    }
+
+    // Unity'nin Y rotasyonuyla aynı: yukarıdan bakınca saat yönünde.
+    // Örn. Deg90: ileri (0,0,1) → sağ (1,0,0), sağ (1,0,0) → geri (0,0,-1)
+    public static Vector3Int RotateOffset(Vector3Int c, Rotation rotation)
     {
         switch (rotation)
         {
-            case Rotation.Deg90:  return new Vector2Int(depth - 1 - z, x);
-            case Rotation.Deg180: return new Vector2Int(width - 1 - x, depth - 1 - z);
-            case Rotation.Deg270: return new Vector2Int(z, width - 1 - x);
-            default:              return new Vector2Int(x, z);
+            case Rotation.Deg90:  return new Vector3Int(c.z, c.y, -c.x);
+            case Rotation.Deg180: return new Vector3Int(-c.x, c.y, -c.z);
+            case Rotation.Deg270: return new Vector3Int(-c.z, c.y, c.x);
+            default:              return c;
         }
     }
 }

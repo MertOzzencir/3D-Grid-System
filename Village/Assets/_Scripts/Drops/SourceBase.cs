@@ -9,6 +9,9 @@ public class SourceBase : GridPlaceable
     [SerializeField] private Transform visual;
 
     private Vector3 visualLocalPosition;
+
+    public Transform Visual => visual;
+
     public void Collect()
     {
         InventoryManager.Instance.AddSource(sourceData);

@@ -1,28 +1,32 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Bir entity'nin kapladığı hücreler, pivot hücresine (0,0,0) göre offset olarak.
+// Pivot = modelin pivot noktası = OriginWorldPosition. Döndürülünce offsetler negatif olabilir.
 public class GridFootprint
 {
-    public readonly Vector3Int Size;
-    private readonly bool[] cells;
+    private readonly Vector3Int[] cells;
 
-    public GridFootprint(Vector3Int size, bool[] cells)
+    public Vector3Int Min { get; }
+    public Vector3Int Max { get; }
+    public Vector3Int Size => Max - Min + Vector3Int.one;
+
+    // Footprint'in merkezi, pivot'a göre (dünya birimiyle)
+    public Vector3 Center => (Vector3)(Min + Max) / 2f;
+
+    public GridFootprint(Vector3Int[] cells)
     {
-        Size = size;
         this.cells = cells;
+        if (cells.Length == 0) return;
+
+        Min = cells[0];
+        Max = cells[0];
+        foreach (Vector3Int c in cells)
+        {
+            Min = Vector3Int.Min(Min, c);
+            Max = Vector3Int.Max(Max, c);
+        }
     }
 
-    public static int Index(Vector3Int size, int x, int y, int z) => y * size.x * size.z + z * size.x + x;
-
-    public bool IsFilled(int x, int y, int z) => cells[Index(Size, x, y, z)];
-
-  
-    public IEnumerable<Vector3Int> FilledCells()
-    {
-        for (int y = 0; y < Size.y; y++)
-            for (int z = 0; z < Size.z; z++)
-                for (int x = 0; x < Size.x; x++)
-                    if (IsFilled(x, y, z))
-                        yield return new Vector3Int(x, y, z);
-    }
+    public IReadOnlyList<Vector3Int> FilledCells() => cells;
 }

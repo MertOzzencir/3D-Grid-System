@@ -72,6 +72,8 @@ public class CameraController : MonoBehaviour
     private void StartRotation()
     {
         if (isRotating) return;
+        // Elde obje varken R objeyi döndürür (InteractableController), kamerayı değil
+        if (InteractableController.Instance != null && InteractableController.Instance.IsHolding) return;
 
         lockedY = transform.position.y;
 

@@ -30,6 +30,16 @@ public class GridManager : MonoBehaviour
     public bool CanPlaceablePlaceOn(GridPlaceable entity, Vector3 position) => CanPlaceGeneric(entity, position, d => d.Placeable);
     public bool PlaceablePlaceOn(GridPlaceable entity, Vector3 position) => PlaceGeneric(entity, position, d => d.Placeable, (d, e) => d.Placeable = e);
     public bool PlaceableRemoveOn(GridPlaceable entity, bool destroy = true) => RemoveGeneric(entity, d => d.Placeable, d => d.Placeable = null, destroy);
+
+    // Grid'deki her placeable bir kez (çok hücreli objeler tekrar etmez)
+    public List<GridPlaceable> GetAllPlaceables()
+    {
+        var seen = new HashSet<GridPlaceable>();
+        foreach (GridData data in Grids.Values)
+            if (data.Placeable != null) seen.Add(data.Placeable);
+        return new List<GridPlaceable>(seen);
+    }
+
     private void CreateGridData()
     {
         for (int y = 0; y < GridSize.y; y++)
@@ -75,9 +85,9 @@ public class GridManager : MonoBehaviour
             if (offset == Vector3Int.zero) data.IsOrigin = true;
         }
 
-        // Origin hücresi mask'te boş olsa bile doğru dünya pozisyonunu verir
+        // Pivot origin hücresinde durur; model de footprint ile aynı rotasyonda olur
         Vector3Int originWorldPos = ManagerPosition + origin;
-        entity.transform.position = originWorldPos;
+        entity.transform.SetPositionAndRotation(originWorldPos, entity.GridRotation);
         entity.OnPlaced(originWorldPos);
         return true;
     }
@@ -106,12 +116,12 @@ public class GridManager : MonoBehaviour
     // Entity'nin zemin katmanında, etrafındaki (ve altındaki) ilk boş hücreyi bulur
     public Vector3 GetEmptyGridFromEntityPosition(GridEntity entity, out bool success)
     {
-        Vector3Int size = entity.PlacedFootprint.Size;
+        GridFootprint footprint = entity.PlacedFootprint;
         Vector3Int origin = GetIndexFromWorldPosition(entity.OriginWorldPosition);
 
-        for (int z = -1; z <= size.z; z++)
+        for (int z = footprint.Min.z - 1; z <= footprint.Max.z + 1; z++)
         {
-            for (int x = -1; x <= size.x; x++)
+            for (int x = footprint.Min.x - 1; x <= footprint.Max.x + 1; x++)
             {
                 if (!Grids.TryGetValue(origin + new Vector3Int(x, 0, z), out GridData value)) continue;
                 if (value.Placeable != null || value.Base != null) continue;
@@ -127,6 +137,10 @@ public class GridManager : MonoBehaviour
 
     private Vector3Int GetIndexFromWorldPosition(Vector3 worldPosition)
         => Vector3Int.RoundToInt(worldPosition - transform.position);
+    // Hücre grid içinde mi ve placeable slotu boş mu
+    public bool IsPlaceableCellFree(Vector3 worldPosition)
+        => Grids.TryGetValue(GetIndexFromWorldPosition(worldPosition), out GridData data) && data.Placeable == null;
+
     public Vector3 GetGridWorldPosition(Vector3 worldPosition, out bool success)
     {
         Vector3Int index = GetIndexFromWorldPosition(worldPosition);
