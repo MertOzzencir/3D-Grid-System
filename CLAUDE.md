@@ -35,5 +35,12 @@ Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe.
 - `Tree`: her vuruşta `VfxPool` ile talaş efekti (gövde yüzeyinde, +Z dışarı) ve `HitShake`; ok `maxHealth` bitince kesilir.
 - VFX referansları prefab'da tutulur, ortak SO'larda değil. Efektler `VfxPool` ile oynatılır, Instantiate edilmez.
 
+## Görsel stil ve shader'lar
+- Stil: yumuşak, kil (clay) gibi yuvarlak modeller, pastel renkler, yumuşak gölgeler, yukarıdan eğik kamera. Hedef platform PC (mobil yok).
+- `Assets/Shaders/StylizedWater.shader` (URP HLSL): Depth + Opaque Texture'a ihtiyaç duyar (PC_RPAsset'te açık). Doku kullanmaz, desenler dünya uzayında.
+- Vertex animasyonlu Lit kopyaları: `TreeChopLit.shader` (+ `ChopDent.hlsl`, ağaç materyali) ve `WoodWobbleLit.shader` (+ `Wobble.hlsl`, `New Wood` materyali). URP `Lit.shader`'ın birebir kopyası; sadece 5 pass'in vertex'i sarmalanmış. **Elle düzenlenmez**, `Assets/Shaders/Editor~/make_lit_variants.py` ile üretilir; URP güncellenince bu script tekrar çalıştırılır. Yeni deformasyon = yeni `.hlsl` + script'teki `VARIANTS` listesine bir satır.
+- Deformasyon verisini C# (`ChopDent.cs`, `JellyWobble.cs`) MaterialPropertyBlock ile sadece ilgili renderer'lara, object space'te gönderir; animasyonu GPU `_Time.y` ile oynatır, bitince blok temizlenir (SRP Batcher'a geri döner).
+- Odun birleşince (`WoodMerger`) sonuç jöle gibi sallanır: yan birleşmede parçanın geldiği yönün tersine eğilir, tepe birleşmesinde sadece basılıp yaylanır.
+
 ## Henüz yapılmayanlar
 - Save sistemi: konuşuldu (JSON, `Application.persistentDataPath`, SO ID + registry), yazılmadı. `GridData.IsOrigin` ve eski `GridSaveManager` o zamana kadar duruyor.

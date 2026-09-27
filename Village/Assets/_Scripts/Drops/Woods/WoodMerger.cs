@@ -7,6 +7,8 @@ public class WoodMerger : MonoBehaviour
 
     [SerializeField] private WoodCatalogSO catalog;
     [SerializeField] private GameObject snapIndicatorPrefab;
+    [Tooltip("Birleşince sonuç jöle gibi sallanır. Odun materyali 'Village/Wood Wobble Lit' shader'ını kullanmalı.")]
+    [SerializeField] private JellyWobble mergeWobble = new JellyWobble();
 
     public WoodCatalogSO Catalog => catalog;
     public GameObject SnapIndicatorPrefab => snapIndicatorPrefab;
@@ -34,7 +36,23 @@ public class WoodMerger : MonoBehaviour
 
         result.Rotation = rotation;
         if (!GridManager.Instance.PlaceablePlaceOn(result, position))
+        {
             Debug.LogWarning($"{result.name} grid'e yerleştirilemedi", result);
+            return;
+        }
+
+        // Parçanın geldiği yönden itilmiş gibi: yan katmandaki parça sağdan gelir → obje önce sola eğilir.
+        // Tepeden gelen parça yukarıdan bastırır → eğilme yok, sadece basılıp yaylanır.
+        Vector3 push = layer == WoodLayout.TopLayer ? Vector3.zero : result.GridRotation * Vector3.left;
+        PlayWobble(result, push);
+    }
+
+    private void PlayWobble(GridPlaceable result, Vector3 push)
+    {
+        GridFootprint footprint = result.PlacedFootprint;
+        // Pivot alt hücrenin ortasında; taban yarım hücre aşağıda
+        Vector3 basePoint = result.transform.position + Vector3.up * (footprint.Min.y - 0.5f);
+        StartCoroutine(mergeWobble.Play(result.GetComponentsInChildren<Renderer>(), basePoint, footprint.Size.y, push));
     }
 
     private GridPlaceable SpawnLongWood(int length)
