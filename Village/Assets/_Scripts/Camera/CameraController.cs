@@ -5,6 +5,9 @@ public class CameraController : MonoBehaviour
 {
     public static event Action<CameraFacing> OnCameraRotation;
 
+    // Kameranın şu an baktığı yön (90° adımlar). Ağaç okları buna göre, ihtiyaç anında konumlanır.
+    public static CameraFacing CurrentFacing { get; private set; } = CameraFacing.Deg0;
+
     private static readonly CameraFacing[] FacingSequence =
     {
         CameraFacing.Deg0, CameraFacing.DegNeg90, CameraFacing.DegNeg180, CameraFacing.Deg90
@@ -40,6 +43,7 @@ public class CameraController : MonoBehaviour
 
     void Awake()
     {
+        CurrentFacing = FacingSequence[facingIndex]; // static: önceki Play oturumundan kalmasın
         InputManager.OnR += StartRotation;
         currentYaw = transform.eulerAngles.y;
 
@@ -104,7 +108,8 @@ public class CameraController : MonoBehaviour
         isRotating = true;
 
         facingIndex = (facingIndex + 1) % FacingSequence.Length;
-        OnCameraRotation?.Invoke(FacingSequence[facingIndex]);
+        CurrentFacing = FacingSequence[facingIndex];
+        OnCameraRotation?.Invoke(CurrentFacing);
     }
 
     private void HandleRotation()

@@ -37,6 +37,15 @@ public class ArrowBase : MonoBehaviour
     {
         return length;
     }
+
+    // Bu okun temsil ettiği odun parçasının uzunluğu (WoodCatalog'da aranır)
+    public int WoodLength => length switch
+    {
+        Lenghts.BR_1 => 1,
+        Lenghts.BR_2 => 2,
+        Lenghts.BR_3 => 3,
+        _ => 1
+    };
     public virtual Transform VisualPart()
     {
         return animatedPart;
