@@ -84,6 +84,7 @@ public class Tree : ResourceEntity, IToolTarget
         if (!hitArrow.TakeHit()) return true;
 
         selectedArrow = null;
+        hitArrow.FallDirection = -outward; // kesilen parça baltadan uzağa devrilir
         hitArrow.transform.parent = null;
         SpawnLogic(hitArrow, out bool success);
         return success;
@@ -222,12 +223,12 @@ public class Tree : ResourceEntity, IToolTarget
                 Vector3 spawnPosition = GridManager.Instance.GetEmptyGridFromEntityPosition(this, out bool positionSuccess);
                 if (positionSuccess)
                 {
-                    ArrowChild tempArrowChild = arrow as ArrowChild;
-                    Transform spawnedPosition = tempArrowChild.VisualPart();
-                    SourceBase wood = Instantiate(SourceBaseStaticManager.GetItemByIndex(0).Prefab, spawnedPosition.transform.position, Quaternion.identity);
+                    // Odun, devrilen parçanın düştüğü yerden çıkar
+                    Vector3 spawnOrigin = arrow.SpawnOrigin;
+                    SourceBase wood = Instantiate(SourceBaseStaticManager.GetItemByIndex(0).Prefab, spawnOrigin, Quaternion.identity);
                     wood.OnSpawned();
                     GridManager.Instance.PlaceablePlaceOn(wood, spawnPosition);
-                    wood.SpawnAnimation(spawnPosition, spawnedPosition.position);
+                    wood.SpawnAnimation(spawnPosition, spawnOrigin);
                 }
                 break;
             case Lenghts.BR_2:

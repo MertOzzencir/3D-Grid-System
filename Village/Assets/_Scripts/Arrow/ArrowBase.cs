@@ -20,6 +20,12 @@ public class ArrowBase : MonoBehaviour
     public int MaxHealth => maxHealth;
     public int Health => Mathf.Max(0, maxHealth - hitsTaken);
 
+    // Kesilen parçanın devrileceği yatay yön (baltadan uzağa). Tree, kesimden önce ayarlar.
+    public Vector3 FallDirection { get; set; }
+
+    // Kesimden çıkan odunun animasyona başlayacağı nokta
+    public virtual Vector3 SpawnOrigin => animatedPart != null ? animatedPart.position : transform.position;
+
     // Bir vuruş alır. Can bittiyse true döner (ok kesilmeye hazır).
     public bool TakeHit()
     {
