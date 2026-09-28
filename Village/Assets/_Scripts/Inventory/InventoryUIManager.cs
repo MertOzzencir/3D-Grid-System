@@ -1,5 +1,4 @@
 using System;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class InventoryUIManager : MonoBehaviour
@@ -32,7 +31,7 @@ public class InventoryUIManager : MonoBehaviour
     public void RemoveSourceOnUI(SourcesSO s)
     {
         InventorySlot c = FindSlotBySource(s);
-        if (c != null) c.Reset();
+        if (c != null) c.Clear();
 
     }
     private InventorySlot FindSlotBySource(SourcesSO source)

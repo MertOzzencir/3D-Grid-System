@@ -5,8 +5,7 @@ public class ToolController : MonoBehaviour
     public static ToolController Instance;
 
     private ToolBase[] tools = new ToolBase[9];
-    private ToolBase CurrentTool;
-    private bool isOpen;
+    private ToolBase CurrentTool; // açık/kapalı durumunu PlacementController yönetir (build mode'da kapalı)
 
     void Awake()
     {
@@ -53,11 +52,6 @@ public class ToolController : MonoBehaviour
         tools[index] = tool;
     }
 
-    public void SetEnable()
-    {
-        isOpen = !isOpen;
-        enabled = isOpen;
-    }
     private void IsTool(IInteractable interactable)
     {
         if (interactable is ToolBase tool)

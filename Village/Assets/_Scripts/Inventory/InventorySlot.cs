@@ -25,7 +25,7 @@ public class InventorySlot : MonoBehaviour
         sourceAmount.text = amount;
         sourceName.text = name;
         icon.sprite = Icon;
-        icon.color = new Color(icon.color.r, icon.color.b, icon.color.g, 1);
+        icon.color = new Color(icon.color.r, icon.color.g, icon.color.b, 1);
         if (gameObject.activeInHierarchy)
         {
             if (slotAnim != null)
@@ -36,12 +36,14 @@ public class InventorySlot : MonoBehaviour
             slotAnim = StartCoroutine(SlotAnimation());
         }
     }
-    public void Reset()
+    // "Reset" değil: o isim Unity'nin kendi mesajı, editörde component eklenince/sıfırlanınca kendiliğinden çağrılıyordu
+    public void Clear()
     {
         SourceOnSlot = null;
         sourceAmount.text = "";
         sourceName.text = "";
         icon.sprite = default;
+        icon.color = new Color(icon.color.r, icon.color.g, icon.color.b, 0); // boş slotta beyaz kutu görünmesin
     }
     private IEnumerator SlotAnimation()
     {

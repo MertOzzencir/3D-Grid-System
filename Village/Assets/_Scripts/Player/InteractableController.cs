@@ -5,8 +5,8 @@ public class InteractableController : MonoBehaviour
 {
     public static InteractableController Instance;
     public static event Action<IInteractable> OnNewInteractable;
+    // Açık/kapalı durumunu PlacementController yönetir: build mode'da kapalı
     private IInteractable currentInteracted;
-    private bool isActive = false;
     private bool tryingToInteract = false;
 
     public bool IsHolding => currentInteracted != null;
@@ -59,12 +59,13 @@ public class InteractableController : MonoBehaviour
 
     private void CancelInteract()
     {
-        if (currentInteracted != null)
-        {
-            tryingToInteract = false;
-            currentInteracted.ContractCancel();
-            currentInteracted = null;
-        }
+        // Elde bir şey olmasa da sıfırlanmalı: yoksa boşluğa sağ tıklayıp bırakınca Update,
+        // mouse'un altından geçen her objeyi tıklamadan tutmaya çalışır
+        tryingToInteract = false;
+
+        if (currentInteracted == null) return;
+        currentInteracted.ContractCancel();
+        currentInteracted = null;
     }
     public void HardCancel(IInteractable current)
     {
@@ -96,11 +97,6 @@ public class InteractableController : MonoBehaviour
             entity.RotateFootprint();
     }
 
-    public void SetEnable()
-    {
-        isActive = !isActive;
-        enabled = isActive;
-    }
     void OnEnable()
     {
         InputManager.OnMouseRight += TryToInteract;
@@ -111,6 +107,10 @@ public class InteractableController : MonoBehaviour
 
     void OnDisable()
     {
+        // Kapalıyken mouse'un bırakılmasını duyamayız: elde ne varsa bırak, durumu sıfırla.
+        // Yoksa "tutmaya çalışıyorum" takılı kalır ve tekrar açılınca tıklamadan obje tutulur.
+        CancelInteract();
+
         InputManager.OnMouseRight -= TryToInteract;
         InputManager.OnMouseLeft -= FinishInteract;
         InputManager.OnR -= RotateHeld;

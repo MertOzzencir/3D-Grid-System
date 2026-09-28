@@ -48,6 +48,11 @@ public class CameraController : MonoBehaviour
         transform.rotation = Quaternion.Euler(pitch, currentYaw, 0);
     }
 
+    void OnDestroy()
+    {
+        InputManager.OnR -= StartRotation;
+    }
+
     void LateUpdate()
     {
         HandleMovement();

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class GridSaveManager : MonoBehaviour
@@ -10,6 +9,11 @@ public class GridSaveManager : MonoBehaviour
     {
         manager = GetComponent<GridManager>();
         InputManager.OnF5 += SaveDataNow;
+    }
+
+    void OnDestroy()
+    {
+        InputManager.OnF5 -= SaveDataNow;
     }
 
     private void SaveDataNow()

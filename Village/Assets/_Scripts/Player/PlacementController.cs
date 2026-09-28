@@ -21,19 +21,42 @@ public class PlacementController : MonoBehaviour
     private Image openBuildModeImage => openBuildMode.GetComponent<Image>();
 
 
-    void OnEnable()
+    [Header("Build mode'da kapananlar")]
+    [SerializeField] private InteractableController interactableController;
+    [SerializeField] private ToolController toolController;
+
+    // OnEnable'da değil: SetBuildMode bu component'i kapatıp açıyor, her açılışta yeniden abone olunur
+    // ve bir süre sonra tek Space basışı birden çok kez tetiklenirdi (build mode kapanmıyordu)
+    void Awake()
     {
+        if (interactableController == null) interactableController = GetComponent<InteractableController>();
+        if (toolController == null) toolController = GetComponent<ToolController>();
+
         InputManager.OnSpace += OpenBuildMode;
+        SetBuildMode(isOpen); // sahnedeki başlangıç durumları ne olursa olsun hepsi uyumlu başlasın
     }
-  
-    public void OpenBuildMode()
+
+    void OnDestroy()
     {
-        isOpen = !isOpen;
+        InputManager.OnSpace -= OpenBuildMode;
+    }
+
+    // Space ve build mode butonu bunu çağırır
+    public void OpenBuildMode() => SetBuildMode(!isOpen);
+
+    // Build mode'un tek yetkilisi: yerleştirme açıkken obje tutma ve aletler kapalı, kapalıyken açık.
+    // Tersine çevirmek (toggle) yerine açıkça set edilir, böylece iki taraf birbirinden kopamaz.
+    public void SetBuildMode(bool open)
+    {
+        isOpen = open;
 
         SetDeActiveMenus();
-        enabled = isOpen;
-        placementMenu.SetActive(isOpen);
-        openBuildModeImage.color = isOpen ? Color.green : Color.red;
+        enabled = open;
+        placementMenu.SetActive(open);
+        openBuildModeImage.color = open ? Color.green : Color.red;
+
+        if (interactableController != null) interactableController.enabled = !open;
+        if (toolController != null) toolController.enabled = !open;
     }
 
     public void SelectMenu(int index)
