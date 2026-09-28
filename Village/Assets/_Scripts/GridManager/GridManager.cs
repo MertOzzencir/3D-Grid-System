@@ -10,18 +10,15 @@ public class GridManager : MonoBehaviour
     public Vector3 GridSize;
     public Dictionary<Vector3Int, GridData> Grids = new Dictionary<Vector3Int, GridData>();
 
-    private GridSaveManager saveManager;
-
     private Vector3Int ManagerPosition => Vector3Int.RoundToInt(transform.position);
 
+    // Kayıt yüklemesi burada değil, SaveManager.Start'ta: grid Awake'te hazır olur
     private void Awake()
     {
-        saveManager = GetComponent<GridSaveManager>();
         if (Instance == null)
             Instance = this;
 
         CreateGridData();
-        CreateSavedGridEntities();
     }
     public bool CanPlaceBase(GridBase entity, Vector3 position) => CanPlaceGeneric(entity, position, d => d.Base);
     public bool PlaceBase(GridBase entity, Vector3 position) => PlaceGeneric(entity, position, d => d.Base, (d, e) => d.Base = e);
@@ -31,13 +28,19 @@ public class GridManager : MonoBehaviour
     public bool PlaceablePlaceOn(GridPlaceable entity, Vector3 position) => PlaceGeneric(entity, position, d => d.Placeable, (d, e) => d.Placeable = e);
     public bool PlaceableRemoveOn(GridPlaceable entity, bool destroy = true) => RemoveGeneric(entity, d => d.Placeable, d => d.Placeable = null, destroy);
 
-    // Grid'deki her placeable bir kez (çok hücreli objeler tekrar etmez)
-    public List<GridPlaceable> GetAllPlaceables()
+    // Grid'deki her obje bir kez (çok hücreli objeler tekrar etmez)
+    public List<GridBase> GetAllBases() => GetPlacedEntities(d => d.Base);
+    public List<GridPlaceable> GetAllPlaceables() => GetPlacedEntities(d => d.Placeable);
+
+    private List<T> GetPlacedEntities<T>(Func<GridData, T> slotGetter) where T : GridEntity
     {
-        var seen = new HashSet<GridPlaceable>();
+        var seen = new HashSet<T>();
         foreach (GridData data in Grids.Values)
-            if (data.Placeable != null) seen.Add(data.Placeable);
-        return new List<GridPlaceable>(seen);
+        {
+            T entity = slotGetter(data);
+            if (entity != null) seen.Add(entity);
+        }
+        return new List<T>(seen);
     }
 
     private void CreateGridData()
@@ -49,15 +52,6 @@ public class GridManager : MonoBehaviour
                     Vector3Int index = new Vector3Int(x, y, z);
                     Grids[index] = new GridData(ManagerPosition + index);
                 }
-    }
-    public void CreateSavedGridEntities()
-    {
-        SaveData[] savedGrids = saveManager.SavedData().ToArray();
-        foreach (var a in savedGrids)
-        {
-            GridEntity prefab = Instantiate(a.Prefab);
-            PlaceBase(prefab as GridBase, a.SavedData.WorldPosition);
-        }
     }
 
     public bool CanPlaceGeneric<T>(T entity, Vector3 position, Func<GridData, object> slotGetter) where T : GridEntity
@@ -79,11 +73,7 @@ public class GridManager : MonoBehaviour
         Vector3Int origin = GetIndexFromWorldPosition(position);
 
         foreach (Vector3Int offset in entity.GetFootprint().FilledCells())
-        {
-            GridData data = Grids[origin + offset];
-            slotSetter(data, entity);
-            if (offset == Vector3Int.zero) data.IsOrigin = true;
-        }
+            slotSetter(Grids[origin + offset], entity);
 
         // Pivot origin hücresinde durur; model de footprint ile aynı rotasyonda olur
         Vector3Int originWorldPos = ManagerPosition + origin;
@@ -104,7 +94,6 @@ public class GridManager : MonoBehaviour
             if (!Equals(slotGetter(data), entity)) continue;
 
             slotClearer(data);
-            data.IsOrigin = false;
             removedAny = true;
         }
 
@@ -196,7 +185,6 @@ public class GridData
     public GridBase Base;
     public GridPlaceable Placeable;
     public Vector3Int WorldPosition;
-    public bool IsOrigin;
     public GridData(Vector3Int WorldPos)
     {
         WorldPosition = WorldPos;

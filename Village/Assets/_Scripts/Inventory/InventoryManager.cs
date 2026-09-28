@@ -44,6 +44,13 @@ public class InventoryManager : MonoBehaviour
 
         inventoryManager.Refresh(this);
     }
+    // Kayıttan yükleme: envanteri verilen içerikle değiştirir
+    public void LoadSources(Dictionary<SourcesSO, int> loaded)
+    {
+        sources = new Dictionary<SourcesSO, int>(loaded);
+        inventoryManager.Refresh(this);
+    }
+
     public int SourceAmount(SourcesSO amount)
     {
         if (sources.ContainsKey(amount))

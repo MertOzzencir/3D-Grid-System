@@ -10,6 +10,8 @@ public class WoodMerger : MonoBehaviour
 
     [SerializeField] private WoodCatalogSO catalog;
     [SerializeField] private GameObject snapIndicatorPrefab;
+    [Tooltip("İçi boş MergedWood prefab'ı (SO'su olmalı ki kaydedilebilsin). Görselini Build kurar.")]
+    [SerializeField] private MergedWood mergedWoodPrefab;
     [Tooltip("Birleşince sonuç jöle gibi sallanır. Odun materyali 'Village/Wood Wobble Lit' shader'ını kullanmalı.")]
     [SerializeField] private JellyWobble mergeWobble = new JellyWobble();
 
@@ -85,7 +87,18 @@ public class WoodMerger : MonoBehaviour
 
     private GridPlaceable SpawnMergedWood(int baseLength, int[] layers)
     {
-        var merged = new GameObject($"MergedWood {baseLength}BR [{string.Join(",", layers)}]").AddComponent<MergedWood>();
+        MergedWood merged;
+        if (mergedWoodPrefab != null)
+        {
+            merged = Instantiate(mergedWoodPrefab);
+        }
+        else
+        {
+            Debug.LogWarning("WoodMerger: Merged Wood Prefab atanmamış; oluşan obje kaydedilemeyecek.", this);
+            merged = new GameObject().AddComponent<MergedWood>();
+        }
+
+        merged.name = $"MergedWood {baseLength}BR [{string.Join(",", layers)}]";
         merged.Build(baseLength, layers, catalog);
         return merged;
     }

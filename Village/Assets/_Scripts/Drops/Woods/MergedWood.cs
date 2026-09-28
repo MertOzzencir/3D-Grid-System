@@ -3,8 +3,16 @@ using UnityEngine;
 
 // Katmanlarında odun olan dik odun: ana (base) odun + yan katmanlardaki yatık parçalar.
 // Boş katmanlarına tek parça odun eklenebilir (hedef); kendisi başka bir oduna eklenemez ama taşınıp döndürülebilir.
-public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintPiece, IWoodStack
+public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintPiece, IWoodStack, ISaveState
 {
+    // Kayıttaki durumu: prefab'ı boş, görseli bu iki değerden yeniden kurulur
+    [System.Serializable]
+    private class State
+    {
+        public int baseLength;
+        public List<int> layers;
+    }
+
     private const float ColliderThickness = 0.75f;
 
     [SerializeField] private float followSpeed = 10f;
@@ -92,6 +100,15 @@ public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintP
     public void InteractContractBeginnig() => drag.Begin();
     public void InteractContract(out bool success) { success = true; drag.Tick(); }
     public void ContractCancel() => drag.Cancel();
+
+    // --- ISaveState ---
+    public string CaptureState() => JsonUtility.ToJson(new State { baseLength = baseLength, layers = layers });
+
+    public void RestoreState(string state)
+    {
+        State loaded = JsonUtility.FromJson<State>(state);
+        Build(loaded.baseLength, loaded.layers, WoodMerger.Instance.Catalog);
+    }
 
     // --- IToolTarget: boş bir katmana tek parça odun getirildiğinde ---
     public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept) => mergeTarget.GetToolTargetPosition(interacted, out accept);

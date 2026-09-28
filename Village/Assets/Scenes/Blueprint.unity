@@ -340,6 +340,8 @@ MonoBehaviour:
   menuName: {fileID: 1601044980}
   selectedColor: {r: 0, g: 1, b: 0, a: 1}
   defaultColor: {r: 1, g: 0, b: 0, a: 1}
+  interactableController: {fileID: 0}
+  toolController: {fileID: 0}
 --- !u!114 &82442286
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1803,6 +1805,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridManager
   HeightDebugDistance: 0
+  showBaseGizmos: 1
   GridSize: {x: 15, y: 15, z: 15}
 --- !u!114 &1032872126
 MonoBehaviour:
@@ -1813,10 +1816,14 @@ MonoBehaviour:
   m_GameObject: {fileID: 1032872123}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c47f3d42c66b7bb42af32269c40c2124, type: 3}
+  m_Script: {fileID: 11500000, guid: b20b960f00bf49bc9caf2d409c84345b, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: '::'
-  data: {fileID: 11400000, guid: 067b1ac14be5a5543a2893bcf2516831, type: 2}
+  m_EditorClassIdentifier: Assembly-CSharp::SaveManager
+  registry: {fileID: 11400000, guid: 45ca99d7b3f2453d95fe3a1bf016c9f3, type: 2}
+  slotName: blueprint_bases
+  saveBases: 1
+  savePlaceables: 0
+  saveInventory: 0
 --- !u!1001 &1037313267
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2074,6 +2081,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WoodMerger
   catalog: {fileID: 11400000, guid: 3a12cca9a7e970142a3070367264578a, type: 2}
   snapIndicatorPrefab: {fileID: 919132149155446097, guid: 91b65ab19aa9eb74b96ec776bf93e1af, type: 3}
+  mergedWoodPrefab: {fileID: 7454160838818081061, guid: bad3add8b331686469c363ef7240b915, type: 3}
   mergeWobble:
     bendAmount: 0.15
     squashAmount: 0.25
@@ -2094,53 +2102,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1150626529
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1150626530}
-  - component: {fileID: 1150626531}
-  m_Layer: 0
-  m_Name: SourceBaseStaticInventor
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1150626530
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1150626529}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 5.32444, y: 1.05714, z: 5.61968}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1150626531
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1150626529}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8b10dbcef7f292e4ba5a35375714a00c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: '::'
-  inventoryEntries:
-  - {fileID: 11400000, guid: 09121dafe5b103d46839d45c40dcaa90, type: 2}
-  - {fileID: 11400000, guid: e0bfd29f63ec76641b9b7368e45ff04a, type: 2}
 --- !u!1001 &1171205265
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3941,6 +3902,5 @@ SceneRoots:
   - {fileID: 1266337178}
   - {fileID: 7373075}
   - {fileID: 1010172444}
-  - {fileID: 1150626530}
   - {fileID: 1126745012}
   - {fileID: 543450653409220582}

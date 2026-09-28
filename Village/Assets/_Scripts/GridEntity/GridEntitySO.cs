@@ -20,6 +20,10 @@ public abstract class GridEntitySOBase : ScriptableObject
     public string Name;
     public Sprite Icon;
 
+    [Tooltip("Kayıt dosyasındaki kimliği. Boşsa asset adı kullanılır. Oyun yayınlandıktan sonra değiştirme: eski kayıtlar bu objeyi bulamaz.")]
+    [SerializeField] private string saveId;
+    public string SaveId => string.IsNullOrEmpty(saveId) ? name : saveId;
+
     [Tooltip("x = genislik, y = yukseklik (katman sayisi), z = derinlik")]
     [SerializeField] private Vector3Int size = Vector3Int.one;
 

@@ -43,5 +43,10 @@ Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe.
 - Deformasyon verisini C# (`ChopDent.cs`, `JellyWobble.cs`) MaterialPropertyBlock ile sadece ilgili renderer'lara, object space'te gönderir; animasyonu GPU `_Time.y` ile oynatır, bitince blok temizlenir (SRP Batcher'a geri döner).
 - Odun birleşince (`WoodMerger`) sonuç jöle gibi sallanır: yan birleşmede parçanın geldiği yönün tersine eğilir, tepe birleşmesinde sadece basılıp yaylanır.
 
-## Henüz yapılmayanlar
-- Save sistemi: konuşuldu (JSON, `Application.persistentDataPath`, SO ID + registry), yazılmadı. `GridData.IsOrigin` ve eski `GridSaveManager` o zamana kadar duruyor.
+## Save sistemi
+- Kayıt = dünyayı yeniden kuran tarif: her obje için SO `SaveId` + hücre + rotasyon (+ `ISaveState` ile ekstra durum). JSON, `Application.persistentDataPath/<slot>.json`, güvenli yazma (`SaveStorage`).
+- Sahneye elle obje konmaz; her şey build mode ile yerleşir, bu yüzden yükleme boş dünyaya yapılır.
+- `SaveManager` sahnede bir tane: oyun sahnesi `save` (her şey), Blueprint sahnesi `blueprint_bases` (sadece base). F5 + çıkışta kaydeder, Start'ta yükler.
+- `SaveRegistrySO` (`SOData/SaveRegistry`) tüm entity ve kaynak SO'larını tutar; yeni SO eklenince "Find All Assets". Registry'de olmayan obje kaydedilmez (uyarı verir).
+- Her yerleşen objenin prefab + SO'su olmalı; `MergedWood` da (içi boş prefab, görseli `RestoreState`/`Build` kurar).
+- Ağacın kesilmiş hali bilerek kaydedilmez (kayıttan tam ağaç çıkar).
