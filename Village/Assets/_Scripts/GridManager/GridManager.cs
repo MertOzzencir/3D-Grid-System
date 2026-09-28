@@ -6,6 +6,7 @@ using UnityEngine;
 public class GridManager : MonoBehaviour
 {
     [SerializeField] private int HeightDebugDistance;
+    [SerializeField] private bool showBaseGizmos = true;
     public static GridManager Instance;
     public Vector3 GridSize;
     public Dictionary<Vector3Int, GridData> Grids = new Dictionary<Vector3Int, GridData>();
@@ -175,8 +176,11 @@ public class GridManager : MonoBehaviour
 
             Vector3 worldPos = transform.position + new Vector3(kvp.Key.x, kvp.Key.y, kvp.Key.z);
 
-            Gizmos.color = kvp.Value.Base == null ? Color.red : Color.green;
-            Gizmos.DrawCube(worldPos, Vector3.one * 0.9f);
+            if (showBaseGizmos)
+            {
+                Gizmos.color = kvp.Value.Base == null ? Color.red : Color.green;
+                Gizmos.DrawCube(worldPos, Vector3.one * 0.9f);
+            }
 
             if (kvp.Value.Placeable != null)
             {
