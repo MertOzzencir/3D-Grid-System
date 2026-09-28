@@ -2100,7 +2100,7 @@ MonoBehaviour:
   snapIndicatorPrefab: {fileID: 919132149155446097, guid: 91b65ab19aa9eb74b96ec776bf93e1af, type: 3}
   mergeWobble:
     bendAmount: 0.15
-    squashAmount: 0.5
+    squashAmount: 0.25
     duration: 0.6
     oscillations: 2.5
 --- !u!4 &1126745012

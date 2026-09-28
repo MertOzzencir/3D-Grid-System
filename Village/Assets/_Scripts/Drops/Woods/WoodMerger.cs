@@ -1,6 +1,9 @@
+using System.Linq;
 using UnityEngine;
 
-// İki odunu birleştirir. Tepe (katman 0) → daha uzun tek parça odun, yan katman → MergedWood.
+// Hedef odunun (Wood ya da MergedWood) bir katmanına tek parça odun ekler:
+//   tepe (katman 0) → ana odun uzar; yan katmanlarda odun yoksa tek parça Wood, varsa MergedWood (katmanlar kayar)
+//   yan katman       → MergedWood (hedefin mevcut katmanları korunur)
 public class WoodMerger : MonoBehaviour
 {
     public static WoodMerger Instance { get; private set; }
@@ -18,21 +21,39 @@ public class WoodMerger : MonoBehaviour
         if (Instance == null) Instance = this;
     }
 
-    public void Merge(Wood target, Wood carried, int layer)
+    // target hem GridPlaceable hem IWoodStack olmalı (Wood ya da MergedWood)
+    public void Merge(GridPlaceable target, Wood carried, int layer)
     {
+        var stack = (IWoodStack)target;
+
+        // Hedef silinmeden önce sonucu hesapla
         Vector3 position = target.OriginWorldPosition;
         GridMaskRotator.Rotation rotation = target.Rotation;
-        int targetLength = target.Length;
-        int carriedLength = carried.Length;
+        int baseLength = stack.BaseLength;
+        int[] layers;
+
+        if (layer == WoodLayout.TopLayer)
+        {
+            baseLength += carried.Length;
+            layers = WoodLayout.LayersAfterTopMerge(stack, carried.Length);
+        }
+        else
+        {
+            layers = new int[WoodLayout.LayerCount(baseLength)];
+            for (int i = 0; i < layers.Length; i++)
+                layers[i] = stack.PieceAt(i);
+            layers[layer] = carried.Length;
+        }
 
         // Taşınan odun yok olacak: geri yerleştirilmeye çalışılmasın diye iptal değil, sadece bırakıyoruz
         InteractableController.Instance.Release(carried);
         Destroy(carried.gameObject);
         GridManager.Instance.PlaceableRemoveOn(target, true);
 
-        GridPlaceable result = layer == WoodLayout.TopLayer
-            ? SpawnLongWood(targetLength + carriedLength)
-            : SpawnMergedWood(targetLength, layer, carriedLength);
+        // Yan katmanlarda hiç odun yoksa sonuç sıradan (tek parça) bir odun
+        GridPlaceable result = layers.All(length => length == 0)
+            ? SpawnLongWood(baseLength)
+            : SpawnMergedWood(baseLength, layers);
 
         result.Rotation = rotation;
         if (!GridManager.Instance.PlaceablePlaceOn(result, position))
@@ -62,10 +83,10 @@ public class WoodMerger : MonoBehaviour
         return wood;
     }
 
-    private GridPlaceable SpawnMergedWood(int baseLength, int layer, int pieceLength)
+    private GridPlaceable SpawnMergedWood(int baseLength, int[] layers)
     {
-        var merged = new GameObject($"MergedWood {baseLength}BR + {pieceLength}BR").AddComponent<MergedWood>();
-        merged.Build(baseLength, layer, pieceLength, catalog);
+        var merged = new GameObject($"MergedWood {baseLength}BR [{string.Join(",", layers)}]").AddComponent<MergedWood>();
+        merged.Build(baseLength, layers, catalog);
         return merged;
     }
 }

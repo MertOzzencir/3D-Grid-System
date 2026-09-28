@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Yan katmandan birleşmiş odun: base odun + katmanlarındaki parçalar.
-// Tekrar birleşme hedefi olamaz ama taşınabilir ve döndürülebilir.
-public class MergedWood : GridPlaceable, IInteractable, IBlueprintPiece
+// Katmanlarında odun olan dik odun: ana (base) odun + yan katmanlardaki yatık parçalar.
+// Boş katmanlarına tek parça odun eklenebilir (hedef); kendisi başka bir oduna eklenemez ama taşınıp döndürülebilir.
+public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintPiece, IWoodStack
 {
     private const float ColliderThickness = 0.75f;
 
@@ -14,21 +14,27 @@ public class MergedWood : GridPlaceable, IInteractable, IBlueprintPiece
     [SerializeField] private List<int> layers = new List<int>();
 
     private GridDragMotor drag;
+    private WoodMergeTarget mergeTarget;
     private GridFootprint[] footprints; // rotasyon başına bir kez hesaplanır
 
     public int BaseLength => baseLength;
     public IReadOnlyList<int> Layers => layers;
+    public int PieceAt(int layer) => layer >= 0 && layer < layers.Count ? layers[layer] : 0;
 
     // Örn. 2BR base, katman 1'de 1BR → "MergedWood:2:0,1,0"
     public string BlueprintSignature => $"MergedWood:{baseLength}:{string.Join(",", layers)}";
 
-    private void Awake() => drag = new GridDragMotor(this, followSpeed);
+    private void Awake()
+    {
+        drag = new GridDragMotor(this, followSpeed);
+        mergeTarget = new WoodMergeTarget(this);
+    }
 
-    public void Build(int baseLength, int layer, int pieceLength, WoodCatalogSO catalog)
+    // layers: index = katman, değer = uzunluk (0 = boş); boyu LayerCount(baseLength) olmalı
+    public void Build(int baseLength, IReadOnlyList<int> layers, WoodCatalogSO catalog)
     {
         this.baseLength = baseLength;
-        layers = new List<int>(new int[WoodLayout.LayerCount(baseLength)]);
-        layers[layer] = pieceLength;
+        this.layers = new List<int>(layers);
         footprints = null;
 
         AddPiece(catalog.GetWood(baseLength), Vector3Int.zero, Quaternion.identity, baseLength);
@@ -86,4 +92,10 @@ public class MergedWood : GridPlaceable, IInteractable, IBlueprintPiece
     public void InteractContractBeginnig() => drag.Begin();
     public void InteractContract(out bool success) { success = true; drag.Tick(); }
     public void ContractCancel() => drag.Cancel();
+
+    // --- IToolTarget: boş bir katmana tek parça odun getirildiğinde ---
+    public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept) => mergeTarget.GetToolTargetPosition(interacted, out accept);
+    public Quaternion GetToolTargetRotation() => mergeTarget.GetToolTargetRotation();
+    public void OnToolTargetExit() => mergeTarget.OnToolTargetExit();
+    public bool OnToolUsed(IInteractable tool) => mergeTarget.OnToolUsed(tool);
 }

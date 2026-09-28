@@ -34,6 +34,17 @@ public static class WoodLayout
     private static Vector3Int PieceDirection(int layer)
         => layer == TopLayer ? Vector3Int.up : Vector3Int.right;
 
+    // Tepeye odun eklenince ana odun uzar; yan odunlar olduğu yükseklikte kalır, katman numaraları kayar.
+    // Yan katmanın yüksekliği (baseLength - layer) sabit kalsın diye: yeni katman = eski katman + eklenen uzunluk.
+    // Örn. 2BR (katman 1: y=1, katman 2: y=0) + 1BR tepeye → 3BR: eski 1 → 2 (y=1), eski 2 → 3 (y=0), yeni 1 (y=2) boş.
+    public static int[] LayersAfterTopMerge(IWoodStack stack, int addedLength)
+    {
+        var result = new int[LayerCount(stack.BaseLength + addedLength)];
+        for (int layer = 1; layer < LayerCount(stack.BaseLength); layer++)
+            result[layer + addedLength] = stack.PieceAt(layer);
+        return result;
+    }
+
     public static IEnumerable<Vector3Int> BaseCells(int baseLength)
     {
         for (int y = 0; y < baseLength; y++)
