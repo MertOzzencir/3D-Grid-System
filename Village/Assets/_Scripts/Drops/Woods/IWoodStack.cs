@@ -1,10 +1,10 @@
-// Katmanlarına odun eklenebilen dik odun: tek parça Wood (katmanları hep boş) ya da MergedWood.
-// Katman numaralaması için bkz. WoodLayout.
+// Yanlarına odun eklenebilen dik odun: tek parça Wood (yanları hep boş) ya da MergedWood.
+// Yan ve katman numaralaması için bkz. WoodLayout / WoodSlot.
 public interface IWoodStack
 {
-    // Dik duran ana odunun uzunluğu
+    // Dik duran ana odunun uzunluğu = her yandaki katman sayısı
     int BaseLength { get; }
 
-    // O katmandaki odunun uzunluğu, 0 = boş. Katman 0 (tepe) her zaman boştur; tepeye eklenen odun ana odunu uzatır.
-    int PieceAt(int layer);
+    // O yandaki katmanda duran odunun uzunluğu, 0 = boş. layer: 1..BaseLength
+    int PieceAt(WoodSide side, int layer);
 }

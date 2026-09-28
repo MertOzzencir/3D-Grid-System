@@ -1,9 +1,8 @@
-using System.Linq;
 using UnityEngine;
 
-// Hedef odunun (Wood ya da MergedWood) bir katmanına tek parça odun ekler:
-//   tepe (katman 0) → ana odun uzar; yan katmanlarda odun yoksa tek parça Wood, varsa MergedWood (katmanlar kayar)
-//   yan katman       → MergedWood (hedefin mevcut katmanları korunur)
+// Hedef odunun (Wood ya da MergedWood) bir bağlantı yerine tek parça odun ekler:
+//   tepe → ana odun uzar; dört yanın katmanları birlikte kayar. Yanlarda hiç odun yoksa sonuç tek parça Wood.
+//   yan  → MergedWood (hedefin mevcut katmanları korunur, seçilen katman dolar)
 public class WoodMerger : MonoBehaviour
 {
     public static WoodMerger Instance { get; private set; }
@@ -24,7 +23,7 @@ public class WoodMerger : MonoBehaviour
     }
 
     // target hem GridPlaceable hem IWoodStack olmalı (Wood ya da MergedWood)
-    public void Merge(GridPlaceable target, Wood carried, int layer)
+    public void Merge(GridPlaceable target, Wood carried, WoodSlot slot)
     {
         var stack = (IWoodStack)target;
 
@@ -32,19 +31,17 @@ public class WoodMerger : MonoBehaviour
         Vector3 position = target.OriginWorldPosition;
         GridMaskRotator.Rotation rotation = target.Rotation;
         int baseLength = stack.BaseLength;
-        int[] layers;
+        int[][] sides;
 
-        if (layer == WoodLayout.TopLayer)
+        if (slot.IsTop)
         {
             baseLength += carried.Length;
-            layers = WoodLayout.LayersAfterTopMerge(stack, carried.Length);
+            sides = WoodLayout.SidesAfterTopMerge(stack, carried.Length);
         }
         else
         {
-            layers = new int[WoodLayout.LayerCount(baseLength)];
-            for (int i = 0; i < layers.Length; i++)
-                layers[i] = stack.PieceAt(i);
-            layers[layer] = carried.Length;
+            sides = WoodLayout.CopySides(stack);
+            sides[(int)slot.Side][slot.Layer - 1] = carried.Length;
         }
 
         // Taşınan odun yok olacak: geri yerleştirilmeye çalışılmasın diye iptal değil, sadece bırakıyoruz
@@ -52,10 +49,10 @@ public class WoodMerger : MonoBehaviour
         Destroy(carried.gameObject);
         GridManager.Instance.PlaceableRemoveOn(target, true);
 
-        // Yan katmanlarda hiç odun yoksa sonuç sıradan (tek parça) bir odun
-        GridPlaceable result = layers.All(length => length == 0)
+        // Yanlarda hiç odun yoksa sonuç sıradan (tek parça) bir odun
+        GridPlaceable result = WoodLayout.IsEmpty(sides)
             ? SpawnLongWood(baseLength)
-            : SpawnMergedWood(baseLength, layers);
+            : SpawnMergedWood(baseLength, sides);
 
         result.Rotation = rotation;
         if (!GridManager.Instance.PlaceablePlaceOn(result, position))
@@ -64,9 +61,11 @@ public class WoodMerger : MonoBehaviour
             return;
         }
 
-        // Parçanın geldiği yönden itilmiş gibi: yan katmandaki parça sağdan gelir → obje önce sola eğilir.
+        // Parçanın geldiği yönden itilmiş gibi: yandan eklenen parça o yandan iter → obje ters yöne eğilir.
         // Tepeden gelen parça yukarıdan bastırır → eğilme yok, sadece basılıp yaylanır.
-        Vector3 push = layer == WoodLayout.TopLayer ? Vector3.zero : result.GridRotation * Vector3.left;
+        Vector3 push = slot.IsTop
+            ? Vector3.zero
+            : -(result.GridRotation * (Vector3)WoodLayout.SideDirection(slot.Side));
         PlayWobble(result, push);
     }
 
@@ -85,7 +84,7 @@ public class WoodMerger : MonoBehaviour
         return wood;
     }
 
-    private GridPlaceable SpawnMergedWood(int baseLength, int[] layers)
+    private GridPlaceable SpawnMergedWood(int baseLength, int[][] sides)
     {
         MergedWood merged;
         if (mergedWoodPrefab != null)
@@ -98,8 +97,8 @@ public class WoodMerger : MonoBehaviour
             merged = new GameObject().AddComponent<MergedWood>();
         }
 
-        merged.name = $"MergedWood {baseLength}BR [{string.Join(",", layers)}]";
-        merged.Build(baseLength, layers, catalog);
+        merged.name = $"MergedWood {baseLength}BR";
+        merged.Build(baseLength, sides, catalog);
         return merged;
     }
 }

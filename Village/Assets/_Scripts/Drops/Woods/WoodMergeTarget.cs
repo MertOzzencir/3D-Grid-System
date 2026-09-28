@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Wood ve MergedWood'un ortak hedef davranışı (IToolTarget'ı bununla uygularlar):
-// taşınan tek parça odun için geçerli katman noktalarını hesaplar, mouse'a en yakınını seçtirir,
+// taşınan tek parça odun için geçerli bağlantı noktalarını hesaplar, mouse'a en yakınını seçtirir,
 // tıklanınca WoodMerger'a iletir. Sahibi hem GridPlaceable hem IWoodStack olmalı.
 public class WoodMergeTarget
 {
@@ -48,33 +48,63 @@ public class WoodMergeTarget
     {
         if (!(tool is Wood carried) || snapSelector == null || !snapSelector.HasSelection) return false;
 
-        int layer = snapSelector.Selected.Layer;
+        WoodSlot slot = WoodSlot.FromId(snapSelector.Selected.Layer);
         snapSelector.Hide();
-        WoodMerger.Instance.Merge(owner, carried, layer);
+        WoodMerger.Instance.Merge(owner, carried, slot);
         return true;
     }
 
-    // Taşınan odunun konabileceği katmanlar. Geçersizler (prefab yok / katman dolu / hücre dolu) hiç eklenmez.
+    // Taşınan odunun konabileceği yerler: tepe + kameraya bakan yüzün sağındaki ve solundaki yanlar.
+    // Geçersizler (prefab yok / katman dolu / hücre dolu) hiç eklenmez.
     private void CollectSnapPoints(Wood carried, List<SnapPoint> result)
     {
         int baseLength = stack.BaseLength;
-        bool topPrefabExists = WoodMerger.Instance.Catalog.GetWood(baseLength + carried.Length) != null;
 
-        for (int layer = 0; layer < WoodLayout.LayerCount(baseLength); layer++)
-        {
-            if (layer == WoodLayout.TopLayer && !topPrefabExists) continue;
-            if (stack.PieceAt(layer) > 0) continue;
-            if (!ArePieceCellsFree(baseLength, layer, carried.Length)) continue;
+        if (WoodMerger.Instance.Catalog.GetWood(baseLength + carried.Length) != null)
+            TryAddSnapPoint(WoodSlot.Top, baseLength, carried.Length, result);
 
-            Vector3Int start = GridMaskRotator.RotateOffset(WoodLayout.PieceStart(baseLength, layer), owner.Rotation);
-            Quaternion rotation = owner.GridRotation * WoodLayout.PieceRotation(layer);
-            result.Add(new SnapPoint(layer, owner.OriginWorldPosition + start, rotation));
-        }
+        GetVisibleSides(out WoodSide first, out WoodSide second);
+        foreach (WoodSide side in new[] { first, second })
+            for (int layer = 1; layer <= baseLength; layer++)
+                if (stack.PieceAt(side, layer) == 0)
+                    TryAddSnapPoint(WoodSlot.At(side, layer), baseLength, carried.Length, result);
     }
 
-    private bool ArePieceCellsFree(int baseLength, int layer, int pieceLength)
+    // Kameraya en çok bakan yan "ön" sayılır; onun sağındaki ve solundaki yanlar döner. Ön ve arka gösterilmez.
+    // Odunun kendi rotasyonu da hesaba katılır (yanlar odunla birlikte döner).
+    private void GetVisibleSides(out WoodSide first, out WoodSide second)
     {
-        foreach (Vector3Int cell in WoodLayout.PieceCells(baseLength, layer, pieceLength))
+        Vector3 toCamera = Vector3.ProjectOnPlane(-Camera.main.transform.forward, Vector3.up);
+        WoodSide facing = WoodSide.Forward;
+        float best = float.MinValue;
+
+        for (int s = 0; s < WoodLayout.SideCount; s++)
+        {
+            Vector3 sideWorld = owner.GridRotation * (Vector3)WoodLayout.SideDirection((WoodSide)s);
+            float alignment = Vector3.Dot(sideWorld, toCamera);
+            if (alignment > best)
+            {
+                best = alignment;
+                facing = (WoodSide)s;
+            }
+        }
+
+        first = (WoodSide)(((int)facing + 1) % WoodLayout.SideCount);
+        second = (WoodSide)(((int)facing + 3) % WoodLayout.SideCount);
+    }
+
+    private void TryAddSnapPoint(WoodSlot slot, int baseLength, int pieceLength, List<SnapPoint> result)
+    {
+        if (!ArePieceCellsFree(baseLength, slot, pieceLength)) return;
+
+        Vector3Int start = GridMaskRotator.RotateOffset(WoodLayout.PieceStart(baseLength, slot), owner.Rotation);
+        Quaternion rotation = owner.GridRotation * WoodLayout.PieceRotation(slot);
+        result.Add(new SnapPoint(slot.ToId(), owner.OriginWorldPosition + start, rotation));
+    }
+
+    private bool ArePieceCellsFree(int baseLength, WoodSlot slot, int pieceLength)
+    {
+        foreach (Vector3Int cell in WoodLayout.PieceCells(baseLength, slot, pieceLength))
         {
             Vector3Int worldCell = owner.OriginWorldPosition + GridMaskRotator.RotateOffset(cell, owner.Rotation);
             if (!GridManager.Instance.IsPlaceableCellFree(worldCell)) return false;

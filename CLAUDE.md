@@ -19,10 +19,12 @@ Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe.
 
 ## Odun
 - Odunlar **dik** durur. Uzunluk = SO'daki yükseklik (`Size.y`); `Lenghts` enum'u odun için kullanılmıyor (sadece ağaç okları).
-- Katmanlar (`WoodLayout`): katman 0 = tepe → toplam uzunlukta tek parça prefab (`WoodCatalogSO`); katman 1..L = sağ yan, yukarıdan aşağı → parça 90° yatırılıp sağa uzanır, sonuç `MergedWood`.
-- "Sağ" = odunun kendi sağı (rotasyonla döner). Sol taraf ve alt uç yok.
-- Her boş katmana ayrı odun eklenebilir; hem `Wood` hem `MergedWood` hedeftir (ortak davranış `WoodMergeTarget`, ortak arayüz `IWoodStack`). Eklenen/taşınan odun her zaman tek parça `Wood`; `MergedWood` başka bir oduna eklenemez. Yandaki yatık parçaların kendi katmanları yok.
-- Yanları dolu odunun tepesine ekleme: ana odun uzar, yan parçalar yerinde kalır, katman numaraları eklenen uzunluk kadar kayar (`WoodLayout.LayersAfterTopMerge`). Toplam uzunlukta prefab yoksa tepe noktası gösterilmez.
+- Bağlantı yerleri (`WoodLayout`, `WoodSlot`): tepe → toplam uzunlukta tek parça prefab (`WoodCatalogSO`); dört yan (Forward/Right/Back/Left, odunun kendi yönleri, R ile döner), her yanda katman 1..L yukarıdan aşağı → parça yatırılıp o yanın yönünde uzanır, sonuç `MergedWood`. Alt uç yok.
+- Sadece kameraya bakan yüzün sağındaki ve solundaki yanlarda nokta gösterilir (ön ve arka gösterilmez) + tepe.
+- Her katman bağımsız doldurulur; hem `Wood` hem `MergedWood` hedeftir (ortak davranış `WoodMergeTarget`, ortak arayüz `IWoodStack.PieceAt(yan, katman)`). Eklenen/taşınan odun her zaman tek parça `Wood`; `MergedWood` başka bir oduna eklenemez. Yatık parçaların kendi katmanları yok.
+- Yanları dolu odunun tepesine ekleme: ana odun uzar, dört yanın parçaları yerinde kalır, katman numaraları eklenen uzunluk kadar kayar (`WoodLayout.SidesAfterTopMerge`). Toplam uzunlukta prefab yoksa tepe noktası gösterilmez.
+- Blueprint imzası döndürmeden bağımsız (`WoodLayout.CanonicalSignature`: 4 dönüşten sıralamada en küçüğü); döndürülmüş aynı şekil eşleşir, ayna görüntüsü eşleşmez. `steps` çıktısı slot'a yerleştirirken gereken dönüş.
+- `MergedWood` kayıt durumu: `baseLength` + 4 yan; eski format (sadece sağ yan, `layers`) yüklenirken sağ yana çevrilir.
 - Kombinasyon prefab'ı yapılmaz (eski 2BR_1BR sistemi kaldırıldı).
 
 ## Blueprint (boyama kitabı)
