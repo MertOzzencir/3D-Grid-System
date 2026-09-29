@@ -41,6 +41,9 @@ public class GridDragMotor
 
     public void Tick()
     {
+        // Yapışkan hedef: kilit bırakılmadıkça ray ile yeni hedef aranmaz (mouse collider'dan çıksa da)
+        if (TryKeepStickyTarget()) return;
+
         if (!TryRaycast(out RaycastHit hit, out IToolTarget target))
         {
             ClearTarget();
@@ -71,6 +74,27 @@ public class GridDragMotor
             lastValidGridPosition = gridPos;
             FollowTowards(gridPos, owner.GridRotation);
         }
+    }
+
+    private bool TryKeepStickyTarget()
+    {
+        if (!(currentTarget is IStickyToolTarget sticky)) return false;
+
+        // Hedef bu arada yok edilmiş olabilir (Unity null'u)
+        if (currentTarget is Object targetObject && targetObject == null)
+        {
+            currentTarget = null;
+            return false;
+        }
+
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        if (!sticky.IsStillTargeted(interactable, ray)) return false;
+
+        Vector3 targetPos = currentTarget.GetToolTargetPosition(interactable, out bool accept);
+        if (!accept) return false; // uygun nokta kalmadı: normal akışa dön
+
+        FollowTowards(targetPos, currentTarget.GetToolTargetRotation());
+        return true;
     }
 
     public bool TryUseOnTarget(out bool finished)

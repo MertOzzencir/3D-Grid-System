@@ -11,6 +11,7 @@ public class InteractableController : MonoBehaviour
     private IHoverable hovered;
 
     public bool IsHolding => currentInteracted != null;
+    public IInteractable Held => currentInteracted;
 
     void Awake()
     {

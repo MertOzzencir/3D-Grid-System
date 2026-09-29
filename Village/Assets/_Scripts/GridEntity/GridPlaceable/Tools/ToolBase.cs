@@ -1,10 +1,20 @@
 using System.Collections;
 using UnityEngine;
 
-public abstract class ToolBase : GridPlaceable, IInteractable
+public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
 {
     public Transform VisualTransform;
     [SerializeField] private float followSpeed = 10f;
+
+    [Header("Eldiven")]
+    [Tooltip("Eldivenin avucunun sapta oturacağı nokta; VisualTransform'un altında olsun ki sallanmayla birlikte dönsün. " +
+             "Y avucun baktığı yön (sapa doğru), Z parmak uçları. Boşsa eldiven normal tutar.")]
+    [SerializeField] private Transform gloveGrip;
+    [Tooltip("Sapı kavrarken parmakların kıvrılması (0 = düz, 1 = tam kıvrık)")]
+    [SerializeField, Range(0f, 1f)] private float gloveGripCurl = 0.7f;
+
+    public Transform GripPoint => gloveGrip;
+    public float GripCurl => gloveGripCurl;
 
     [Header("Kullanım")]
     [Tooltip("İki kullanım arasındaki en kısa süre (saniye). Tıklama anından itibaren sayılır.")]

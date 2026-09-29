@@ -137,7 +137,8 @@ public class GloveFingers : MonoBehaviour
         {
             if (!finger.valid) continue;
 
-            float target = SolveContact(finger, radius);
+            // Alet sapını kavrarken yüzey aranmaz (aletin collider'ı sallanmada dönmüyor), sabit kavramaya gidilir
+            float target = cursor.IsGripping ? cursor.GripCurl : SolveContact(finger, radius);
             target += (Mathf.PerlinNoise(finger.noiseSeed, Time.time * idleSpeed) - 0.5f) * 2f * idleNoise;
 
             // Sönümlü yay

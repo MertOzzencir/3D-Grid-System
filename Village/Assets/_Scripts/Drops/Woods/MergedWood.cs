@@ -4,7 +4,7 @@ using UnityEngine;
 
 // Yanlarında odun olan dik odun: ana (base) odun + dört yanın katmanlarındaki yatık parçalar.
 // Boş katmanlarına tek parça odun eklenebilir (hedef); kendisi başka bir oduna eklenemez ama taşınıp döndürülebilir.
-public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintPiece, IWoodStack, ISaveState
+public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlueprintPiece, IWoodStack, ISaveState
 {
     // Unity iç içe dizi (int[][]) kaydedemediği için her yan bu sınıfla tutulur
     [Serializable]
@@ -233,4 +233,5 @@ public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintP
     public Quaternion GetToolTargetRotation() => mergeTarget.GetToolTargetRotation();
     public void OnToolTargetExit() => mergeTarget.OnToolTargetExit();
     public bool OnToolUsed(IInteractable tool) => mergeTarget.OnToolUsed(tool);
+    public bool IsStillTargeted(IInteractable interacted, Ray mouseRay) => mergeTarget.IsStillTargeted(interacted, mouseRay);
 }

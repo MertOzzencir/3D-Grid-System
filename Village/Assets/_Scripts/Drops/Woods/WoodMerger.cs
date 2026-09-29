@@ -15,9 +15,13 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private JellyWobble mergeWobble = new JellyWobble();
     [Tooltip("Hedef odunun kameraya bakan yanındaki parçalar, odun getirilince yarı saydam olur (aynı shader).")]
     [SerializeField] private DitherFade frontFade = new DitherFade();
+    [Tooltip("Taşınan odun bir hedefe yapıştıktan sonra mouse, hedefin ekseninden bu kadar (birim) uzaklaşınca bırakılır. " +
+             "Mouse collider'dan çıksa da hedef kaybolmaz.")]
+    [SerializeField] private float targetReleaseDistance = 1.8f;
 
     public WoodCatalogSO Catalog => catalog;
     public DitherFade FrontFade => frontFade;
+    public float TargetReleaseDistance => targetReleaseDistance;
     public GameObject SnapIndicatorPrefab => snapIndicatorPrefab;
 
     private void Awake()

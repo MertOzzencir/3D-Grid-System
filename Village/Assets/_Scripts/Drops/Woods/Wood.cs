@@ -2,7 +2,7 @@ using UnityEngine;
 
 // Tek parça odun. Uzunluğu grid yüksekliğidir (SO Size.y). Katmanlar için bkz. WoodLayout.
 // Katmanları her zaman boştur; bir katmana odun eklenince MergedWood'a dönüşür.
-public class Wood : SourceBase, IInteractable, IToolTarget, IBlueprintPiece, IWoodStack
+public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiece, IWoodStack
 {
     [SerializeField] private float followSpeed;
 
@@ -41,4 +41,5 @@ public class Wood : SourceBase, IInteractable, IToolTarget, IBlueprintPiece, IWo
     public Quaternion GetToolTargetRotation() => mergeTarget.GetToolTargetRotation();
     public void OnToolTargetExit() => mergeTarget.OnToolTargetExit();
     public bool OnToolUsed(IInteractable tool) => mergeTarget.OnToolUsed(tool);
+    public bool IsStillTargeted(IInteractable interacted, Ray mouseRay) => mergeTarget.IsStillTargeted(interacted, mouseRay);
 }

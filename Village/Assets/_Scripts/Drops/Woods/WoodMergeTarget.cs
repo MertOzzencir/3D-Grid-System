@@ -48,6 +48,24 @@ public class WoodMergeTarget
         return SnapSelector.Selected.Position;
     }
 
+    // Yapışkan hedef: taşınan odun bu oduna bir kez yapıştıysa, mouse collider'dan çıksa da bırakılmaz.
+    // Mouse, hedefin kameraya bakan düzlemine yansıtılır; nokta ana odunun ekseninden (dikey çizgi) belli
+    // mesafeden fazla uzaklaşınca bırakılır. Noktalar zaten mouse ışınına göre seçildiği için collider gerekmez.
+    public bool IsStillTargeted(IInteractable interacted, Ray mouseRay)
+    {
+        if (!(interacted is Wood carried) || ReferenceEquals(carried, owner)) return false;
+
+        Transform cameraTransform = Camera.main.transform;
+        Vector3 bottom = owner.OriginWorldPosition;
+        Vector3 top = bottom + Vector3.up * (stack.BaseLength - 1);
+        var plane = new Plane(-cameraTransform.forward, (bottom + top) * 0.5f);
+        if (!plane.Raycast(mouseRay, out float enter)) return false;
+
+        Vector3 point = mouseRay.GetPoint(enter);
+        Vector3 closestOnAxis = bottom + Vector3.up * Mathf.Clamp(point.y - bottom.y, 0f, top.y - bottom.y);
+        return Vector3.Distance(point, closestOnAxis) <= WoodMerger.Instance.TargetReleaseDistance;
+    }
+
     public Quaternion GetToolTargetRotation()
         => snapSelector != null && snapSelector.HasSelection ? snapSelector.Selected.Rotation : owner.transform.rotation;
 
