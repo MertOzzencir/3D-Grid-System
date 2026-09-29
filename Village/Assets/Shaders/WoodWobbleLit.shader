@@ -1,6 +1,7 @@
-// URP Lit kopyası + birleşmede jöle gibi sallanma (Wobble.hlsl).
+// URP Lit kopyası + birleşmede jöle gibi sallanma (Wobble.hlsl) + noktalı saydamlık (Fade.hlsl).
 // Lit'ten tek fark: ForwardLit, ShadowCaster, GBuffer, DepthOnly, DepthNormals pass'lerinde
 // vertex, URP'nin kendi vertex fonksiyonuna gitmeden önce ApplyWobble ile deforme edilir.
+// ForwardLit, GBuffer, DepthOnly, DepthNormals fragment'ı önce ApplyFade çağırır (ShadowCaster hariç).
 // Elle düzenlenmez: Editor~/make_lit_variants.py ile üretilir, URP güncellenince yeniden üret.
 Shader "Village/Wood Wobble Lit"
 {
@@ -118,7 +119,7 @@ Shader "Village/Wood Wobble Lit"
             // -------------------------------------
             // Shader Stages
             #pragma vertex VillageLitPassVertex
-            #pragma fragment LitPassFragment
+            #pragma fragment VillageLitPassFragment
 
             // -------------------------------------
             // Material Keywords
@@ -185,6 +186,22 @@ Shader "Village/Wood Wobble Lit"
             {
                 ApplyWobble(input.positionOS.xyz, input.normalOS);
                 return LitPassVertex(input);
+            }
+            #include "Fade.hlsl"
+            void VillageLitPassFragment(
+                Varyings input
+                , out half4 outColor : SV_Target0
+            #ifdef _WRITE_RENDERING_LAYERS
+                , out uint outRenderingLayers : SV_Target1
+            #endif
+            )
+            {
+                ApplyFade(input.positionCS);
+                LitPassFragment(input, outColor
+            #ifdef _WRITE_RENDERING_LAYERS
+                    , outRenderingLayers
+            #endif
+                );
             }
             ENDHLSL
         }
@@ -271,7 +288,7 @@ Shader "Village/Wood Wobble Lit"
             // -------------------------------------
             // Shader Stages
             #pragma vertex VillageLitGBufferPassVertex
-            #pragma fragment LitGBufferPassFragment
+            #pragma fragment VillageLitGBufferPassFragment
 
             // -------------------------------------
             // Material Keywords
@@ -336,6 +353,12 @@ Shader "Village/Wood Wobble Lit"
                 ApplyWobble(input.positionOS.xyz, input.normalOS);
                 return LitGBufferPassVertex(input);
             }
+            #include "Fade.hlsl"
+            GBufferFragOutput VillageLitGBufferPassFragment(Varyings input)
+            {
+                ApplyFade(input.positionCS);
+                return LitGBufferPassFragment(input);
+            }
             ENDHLSL
         }
 
@@ -359,7 +382,7 @@ Shader "Village/Wood Wobble Lit"
             // -------------------------------------
             // Shader Stages
             #pragma vertex VillageDepthOnlyVertex
-            #pragma fragment DepthOnlyFragment
+            #pragma fragment VillageDepthOnlyFragment
 
             // -------------------------------------
             // Material Keywords
@@ -385,6 +408,12 @@ Shader "Village/Wood Wobble Lit"
                 ApplyWobble(input.position.xyz);
                 return DepthOnlyVertex(input);
             }
+            #include "Fade.hlsl"
+            half VillageDepthOnlyFragment(Varyings input) : SV_TARGET
+            {
+                ApplyFade(input.positionCS);
+                return DepthOnlyFragment(input);
+            }
             ENDHLSL
         }
 
@@ -408,7 +437,7 @@ Shader "Village/Wood Wobble Lit"
             // -------------------------------------
             // Shader Stages
             #pragma vertex VillageDepthNormalsVertex
-            #pragma fragment DepthNormalsFragment
+            #pragma fragment VillageDepthNormalsFragment
 
             // -------------------------------------
             // Material Keywords
@@ -440,6 +469,22 @@ Shader "Village/Wood Wobble Lit"
             {
                 ApplyWobble(input.positionOS.xyz, input.normal);
                 return DepthNormalsVertex(input);
+            }
+            #include "Fade.hlsl"
+            void VillageDepthNormalsFragment(
+                Varyings input
+                , out half4 outNormalWS : SV_Target0
+            #ifdef _WRITE_RENDERING_LAYERS
+                , out uint outRenderingLayers : SV_Target1
+            #endif
+            )
+            {
+                ApplyFade(input.positionCS);
+                DepthNormalsFragment(input, outNormalWS
+            #ifdef _WRITE_RENDERING_LAYERS
+                    , outRenderingLayers
+            #endif
+                );
             }
             ENDHLSL
         }

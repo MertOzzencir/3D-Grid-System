@@ -41,8 +41,13 @@ Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe.
 ## Görsel stil ve shader'lar
 - Stil: yumuşak, kil (clay) gibi yuvarlak modeller, pastel renkler, yumuşak gölgeler, yukarıdan eğik kamera. Hedef platform PC (mobil yok).
 - `Assets/Shaders/StylizedWater.shader` (URP HLSL): Depth + Opaque Texture'a ihtiyaç duyar (PC_RPAsset'te açık). Doku kullanmaz, desenler dünya uzayında.
+  - Yüzey: iki katman yumuşak Voronoi tepecik (eğim analitik), güneşe bakan yamaç açık + güneş yansıması; hafif şeffaf. Kıyıda temas köpüğü + kıyıya gelen dalga çizgileri (derinliğin eş-değer çizgileri).
+  - Köpük/sığ su derinlikten hesaplanır: su bir şeye değmeli. Ada için `IslandSkirt` (base hücrelerinden otomatik eğimli yamaç, `GridManager.BasesChanged` ile yeniden kurulur); su mesh'i `WaterSurface` (sık grid, vertex dalgası için).
+  - Materyali elle düzenlerken dikkat: Unity eski shader'ların değerlerini materyalde tutar ve aynı isimli yeni varsayılanları ezer; shader değişince materyali Reset'le.
 - Vertex animasyonlu Lit kopyaları: `TreeChopLit.shader` (+ `ChopDent.hlsl`, ağaç materyali) ve `WoodWobbleLit.shader` (+ `Wobble.hlsl`, `New Wood` materyali). URP `Lit.shader`'ın birebir kopyası; sadece 5 pass'in vertex'i sarmalanmış. **Elle düzenlenmez**, `Assets/Shaders/Editor~/make_lit_variants.py` ile üretilir; URP güncellenince bu script tekrar çalıştırılır. Yeni deformasyon = yeni `.hlsl` + script'teki `VARIANTS` listesine bir satır.
 - Deformasyon verisini C# (`ChopDent.cs`, `JellyWobble.cs`) MaterialPropertyBlock ile sadece ilgili renderer'lara, object space'te gönderir; animasyonu GPU `_Time.y` ile oynatır, bitince blok temizlenir (SRP Batcher'a geri döner).
+- Script fragment de sarabilir (`VARIANTS`'ta `fragment`): `WoodWobbleLit` ayrıca `Fade.hlsl` ile noktalı (dither) saydamlık yapar; ShadowCaster hariç (gölge tam kalır). `DitherFade.cs` aynı MPB yöntemiyle sürer.
+- Odun getirilince hedefin kameraya bakan yanındaki parçalar yarı saydam olur (`WoodMergeTarget.FadeFrontPieces`, sadece nokta seçiliyken; çıkışta geri gelir). Ayarı `WoodMerger.frontFade`.
 - Odun birleşince (`WoodMerger`) sonuç jöle gibi sallanır: yan birleşmede parçanın geldiği yönün tersine eğilir, tepe birleşmesinde sadece basılıp yaylanır.
 
 ## Save sistemi

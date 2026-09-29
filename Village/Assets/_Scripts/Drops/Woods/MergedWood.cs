@@ -33,8 +33,19 @@ public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintP
     private WoodMergeTarget mergeTarget;
     private GridFootprint[] footprints; // rotasyon başına bir kez hesaplanır
     private string signature;           // şekil değişmedikçe aynı
+    private readonly List<Renderer>[] sideRenderers = NewSideRenderers();
 
     public int BaseLength => baseLength;
+
+    public Renderer[] PieceRenderers(WoodSide side) => sideRenderers[(int)side].ToArray();
+
+    private static List<Renderer>[] NewSideRenderers()
+    {
+        var result = new List<Renderer>[WoodLayout.SideCount];
+        for (int s = 0; s < result.Length; s++)
+            result[s] = new List<Renderer>();
+        return result;
+    }
 
     public int PieceAt(WoodSide side, int layer)
     {
@@ -63,9 +74,16 @@ public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintP
         footprints = null;
         signature = null;
 
+        foreach (List<Renderer> list in sideRenderers)
+            list.Clear();
+
         AddPiece(catalog.GetWood(baseLength), Vector3Int.zero, Quaternion.identity, baseLength);
         foreach ((WoodSlot slot, int length) in FilledSlots())
-            AddPiece(catalog.GetWood(length), WoodLayout.PieceStart(baseLength, slot), WoodLayout.PieceRotation(slot), length);
+        {
+            GameObject visual = AddPiece(catalog.GetWood(length), WoodLayout.PieceStart(baseLength, slot), WoodLayout.PieceRotation(slot), length);
+            if (visual != null)
+                sideRenderers[(int)slot.Side].AddRange(visual.GetComponentsInChildren<Renderer>());
+        }
     }
 
     public override GridFootprint GetFootprint()
@@ -101,26 +119,27 @@ public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintP
     }
 
     // Parçanın modelini child olarak ekler, root'a da parçayı kaplayan bir collider koyar
-    // (InteractableController collider'ın kendi objesinde IInteractable arıyor).
-    private void AddPiece(Wood woodPrefab, Vector3Int start, Quaternion rotation, int length)
+    // (InteractableController collider'ın kendi objesinde IInteractable arıyor). Eklenen modeli döndürür.
+    private GameObject AddPiece(Wood woodPrefab, Vector3Int start, Quaternion rotation, int length)
     {
         if (woodPrefab == null)
         {
             Debug.LogWarning($"WoodCatalog'da {length} uzunluğunda odun yok", this);
-            return;
+            return null;
         }
 
         var holder = new GameObject($"Piece {length}BR").transform;
         holder.SetParent(transform, false);
         holder.localPosition = start;
         holder.localRotation = rotation;
-        Instantiate(woodPrefab.Visual.gameObject, holder, false);
+        GameObject visual = Instantiate(woodPrefab.Visual.gameObject, holder, false);
 
         Vector3 axis = rotation * Vector3.up;
         Vector3 size = rotation * new Vector3(ColliderThickness, length, ColliderThickness);
         var box = gameObject.AddComponent<BoxCollider>();
         box.center = (Vector3)start + axis * (length - 1) / 2f;
         box.size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
+        return visual;
     }
 
     // --- IInteractable ---

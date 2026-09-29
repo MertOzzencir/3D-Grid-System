@@ -11,6 +11,12 @@ public class WoodMergeTarget
     private readonly List<SnapPoint> snapPoints = new List<SnapPoint>();
     private SnapPointSelector snapSelector;
 
+    // Kameraya bakan yandaki parçalar noktaları kapatmasın diye yarı saydam yapılır (bkz. DitherFade)
+    private bool frontFaded;
+    private WoodSide fadedSide;
+    private Renderer[] fadedRenderers;  // saydam olan ya da geri gelmekte olan parçalar
+    private Coroutine restoreRoutine;
+
     // WoodMerger'ın Awake'i sahibinkinden sonra çalışabilir, o yüzden ilk ihtiyaçta oluşturuyoruz
     private SnapPointSelector SnapSelector
         => snapSelector ??= new SnapPointSelector(WoodMerger.Instance.SnapIndicatorPrefab, owner.transform);
@@ -29,12 +35,15 @@ public class WoodMergeTarget
         accept = false;
         if (!(interacted is Wood carried) || ReferenceEquals(carried, owner)) return default;
 
+        WoodSide facing = GetFacingSide();
         snapPoints.Clear();
-        CollectSnapPoints(carried, snapPoints);
+        CollectSnapPoints(carried, facing, snapPoints);
 
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         if (!SnapSelector.UpdateSelection(snapPoints, ray)) return default;
 
+        // Seçim yokken GridDragMotor her kare OnToolTargetExit çağırır; o yüzden sadece seçim varken saydamlaştır
+        FadeFrontPieces(facing);
         accept = true;
         return SnapSelector.Selected.Position;
     }
@@ -42,7 +51,11 @@ public class WoodMergeTarget
     public Quaternion GetToolTargetRotation()
         => snapSelector != null && snapSelector.HasSelection ? snapSelector.Selected.Rotation : owner.transform.rotation;
 
-    public void OnToolTargetExit() => snapSelector?.Hide();
+    public void OnToolTargetExit()
+    {
+        snapSelector?.Hide();
+        RestoreFrontPieces();
+    }
 
     public bool OnToolUsed(IInteractable tool)
     {
@@ -56,23 +69,25 @@ public class WoodMergeTarget
 
     // Taşınan odunun konabileceği yerler: tepe + kameraya bakan yüzün sağındaki ve solundaki yanlar.
     // Geçersizler (prefab yok / katman dolu / hücre dolu) hiç eklenmez.
-    private void CollectSnapPoints(Wood carried, List<SnapPoint> result)
+    private void CollectSnapPoints(Wood carried, WoodSide facing, List<SnapPoint> result)
     {
         int baseLength = stack.BaseLength;
 
         if (WoodMerger.Instance.Catalog.GetWood(baseLength + carried.Length) != null)
             TryAddSnapPoint(WoodSlot.Top, baseLength, carried.Length, result);
 
-        GetVisibleSides(out WoodSide first, out WoodSide second);
+        // Ön yanın sağındaki ve solundaki yanlar; ön ve arka gösterilmez
+        WoodSide first = (WoodSide)(((int)facing + 1) % WoodLayout.SideCount);
+        WoodSide second = (WoodSide)(((int)facing + 3) % WoodLayout.SideCount);
         foreach (WoodSide side in new[] { first, second })
             for (int layer = 1; layer <= baseLength; layer++)
                 if (stack.PieceAt(side, layer) == 0)
                     TryAddSnapPoint(WoodSlot.At(side, layer), baseLength, carried.Length, result);
     }
 
-    // Kameraya en çok bakan yan "ön" sayılır; onun sağındaki ve solundaki yanlar döner. Ön ve arka gösterilmez.
+    // Kameraya en çok bakan yan "ön" sayılır.
     // Odunun kendi rotasyonu da hesaba katılır (yanlar odunla birlikte döner).
-    private void GetVisibleSides(out WoodSide first, out WoodSide second)
+    private WoodSide GetFacingSide()
     {
         Vector3 toCamera = Vector3.ProjectOnPlane(-Camera.main.transform.forward, Vector3.up);
         WoodSide facing = WoodSide.Forward;
@@ -89,8 +104,39 @@ public class WoodMergeTarget
             }
         }
 
-        first = (WoodSide)(((int)facing + 1) % WoodLayout.SideCount);
-        second = (WoodSide)(((int)facing + 3) % WoodLayout.SideCount);
+        return facing;
+    }
+
+    // Ön yandaki parçaları yarı saydam yapar; zaten o yan saydamsa bir şey yapmaz.
+    private void FadeFrontPieces(WoodSide facing)
+    {
+        if (frontFaded && fadedSide == facing) return;
+
+        StopRestore();
+        // Başka bir yan saydam kaldıysa (ön yan değiştiyse) o hemen eski haline döner
+        if (fadedRenderers != null && fadedSide != facing)
+            DitherFade.Clear(fadedRenderers);
+
+        fadedSide = facing;
+        fadedRenderers = stack.PieceRenderers(facing);
+        frontFaded = true;
+        if (fadedRenderers.Length > 0)
+            WoodMerger.Instance.FrontFade.FadeOut(fadedRenderers);
+    }
+
+    private void RestoreFrontPieces()
+    {
+        if (!frontFaded) return;
+        frontFaded = false;
+        if (fadedRenderers.Length > 0 && owner != null && owner.isActiveAndEnabled)
+            restoreRoutine = owner.StartCoroutine(WoodMerger.Instance.FrontFade.FadeIn(fadedRenderers));
+    }
+
+    private void StopRestore()
+    {
+        if (restoreRoutine == null) return;
+        if (owner != null) owner.StopCoroutine(restoreRoutine);
+        restoreRoutine = null;
     }
 
     private void TryAddSnapPoint(WoodSlot slot, int baseLength, int pieceLength, List<SnapPoint> result)

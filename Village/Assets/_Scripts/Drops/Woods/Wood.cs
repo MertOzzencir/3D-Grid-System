@@ -13,6 +13,7 @@ public class Wood : SourceBase, IInteractable, IToolTarget, IBlueprintPiece, IWo
     // --- IWoodStack ---
     public int BaseLength => Length;
     public int PieceAt(WoodSide side, int layer) => 0;
+    public Renderer[] PieceRenderers(WoodSide side) => System.Array.Empty<Renderer>();
 
     private GridDragMotor drag;
     private WoodMergeTarget mergeTarget;

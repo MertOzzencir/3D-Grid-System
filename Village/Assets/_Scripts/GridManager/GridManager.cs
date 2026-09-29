@@ -20,9 +20,24 @@ public class GridManager : MonoBehaviour
 
         CreateGridData();
     }
+    // Base eklenip silinince (örn. ada eteği yeniden kurulsun diye)
+    public event Action BasesChanged;
+
     public bool CanPlaceBase(GridBase entity, Vector3 position) => CanPlaceGeneric(entity, position, d => d.Base);
-    public bool PlaceBase(GridBase entity, Vector3 position) => PlaceGeneric(entity, position, d => d.Base, (d, e) => d.Base = e);
-    public bool RemoveBase(GridBase entity, bool destroy = true) => RemoveGeneric(entity, d => d.Base, d => d.Base = null, destroy);
+
+    public bool PlaceBase(GridBase entity, Vector3 position)
+    {
+        bool placed = PlaceGeneric(entity, position, d => d.Base, (d, e) => d.Base = e);
+        if (placed) BasesChanged?.Invoke();
+        return placed;
+    }
+
+    public bool RemoveBase(GridBase entity, bool destroy = true)
+    {
+        bool removed = RemoveGeneric(entity, d => d.Base, d => d.Base = null, destroy);
+        if (removed) BasesChanged?.Invoke();
+        return removed;
+    }
 
     public bool CanPlaceablePlaceOn(GridPlaceable entity, Vector3 position) => CanPlaceGeneric(entity, position, d => d.Placeable);
     public bool PlaceablePlaceOn(GridPlaceable entity, Vector3 position) => PlaceGeneric(entity, position, d => d.Placeable, (d, e) => d.Placeable = e);

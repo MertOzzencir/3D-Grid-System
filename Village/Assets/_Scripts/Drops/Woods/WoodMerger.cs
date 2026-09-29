@@ -13,8 +13,11 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private MergedWood mergedWoodPrefab;
     [Tooltip("Birleşince sonuç jöle gibi sallanır. Odun materyali 'Village/Wood Wobble Lit' shader'ını kullanmalı.")]
     [SerializeField] private JellyWobble mergeWobble = new JellyWobble();
+    [Tooltip("Hedef odunun kameraya bakan yanındaki parçalar, odun getirilince yarı saydam olur (aynı shader).")]
+    [SerializeField] private DitherFade frontFade = new DitherFade();
 
     public WoodCatalogSO Catalog => catalog;
+    public DitherFade FrontFade => frontFade;
     public GameObject SnapIndicatorPrefab => snapIndicatorPrefab;
 
     private void Awake()
