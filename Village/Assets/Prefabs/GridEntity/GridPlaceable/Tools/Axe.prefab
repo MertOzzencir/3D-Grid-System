@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5447338256143925065}
   - component: {fileID: 8068828346316012274}
-  - component: {fileID: 871510326296330241}
+  - component: {fileID: 1267462294107112075}
   m_Layer: 6
   m_Name: Axe
   m_TagString: Untagged
@@ -50,11 +50,16 @@ MonoBehaviour:
   rotation: 1
   VisualTransform: {fileID: 3542210693720370261}
   followSpeed: 15
-  raycastMask:
-    serializedVersion: 2
-    m_Bits: 55
---- !u!65 &871510326296330241
-BoxCollider:
+  cooldown: 0.6
+  swing:
+    axis: {x: 1, y: 0, z: 0}
+    windUpAngle: -50
+    strikeAngle: 30
+    windUpDuration: 0.15
+    strikeDuration: 0.07
+    returnDuration: 0.2
+--- !u!136 &1267462294107112075
+CapsuleCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -71,9 +76,11 @@ BoxCollider:
   m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 0.74034595, y: 1.7016454, z: 0.89560175}
-  m_Center: {x: -0.018875599, y: 0.38796282, z: 0.18084502}
+  serializedVersion: 2
+  m_Radius: 0.14482379
+  m_Height: 1.6549382
+  m_Direction: 1
+  m_Center: {x: -0.0005617142, y: 0.29773068, z: -0.0042717457}
 --- !u!1001 &3936934040706714558
 PrefabInstance:
   m_ObjectHideFlags: 0

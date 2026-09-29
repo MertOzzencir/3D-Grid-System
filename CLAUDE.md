@@ -53,6 +53,15 @@ Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe.
 - Odun getirilince hedefin kameraya bakan yanındaki parçalar yarı saydam olur (`WoodMergeTarget.FadeFrontPieces`, sadece nokta seçiliyken; çıkışta geri gelir). Ayarı `WoodMerger.frontFade`.
 - Odun birleşince (`WoodMerger`) sonuç jöle gibi sallanır: yan birleşmede parçanın geldiği yönün tersine eğilir, tepe birleşmesinde sadece basılıp yaylanır.
 
+## Eldiven imleç (`_Scripts/Cursor`)
+- `GloveCursor`: mouse ray'i yüzeye çarpar, avuç ortası (`PalmContact`: Y avucun baktığı yön, Z parmak uçları) çarpılan noktaya oturur, avuç yüzeye bakar; normal etrafındaki dönüş kameraya göre sabit (parmaklar ekranın yukarısına), yumuşak takip. Collider yoksa su seviyesinde düzlem; UI üstünde gizlenir. Blender origin'ine güvenilmez (origin bilekte).
+- `GloveFingers` (execution order 100): parmak başına tek serbestlik "kıvrılma"; eksen açılışta (kemik yönü × avuç yönü) ile hesaplanır, bone roll önemsiz. Her kare ikili aramayla "ucu yüzeye değene kadar kıvrıl" (CheckSphere, `fingerRadius`), değmiyorsa sarkar; yaylı geçiş + hafif kıpırdama. `*_Alt` avuç kemikleri hafif çukurlaşır. Animation Rigging paketi yok. "Kemikleri isimden doldur" context menüsü.
+- Temas collider'lara göre: görsel kalınlığında collider gerekir (`MergedWood` collider'ları görsel mesh sınırlarından hesaplanır).
+- Yapılacak: base grid üstünde ayrı hareket mantığı, durum pozları (önizleme, taşıma, build mode), taşırken kavrama.
+- Özel pozlar/hareketler ileride Blender'da: tek kareli `Pose_*` (hedef poz) ve oynayan `Anim_*` action'ları; sadece rotasyon key'lenir.
+- Rig (sağ el, 5 parmak, Blender'da dik duruyor → Unity'de düzeltme açısı): kök `Avuç İçi` (ASCII'ye çevrilmesi önerildi); parmaklar `Isaret/Orta/Yuzuk/Serce` × `Alt/Orta/Ust`, başparmak `Bas_Alt/Bas_Ust`. `*_Alt` avuç kemiği sayılır (sadece hafif çukurlaşma), kıvrılma `Orta`+`Ust` ile; başparmakta iki kemik de kıvrılır. Kemikler Inspector'a sürüklenir (isim kuralı yok). Bone roll: dört parmakta yerel X ortak kıvrılma ekseni; kıvrılma işareti açılışta otomatik kalibre edilir.
+- FBX: Add Leaf Bones ✓ (parmak ucu = `*_end` kemikleri), Apply Modifiers ✓, sadece Armature + LOW.
+
 ## Save sistemi
 - Kayıt = dünyayı yeniden kuran tarif: her obje için SO `SaveId` + hücre + rotasyon (+ `ISaveState` ile ekstra durum). JSON, `Application.persistentDataPath/<slot>.json`, güvenli yazma (`SaveStorage`).
 - Sahneye elle obje konmaz; her şey build mode ile yerleşir, bu yüzden yükleme boş dünyaya yapılır.

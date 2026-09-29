@@ -22,7 +22,7 @@ public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintP
         public List<int> layers; // eski format (sadece sağ yan): [0] = tepe, [k] = sağ yandaki k. katman
     }
 
-    private const float ColliderThickness = 0.75f;
+    private const float ColliderThickness = 0.75f; // sadece görselde mesh bulunamazsa
 
     [SerializeField] private float followSpeed = 10f;
 
@@ -153,12 +153,44 @@ public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintP
         holder.localRotation = rotation;
         GameObject visual = Instantiate(woodPrefab.Visual.gameObject, holder, false);
 
-        Vector3 axis = rotation * Vector3.up;
-        Vector3 size = rotation * new Vector3(ColliderThickness, length, ColliderThickness);
+        // Collider görselin gerçek sınırlarında (parmaklar ve raycast'ler yüzeye otursun). Görsel yoksa hücre boyunda kutu.
         var box = gameObject.AddComponent<BoxCollider>();
-        box.center = (Vector3)start + axis * (length - 1) / 2f;
-        box.size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
+        if (TryGetLocalBounds(visual, out Bounds bounds))
+        {
+            box.center = bounds.center;
+            box.size = bounds.size;
+        }
+        else
+        {
+            Vector3 axis = rotation * Vector3.up;
+            Vector3 size = rotation * new Vector3(ColliderThickness, length, ColliderThickness);
+            box.center = (Vector3)start + axis * (length - 1) / 2f;
+            box.size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
+        }
         return visual;
+    }
+
+    // Görseldeki bütün mesh'lerin köşeleri bu objenin yerel uzayında. Parçalar 90° katlarında döndüğü için
+    // eksene hizalı kutu görsele tam oturur.
+    private bool TryGetLocalBounds(GameObject visual, out Bounds bounds)
+    {
+        bounds = default;
+        bool any = false;
+        foreach (MeshFilter filter in visual.GetComponentsInChildren<MeshFilter>())
+        {
+            if (filter.sharedMesh == null) continue;
+            Bounds meshBounds = filter.sharedMesh.bounds;
+            for (int corner = 0; corner < 8; corner++)
+            {
+                Vector3 local = meshBounds.center + Vector3.Scale(meshBounds.extents,
+                    new Vector3((corner & 1) == 0 ? -1 : 1, (corner & 2) == 0 ? -1 : 1, (corner & 4) == 0 ? -1 : 1));
+                Vector3 point = transform.InverseTransformPoint(filter.transform.TransformPoint(local));
+                if (any) bounds.Encapsulate(point);
+                else bounds = new Bounds(point, Vector3.zero);
+                any = true;
+            }
+        }
+        return any;
     }
 
     // --- IInteractable ---
