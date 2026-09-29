@@ -89,6 +89,7 @@ Shader "Village/Stylized Water"
 
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
+            #pragma multi_compile_fragment _ _LIGHT_COOKIES
             #pragma multi_compile_fog
             #pragma multi_compile_instancing
 
@@ -316,6 +317,14 @@ Shader "Village/Stylized Water"
                 color = lerp(color, sky, saturate(fresnel * _ReflectionStrength * 2.0));
 
                 color *= lerp(1.0, mainLight.shadowAttenuation, _ShadowStrength);
+
+                // Bulut gölgesi (güneşin cookie'si, bkz. CloudShadows.cs): hem renk hem güneş yansıması kararır
+                half3 cloudShadow = 1.0;
+                #if defined(_LIGHT_COOKIES)
+                    cloudShadow = SampleMainLightCookie(input.positionWS);
+                #endif
+                color *= cloudShadow;
+                mainLight.shadowAttenuation *= cloudShadow.r;
 
                 // 4) Kıyı köpüğü: temasta ince dolu çizgi + dışa doğru parça parça sönen bant
                 float shore = depth / max(_FoamWidth, 0.001); // 0 = temas, 1 = bandın sonu
