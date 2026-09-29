@@ -19,6 +19,13 @@ Shader "Village/Stylized Water"
         _HorizonPower ("Uzak Renk Geçişi", Range(0.5, 8)) = 3
         _RefractionStrength ("Kırılma", Range(0, 0.1)) = 0.035
 
+        [Header(Renk Bolgeleri)]
+        _PatchLightColor ("Açık Bölge Rengi (A = güç)", Color) = (0.2, 0.85, 0.82, 0.45)
+        _PatchDarkColor ("Koyu Bölge Rengi (A = güç)", Color) = (0.02, 0.38, 0.62, 0.4)
+        _PatchScale ("Bölge Boyu (birim)", Float) = 16
+        _PatchSpeed ("Bölge Kayma Hızı", Float) = 0.15
+        _PatchContrast ("Bölge Kenar Keskinliği", Range(0.5, 4)) = 1.6
+
         [Header(Dalgaciklar Voronoi)]
         _RippleScale ("Tepecik Sıklığı (birim başına)", Float) = 3.5
         _RippleHeight ("Tepecik Yüksekliği (eğim)", Range(0, 2)) = 0.4
@@ -105,6 +112,12 @@ Shader "Village/Stylized Water"
                 half4 _HorizonColor;
                 half _HorizonPower;
                 half _RefractionStrength;
+
+                half4 _PatchLightColor;
+                half4 _PatchDarkColor;
+                float _PatchScale;
+                float _PatchSpeed;
+                half _PatchContrast;
 
                 float _RippleScale;
                 half _RippleHeight;
@@ -299,6 +312,14 @@ Shader "Village/Stylized Water"
                 half4 water = lerp(_ShallowColor, _DeepColor, depth01);
                 half horizon = pow(1.0 - saturate(dot(viewDirWS, float3(0, 1, 0))), _HorizonPower);
                 water.rgb = lerp(water.rgb, _HorizonColor.rgb, horizon * _HorizonColor.a);
+
+                // Geniş renk bölgeleri: açık turkuaz ve koyu mavi alanlar, akıntı gibi bükülmüş kenarlarla yavaşça kayar
+                float2 patchUV = xz / max(_PatchScale, 0.01) + float2(0.7, 0.4) * _PatchSpeed * t / max(_PatchScale, 0.01);
+                float2 warp = float2(GradientNoise(patchUV * 0.7 + 3.1), GradientNoise(patchUV * 0.7 - 5.7));
+                float patch = GradientNoise(patchUV + warp * 0.9) + GradientNoise(patchUV * 2.3 - warp * 0.5 + 11.0) * 0.35;
+                patch = clamp(patch * _PatchContrast * 1.6, -1.0, 1.0); // -1 koyu, +1 açık
+                water.rgb = lerp(water.rgb, _PatchLightColor.rgb, smoothstep(0.0, 1.0, patch) * _PatchLightColor.a);
+                water.rgb = lerp(water.rgb, _PatchDarkColor.rgb, smoothstep(0.0, 1.0, -patch) * _PatchDarkColor.a);
 
                 // 3) Tepecik ışığı: düz yüzeye göre güneşe daha çok bakan yamaç açık, daha az bakan koyu
                 float slopeLight = (dot(normalWS, mainLight.direction) - mainLight.direction.y) * _SlopeContrast;

@@ -33,6 +33,7 @@ public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintP
     private WoodMergeTarget mergeTarget;
     private GridFootprint[] footprints; // rotasyon başına bir kez hesaplanır
     private string signature;           // şekil değişmedikçe aynı
+    private int signatureSteps;
     private readonly List<Renderer>[] sideRenderers = NewSideRenderers();
 
     public int BaseLength => baseLength;
@@ -56,7 +57,25 @@ public class MergedWood : GridPlaceable, IInteractable, IToolTarget, IBlueprintP
 
     // Döndürmeden bağımsız: aynı şeklin her yöndeki hali aynı imzayı verir, ayna görüntüsü farklı verir.
     // Örn. 2BR, forward'ın 2. katmanında 1BR → "MergedWood:2|0,1|0,0|0,0|0,0" (standart dönüşte)
-    public string BlueprintSignature => signature ??= "MergedWood:" + WoodLayout.CanonicalSignature(baseLength, ToArrays(), out _);
+    public string BlueprintSignature
+    {
+        get
+        {
+            if (signature == null)
+                signature = "MergedWood:" + WoodLayout.CanonicalSignature(baseLength, ToArrays(), out signatureSteps);
+            return signature;
+        }
+    }
+
+    // Standart hale gelmek için kaç adım döndürüldüğü (imzayla birlikte hesaplanır)
+    public int BlueprintRotationSteps
+    {
+        get
+        {
+            _ = BlueprintSignature;
+            return signatureSteps;
+        }
+    }
 
     private void Awake()
     {

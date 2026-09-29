@@ -31,7 +31,9 @@ Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe.
 - Blueprint sahnesinde (`Scenes/Blueprint.unity`) Play mode'da parçalar yerleştirilir, **Tools → Blueprint Creator** ile prefab + `GridPlaceableSO` üretilir (`Assets/Blueprints`).
 - Pivot dünya (0,0,0); builder slot'ları 1 birim aşağı kaydırıyor (kullanıcının ayarı).
 - Uyum `IBlueprintPiece.BlueprintSignature` ile (örn. `Wood:2`, `MergedWood:2:0,1,0`). Yeni parça türü (taş, çit) sadece bu interface'i uygular; sistem odun üzerine kurulmamalı.
-- Sıradaki adım: slot'ları `IToolTarget` yapıp oyunda doldurma; boş slot görseli (shader) sonra.
+- Doldurma: `BlueprintSlot` bir `IToolTarget`. Uyan parça (imza eşit) slot'a yapışır ve kendisi doğru yöne döner: hedef rotasyon = blueprint rotasyonu + slot'un `canonicalRotation`'ı + parçanın `BlueprintRotationSteps`'i. Tıklanınca parça yok olur, slot dolar (geri alınamaz). Sıra kuralı yok.
+- Boş slot noktalı %30 görünür (`DitherFade`), uyan parça üstündeyken %60; dolunca tam görünür + sallanır. Hepsi dolunca "tamamlandı" efekti (bütünü sallanır + isteğe bağlı partikül). Ödül sonra düşünülecek.
+- Dolu slot'lar `Blueprint` `ISaveState` ile kaydedilir (slot sırası). Builder slot'a `canonicalRotation` yazar; builder değişirse blueprint'ler yeniden üretilmeli.
 
 ## Ağaç kesme
 - `ToolBase`: cooldown + `ToolSwingAnimation`; kullanım vuruş anında olur. Animasyon sadece `VisualTransform`'u döndürür (root motora ait).

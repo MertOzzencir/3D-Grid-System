@@ -69,7 +69,9 @@ public static class BlueprintBuilder
         slot.SetParent(root, false);
         slot.localPosition = placeable.OriginWorldPosition - Vector3.up; // root (0,0,0)'da, dünya pozisyonu = yerel pozisyon
         slot.localRotation = placeable.GridRotation;
-        slotObject.AddComponent<BlueprintSlot>().EditorSetup(signature, placeable.Rotation);
+        // Parçanın standart (imzadaki) hali blueprint içinde hangi yöne bakıyor: kendi rotasyonu - standarda adımı
+        var canonical = (GridMaskRotator.Rotation)(((int)placeable.Rotation - piece.BlueprintRotationSteps + 4) % 4);
+        slotObject.AddComponent<BlueprintSlot>().EditorSetup(signature, placeable.Rotation, canonical);
 
         CopyRenderers(placeable.transform, slot);
 

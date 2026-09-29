@@ -9,6 +9,7 @@ public class Wood : SourceBase, IInteractable, IToolTarget, IBlueprintPiece, IWo
     public int Length => GetData().Size.y;
 
     public string BlueprintSignature => $"Wood:{Length}";
+    public int BlueprintRotationSteps => 0; // dik tek odun her yönde aynı
 
     // --- IWoodStack ---
     public int BaseLength => Length;

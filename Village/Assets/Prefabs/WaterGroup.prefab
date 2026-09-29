@@ -67,7 +67,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 0}
+  - {fileID: 2100000, guid: 636cb8d8cb51706459283689410eb5cd, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -104,11 +104,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IslandSkirt
   water: {fileID: 8979555459229043671}
-  waterLevel: 0.62
-  topOffset: -0.41
-  inset: -0.08
-  depthBelowWater: 5.99
-  flare: 1.19
+  waterLevel: 15
+  topOffset: -0.25
+  inset: -0.01
+  depthBelowWater: 22.65
+  flare: 0.98
 --- !u!1 &3249740360452798852
 GameObject:
   m_ObjectHideFlags: 0

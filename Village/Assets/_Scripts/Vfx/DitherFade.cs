@@ -17,6 +17,14 @@ public class DitherFade
     [Tooltip("Saydamlaşma / geri gelme süresi (saniye)")]
     [SerializeField] private float duration = 0.15f;
 
+    public DitherFade() { }
+
+    public DitherFade(float visibleAmount, float duration)
+    {
+        this.visibleAmount = visibleAmount;
+        this.duration = duration;
+    }
+
     // Kaldığı yerden yarı saydama geçer
     public void FadeOut(Renderer[] renderers) => AnimateTo(renderers, 1f - visibleAmount);
 

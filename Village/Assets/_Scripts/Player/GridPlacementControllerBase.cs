@@ -98,11 +98,14 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
         }
     }
 
+    // Collider child'da olabilir (örn. blueprint'in collider'ları slot objelerinde): entity collider'dan yukarı doğru aranır
     private void DeletePlaced()
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out RaycastHit hit) && hit.collider.TryGetComponent(out TEntity entity))
-            RemoveEntity(entity);
+        if (!Physics.Raycast(ray, out RaycastHit hit)) return;
+
+        TEntity entity = hit.collider.GetComponentInParent<TEntity>();
+        if (entity != null) RemoveEntity(entity);
     }
 
     protected virtual void OnEnable()
