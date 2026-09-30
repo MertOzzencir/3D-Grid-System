@@ -10,10 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f5f32f877dab28438131bb201dcaae7, type: 3}
-  m_Name: Test Base
+  m_Name: Grass Base
   m_EditorClassIdentifier: Assembly-CSharp::GridBaseSO
-  Name: GrassBase
+  Name: Grass Base
   Icon: {fileID: 21300000, guid: a57d0bc93481bd844af3c2236db044f2, type: 3}
-  Size: {x: 1, y: 1}
-  mask: 01
+  saveId: 
+  size: {x: 1, y: 1, z: 1}
+  layers:
+  - cells: 01
+  layoutSize: {x: 1, y: 1, z: 1}
+  legacySize: {x: 1, y: 1}
+  legacyMask: 
   Prefab: {fileID: 7508292806034206008, guid: 51be04b5be6f6504ea22660d4e42e06b, type: 3}

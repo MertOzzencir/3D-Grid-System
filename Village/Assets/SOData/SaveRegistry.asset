@@ -14,7 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SaveRegistrySO
   entities:
   - {fileID: 11400000, guid: f85bfbf301b158e4e94606d0c53a5c32, type: 2}
+  - {fileID: 11400000, guid: 58f54a26d8fefff4fa9e7c66dba62eb6, type: 2}
+  - {fileID: 11400000, guid: b2ab597ca4d0f1a478708db4b789703c, type: 2}
   - {fileID: 11400000, guid: 2339bc06ba77b6642a7f43cdbbc4b6f2, type: 2}
+  - {fileID: 11400000, guid: 6034a0289e09e04459e72a970413703e, type: 2}
   - {fileID: 11400000, guid: 0004bcc1fc03eae4e8eba9da9f030b8b, type: 2}
   - {fileID: 11400000, guid: 07ed8b8df358a4c49badd0e38ba869a9, type: 2}
   - {fileID: 11400000, guid: c77f984198677104cb1f3054ac8bf6a4, type: 2}

@@ -37,6 +37,24 @@ public class GloveCursor : MonoBehaviour
     [Tooltip("Tutma anında eldivenin tutma noktasına kayma süresi; sonra objeye katı bağlı kalır")]
     [SerializeField] private float attachDuration = 0.08f;
 
+    [Header("Base Üstünde (yürüme / bekleme)")]
+    [Tooltip("Bu hızın (birim/sn, ölçek 1'de) üstünde yürümeye başlar")]
+    [SerializeField] private float walkStartSpeed = 0.4f;
+    [Tooltip("Durduktan bu kadar sonra bekleme pozuna döner (saniye)")]
+    [SerializeField] private float walkStopDelay = 0.2f;
+    [Tooltip("Yürüme ↔ bekleme geçiş süresi (saniye)")]
+    [SerializeField] private float walkBlendTime = 0.18f;
+    [Tooltip("Elin gittiği yöne dönme hızı")]
+    [SerializeField] private float turnSharpness = 10f;
+    [Tooltip("Bir tam adım döngüsünde (iki adım) alınan yol (ölçek 1'de). Parmaklar yerde kayıyorsa bununla ayarla.")]
+    [SerializeField] private float strideLength = 0.35f;
+    [Tooltip("Yürürken elin öne-arkaya eğimi (derece); 0 = zemine paralel, artı = parmak kökleri yukarı")]
+    [SerializeField] private float walkPalmTilt = 0f;
+    [Tooltip("Her adımda elin zıplaması (ölçek 1'de)")]
+    [SerializeField] private float walkBob = 0.025f;
+    [Tooltip("Elin yürürkenki yüksekliği, parmak boyundan hesaplanana çarpan")]
+    [SerializeField] private float walkHeightScale = 1f;
+
     private Camera cam;
     private Renderer[] renderers;
     private Vector3 palmLocalPosition;       // palmContact'ın kök objeye göre yeri
@@ -56,7 +74,23 @@ public class GloveCursor : MonoBehaviour
 
     // Alet sapı (IGloveGrip) tutuluyorsa: eldiven tutma noktasının child'ı olur, bırakınca eski parent'ına döner
     private IGloveGrip activeGrip;
+    private Transform currentGripPoint;
     private Transform originalParent;
+
+    // Base üstü hareket takibi
+    private GloveFingers fingers;
+    private Vector3 heading = Vector3.forward;   // elin gittiği yön (yüzeyde)
+    private Vector3 lastSurfacePoint;
+    private bool hasLastSurfacePoint;
+    private float smoothedSpeed;
+    private float lastMoveTime = float.MinValue;
+
+    // Base karosunun üstünde ve elde bir şey yok: yürüme / bekleme modu
+    public bool OnBase { get; private set; }
+    // 0 = bekleme (el yerde, işaret parmağı vuruyor), 1 = yürüme
+    public float WalkWeight { get; private set; }
+    // Adım döngüsü (tur sayısı): katedilen mesafeyle ilerler, parmaklar yerde kaymasın diye
+    public float WalkPhase { get; private set; }
 
     // Parmakların ve durum sisteminin kullanacağı son yüzey bilgisi
     public Transform PalmContact => palmContact;
@@ -72,6 +106,7 @@ public class GloveCursor : MonoBehaviour
     {
         cam = Camera.main;
         renderers = GetComponentsInChildren<Renderer>(true);
+        fingers = GetComponent<GloveFingers>();
 
         if (palmContact == null)
         {
@@ -121,6 +156,7 @@ public class GloveCursor : MonoBehaviour
         }
 
         FindSurface(ray);
+        UpdateBaseMotion();
         TargetRootPose(out Vector3 rootPosition, out Quaternion rootRotation);
 
         if (!placedOnce)
@@ -138,17 +174,69 @@ public class GloveCursor : MonoBehaviour
             Quaternion.Slerp(transform.rotation, rootRotation, rotateT));
     }
 
-    // SurfacePoint / SurfaceNormal'a göre kök objenin olması gereken pozu:
-    // avuç yüzeye bakar (Y = -normal), parmaklar ekranın yukarısına (Z), parmak uçları fingerLift kadar kalkık
+    // SurfacePoint / SurfaceNormal'a göre kök objenin olması gereken pozu.
+    // Normal: avuç yüzeye bakar (Y = -normal), parmaklar ekranın yukarısına (Z), parmak uçları fingerLift kadar kalkık.
+    // Base üstünde: parmaklar kamera yerine elin gittiği yöne bakar. Yürürken el zemine paralel kalır (avuç aşağı),
+    // bacak boyu kadar havaya kalkar; bacakları parmaklar kök ekleminden aşağı kıvrılarak yapar (GloveFingers).
+    // İkisi WalkWeight ile karışır.
     private void TargetRootPose(out Vector3 rootPosition, out Quaternion rootRotation)
     {
-        Vector3 fingerDirection = FingerDirectionOn(SurfaceNormal);
-        Quaternion palmRotation = Quaternion.LookRotation(fingerDirection, -SurfaceNormal)
+        Vector3 normal = SurfaceNormal;
+        Vector3 fingerDirection = OnBase ? heading : FingerDirectionOn(normal);
+        Quaternion palmRotation = Quaternion.LookRotation(fingerDirection, -normal)
                                   * Quaternion.Euler(fingerLift, 0f, 0f); // +X etrafında: parmak uçları yüzeyden kalkar
-        Vector3 palmPosition = SurfacePoint + SurfaceNormal * surfaceOffset;
+        Vector3 palmPosition = SurfacePoint + normal * surfaceOffset;
+
+        if (WalkWeight > 0f && fingers != null)
+        {
+            float scale = transform.lossyScale.x;
+            // Avuç aşağı, parmaklar gidiş yönüne; +X etrafında eksi açı parmak köklerini kaldırır
+            Quaternion walkRotation = Quaternion.LookRotation(heading, -normal) * Quaternion.Euler(-walkPalmTilt, 0f, 0f);
+
+            // Her adımda (yarım döngü) bir zıplama
+            float bob = walkBob * scale * Mathf.Abs(Mathf.Sin(WalkPhase * Mathf.PI * 2f));
+            float height = fingers.WalkPalmHeight * scale * walkHeightScale + bob;
+            Vector3 walkPosition = SurfacePoint + normal * height;
+
+            float w = Mathf.SmoothStep(0f, 1f, WalkWeight);
+            palmRotation = Quaternion.Slerp(palmRotation, walkRotation, w);
+            palmPosition = Vector3.Lerp(palmPosition, walkPosition, w);
+        }
 
         rootRotation = palmRotation * Quaternion.Inverse(palmLocalRotation);
         rootPosition = palmPosition - rootRotation * Vector3.Scale(palmLocalPosition, transform.lossyScale);
+    }
+
+    // Base üstündeyse: hız, gidiş yönü, adım döngüsü ve yürüme ağırlığı. Mesafe, mouse'un yüzeydeki noktasından
+    // (yumuşatılmamış hedef) ölçülür; el yumuşak takip etse de adımlar gerçek yola göre atılır.
+    private void UpdateBaseMotion()
+    {
+        OnBase = SurfaceCollider != null && SurfaceCollider.GetComponentInParent<GridBase>() != null;
+
+        float dt = Mathf.Max(Time.deltaTime, 0.0001f);
+        float scale = transform.lossyScale.x;
+        Vector3 delta = hasLastSurfacePoint ? SurfacePoint - lastSurfacePoint : Vector3.zero;
+        lastSurfacePoint = SurfacePoint;
+        hasLastSurfacePoint = true;
+
+        Vector3 planar = Vector3.ProjectOnPlane(delta, SurfaceNormal);
+        float distance = planar.magnitude;
+        if (distance > 3f) distance = 0f; // ışınlanma (ör. kenardan uzak bir yüzeye atlama): adım sayma
+
+        smoothedSpeed = Mathf.Lerp(smoothedSpeed, distance / dt, 1f - Mathf.Exp(-12f * dt));
+
+        // Yön: hareket varsa hareketin yönüne dön; yoksa son yönü koru (yüzeye göre düzeltilmiş)
+        if (distance > 0.0005f)
+            heading = Vector3.Slerp(heading, planar / distance, 1f - Mathf.Exp(-turnSharpness * dt));
+        heading = Vector3.ProjectOnPlane(heading, SurfaceNormal);
+        heading = heading.sqrMagnitude > 0.0001f ? heading.normalized : FingerDirectionOn(SurfaceNormal);
+
+        if (OnBase && smoothedSpeed > walkStartSpeed * scale) lastMoveTime = Time.time;
+        bool walking = OnBase && Time.time - lastMoveTime < walkStopDelay;
+        WalkWeight = Mathf.MoveTowards(WalkWeight, walking ? 1f : 0f, dt / Mathf.Max(walkBlendTime, 0.0001f));
+
+        if (WalkWeight > 0f)
+            WalkPhase += distance / Mathf.Max(strideLength * scale, 0.0001f);
     }
 
     // Elde tutulan obje (yok edildiyse Unity null'u → null)
@@ -203,6 +291,11 @@ public class GloveCursor : MonoBehaviour
     // O andaki pozdan oraya attachDuration içinde kayar.
     private void BeginGrab(Transform held, Ray ray)
     {
+        // Tutarken base modları kapalı (yürüme pozu tutma pozunu bozmasın)
+        OnBase = false;
+        WalkWeight = 0f;
+        hasLastSurfacePoint = false;
+
         // Alet sapı: tutma noktasını alet kendisi söyler
         if (held.TryGetComponent(out IGloveGrip grip) && grip.GripPoint != null)
         {
@@ -239,13 +332,20 @@ public class GloveCursor : MonoBehaviour
     private void BeginGrip(IGloveGrip grip)
     {
         activeGrip = grip;
-        Transform point = grip.GripPoint;
+        originalParent = transform.parent;
+        AttachToGripPoint(grip.GripPoint);
+    }
+
+    // Eldiveni tutma noktasının child'ı yapar ve oraya attachDuration içinde kaydırır.
+    // Alet tutarken başka bir noktaya geçerse (örn. döndürülünce kameraya göre başka yön seçilir) yine bu çağrılır.
+    private void AttachToGripPoint(Transform point)
+    {
+        currentGripPoint = point;
 
         // Hedef kök poz dünyada: avuç (palmContact) tam tutma noktasında ve onunla aynı yönde
         Quaternion rootRotation = point.rotation * Quaternion.Inverse(palmLocalRotation);
         Vector3 rootPosition = point.position - rootRotation * Vector3.Scale(palmLocalPosition, transform.lossyScale);
 
-        originalParent = transform.parent;
         transform.SetParent(point, true);
 
         attachLocalPosition = point.InverseTransformPoint(rootPosition);
@@ -255,10 +355,13 @@ public class GloveCursor : MonoBehaviour
         attachProgress = 0f;
     }
 
-    // Child olduğu için aletin her hareketi otomatik; burada sadece ilk oturma kayması yapılır
+    // Child olduğu için aletin her hareketi otomatik; burada ilk oturma kayması ve nokta değişimi yapılır
     private void FollowGrip()
     {
         Transform point = activeGrip.GripPoint;
+        if (point == null) return;
+        if (point != currentGripPoint) AttachToGripPoint(point);
+
         HasSurface = true;
         SurfaceCollider = null;
         SurfacePoint = point.position;
@@ -274,6 +377,7 @@ public class GloveCursor : MonoBehaviour
     {
         if (activeGrip == null) return;
         activeGrip = null;
+        currentGripPoint = null;
         transform.SetParent(originalParent, true);
     }
 

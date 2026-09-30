@@ -10,6 +10,7 @@ public class InputManager : MonoBehaviour
     public static event Action OnF5;
     public static event Action OnR;
     public static event Action OnE;
+    public static event Action OnQ;
     public static event Action OnTab;
     public static event Action OnSpace;
 
@@ -62,6 +63,7 @@ public class InputManager : MonoBehaviour
     private void MouseLeft(InputAction.CallbackContext context) => OnMouseLeft?.Invoke(context.performed ? true : false);
     private void MouseRight(InputAction.CallbackContext context) => OnMouseRight?.Invoke(context.performed ? true : false);
     private void E(InputAction.CallbackContext context) => OnE?.Invoke();
+    private void Q(InputAction.CallbackContext context) => OnQ?.Invoke();
     private void R(InputAction.CallbackContext context) => OnR?.Invoke();
     private void F5(InputAction.CallbackContext context) => OnF5?.Invoke();
     private void TabKey(InputAction.CallbackContext context) => OnTab?.Invoke();
@@ -74,6 +76,7 @@ public class InputManager : MonoBehaviour
         baseInput.Player.F5.performed += F5;
         baseInput.Player.R.performed += R;
         baseInput.Player.E.performed += E;
+        baseInput.Player.Q.performed += Q;
         baseInput.Player.Tab.performed += TabKey;
         baseInput.Player.Space.performed += SpaceKey;
         baseInput.Player.MouseLeft.performed += MouseLeft;
@@ -91,6 +94,7 @@ public class InputManager : MonoBehaviour
         baseInput.Player.F5.performed -= F5;
         baseInput.Player.R.performed -= R;
         baseInput.Player.E.performed -= E;
+        baseInput.Player.Q.performed -= Q;
         baseInput.Player.Tab.performed -= TabKey;
         baseInput.Player.Space.performed -= SpaceKey;
         baseInput.Player.MouseLeft.performed -= MouseLeft;

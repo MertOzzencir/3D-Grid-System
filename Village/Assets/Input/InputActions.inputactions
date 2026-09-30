@@ -52,6 +52,15 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "Q",
+                    "type": "Button",
+                    "id": "b214c8ff-89a4-4153-826e-1dd6e3d7e084",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "Tab",
                     "type": "Button",
                     "id": "0e7cf431-c9ba-4549-a551-ab2d07b885b0",
@@ -273,6 +282,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "E",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "0633577e-1822-4626-ae68-bfd0ea253a99",
+                    "path": "<Keyboard>/q",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Q",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

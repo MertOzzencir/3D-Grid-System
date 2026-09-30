@@ -11,14 +11,22 @@ using UnityEngine;
 // Temas: her kare, her parmak için "ucu yüzeye değene kadar ne kadar kıvrılmalı" ikili aramayla bulunur;
 // değme testi parmak ucunda ve ara eklemlerde küre (CheckSphere). Parmaklar hedefe yayla gider (hafif taşar, geri gelir).
 // GloveCursor yerleştikten sonra çalışır (execution order).
+//
+// Base üstünde (GloveCursor.OnBase): dururken el yerde, işaret parmağı sabırsızca vurur (tık-tık-tık, duraklama).
+// Yürürken (WalkWeight) işaret ve orta parmak bacak olur: kök eklem kalça gibi öne-arkaya sallanır, sonraki eklemler
+// diz gibi bükülüp ayağı kaldırır; diğer parmaklar kapalı. Adım döngüsü katedilen mesafeyle ilerler (GloveCursor.WalkPhase).
 [DefaultExecutionOrder(100)]
 [RequireComponent(typeof(GloveCursor))]
 public class GloveFingers : MonoBehaviour
 {
+    private enum FingerRole { Unknown, Thumb, Index, Middle, Ring, Pinky }
+
     [Serializable]
     private class Finger
     {
         public string name;
+        [Tooltip("Yürüme ve bekleme hareketlerinde hangi parmak olduğu")]
+        public FingerRole role;
         [Tooltip("Avuç kemiği (*_Alt). Parmak kıvrıldıkça hafifçe döner, avuç çukurlaşır. Başparmakta boş bırak.")]
         public Transform palmBone;
         [Tooltip("Kıvrılan kemikler, kökten uca (örn. Isaret_Orta, Isaret_Ust)")]
@@ -37,6 +45,9 @@ public class GloveFingers : MonoBehaviour
         [NonSerialized] public float velocity;
         [NonSerialized] public float noiseSeed;
         [NonSerialized] public bool valid;
+        [NonSerialized] public float tipCurve;      // uç ekleme ek kıvrım (derece), temas aramasına dahil
+        [NonSerialized] public Vector3[] sideAxis;  // başparmak: avuç düzleminde işaret parmağına doğru kıvrılma ekseni
+        [NonSerialized] public float sideCurve;     // bu eksende toplam kıvrım (derece), uca doğru artan dağılımla
     }
 
     [SerializeField] private Finger[] fingers = new Finger[0];
@@ -66,7 +77,40 @@ public class GloveFingers : MonoBehaviour
     [SerializeField] private float idleNoise = 0.03f;
     [SerializeField] private float idleSpeed = 0.7f;
 
+    [Header("Base Üstünde Bekleme")]
+    [Tooltip("İşaret parmağının kalkma miktarı (kıvrılma cinsinden)")]
+    [SerializeField] private float tapLift = 0.3f;
+    [Tooltip("İşaret parmağının bir tam kalkıp inme süresi (saniye); kesintisiz, yumuşak ritim")]
+    [SerializeField] private float tapPeriod = 1.1f;
+    [Tooltip("Diğer parmakların uçlarından aşağı kıvrımı (derece, uç ekleme)")]
+    [SerializeField] private float idleFingerCurve = 14f;
+    [Tooltip("Bu kıvrımın işaret parmağının ritmine eşlik eden hafif kıpırtısı (derece)")]
+    [SerializeField] private float idleFingerCurveMotion = 5f;
+    [Tooltip("Parmaklar arası gecikme (saniye): kıpırtı dalga gibi yayılır")]
+    [SerializeField] private float idleFingerDelay = 0.08f;
+    [Tooltip("İşaret parmağı kalkarken ucunun ek kıvrılması (derece, tepede tam); iniyorken açılır")]
+    [SerializeField] private float indexTapCurve = 18f;
+    [Tooltip("Başparmağın avuç düzleminde işaret parmağına doğru içe kıvrımı (derece)")]
+    [SerializeField] private float thumbCurve = 20f;
+    [Tooltip("Bu kıvrımın ritme eşlik eden kıpırtısı (derece)")]
+    [SerializeField] private float thumbCurveMotion = 6f;
+
+    [Header("Base Üstünde Yürüme (işaret + orta parmak bacak)")]
+    [Tooltip("El yatayken bacakların kök eklemden aşağı kıvrılma açısı (derece): 90 = dimdik aşağı, az = uçlar öne")]
+    [SerializeField] private float legDownAngle = 75f;
+    [Tooltip("Kalçanın (parmak kök eklemi) öne-arkaya sallanması (derece)")]
+    [SerializeField] private float hipSwing = 25f;
+    [Tooltip("Yere basarken dizin (sonraki eklemler) hafif bükülmesi (derece)")]
+    [SerializeField] private float kneeBend = 8f;
+    [Tooltip("Adım atarken dizin ek bükülmesi, ayağı kaldırır (derece)")]
+    [SerializeField] private float kneeLift = 55f;
+    [Tooltip("Yürürken diğer parmakların (başparmak, yüzük, serçe) kapanması")]
+    [SerializeField, Range(0f, 1f)] private float closedCurl = 0.95f;
+
     private GloveCursor cursor;
+
+    // Yürürken avucun yerden yüksekliği (ölçek 1'de): el yatay, bacak kök eklemden legDownAngle ile aşağı iniyor
+    public float WalkPalmHeight { get; private set; } = 0.2f;
 
     private void Awake()
     {
@@ -85,6 +129,66 @@ public class GloveFingers : MonoBehaviour
         Vector3 palmUp = cursor.PalmContact.up; // avucun baktığı yön
         foreach (Finger finger in fingers)
             Calibrate(finger, palmUp);
+
+        CalibrateThumbSide(palmUp);
+        MeasureWalkHeight();
+    }
+
+    // Başparmağın yana (işaret parmağına doğru) kıvrılma ekseni: yön × (işaret köküne doğru, avuç düzleminde).
+    // Unity'de AngleAxis(+açı, a × b) a'yı b'ye döndürdüğü için artı açı başparmağı işaret parmağına kıvırır.
+    private void CalibrateThumbSide(Vector3 palmUp)
+    {
+        Finger thumb = Array.Find(fingers, f => f.valid && f.role == FingerRole.Thumb);
+        Finger index = Array.Find(fingers, f => f.valid && f.role == FingerRole.Index);
+        if (thumb == null || index == null) return;
+
+        Vector3 thumbDirection = thumb.tip.position - thumb.bones[0].position;
+        Vector3 towardIndex = Vector3.ProjectOnPlane(index.bones[0].position - thumb.tip.position, palmUp);
+        Vector3 worldAxis = Vector3.Cross(thumbDirection.normalized, towardIndex.normalized).normalized;
+        if (worldAxis.sqrMagnitude < 0.5f) return;
+
+        thumb.sideAxis = new Vector3[thumb.bones.Length];
+        for (int i = 0; i < thumb.bones.Length; i++)
+            thumb.sideAxis[i] = Quaternion.Inverse(thumb.bones[i].rotation) * worldAxis;
+    }
+
+    // Bacak = işaret parmağı. El yatayken (avuç aşağı) avuç ortasının yerden yüksekliği:
+    // bacağın dikey boyu (boy × sin(legDownAngle)) + kök eklemin avuç yüzeyine göre aşağıda kalan kısmı
+    private void MeasureWalkHeight()
+    {
+        Finger leg = Array.Find(fingers, f => f.valid && f.role == FingerRole.Index);
+        if (leg == null) return;
+
+        Transform palm = cursor.PalmContact;
+        float knuckleBelowPalm = Vector3.Dot(leg.bones[0].position - palm.position, palm.up); // avuç yönü = aşağı
+        float length = 0f;
+        for (int i = 0; i < leg.bones.Length; i++)
+        {
+            Transform next = i + 1 < leg.bones.Length ? leg.bones[i + 1] : leg.tip;
+            length += Vector3.Distance(leg.bones[i].position, next.position);
+        }
+        float height = length * Mathf.Sin(legDownAngle * Mathf.Deg2Rad) + knuckleBelowPalm;
+        WalkPalmHeight = Mathf.Max(0f, height) / Mathf.Max(transform.lossyScale.x, 0.0001f);
+    }
+
+    // Rol atanmamışsa (eski ayarlar) adından çıkar.
+    // Türkçe harfler önce ASCII'ye çevrilir: ToLowerInvariant "İ"yi "i + birleşik nokta" yapıyor, "İşaret" eşleşmiyordu.
+    private static FingerRole InferRole(string name)
+    {
+        string n = (name ?? "")
+            .Replace('İ', 'i').Replace('I', 'i').Replace('ı', 'i')
+            .Replace('Ş', 's').Replace('ş', 's')
+            .Replace('Ç', 'c').Replace('ç', 'c')
+            .Replace('Ü', 'u').Replace('ü', 'u')
+            .Replace('Ö', 'o').Replace('ö', 'o')
+            .Replace('Ğ', 'g').Replace('ğ', 'g')
+            .ToLowerInvariant();
+        if (n.Contains("bas") || n.Contains("thumb")) return FingerRole.Thumb;
+        if (n.Contains("isaret") || n.Contains("index")) return FingerRole.Index;
+        if (n.Contains("orta") || n.Contains("middle")) return FingerRole.Middle;
+        if (n.Contains("yuzuk") || n.Contains("ring")) return FingerRole.Ring;
+        if (n.Contains("serce") || n.Contains("pinky")) return FingerRole.Pinky;
+        return FingerRole.Unknown;
     }
 
     private void Calibrate(Finger finger, Vector3 palmUp)
@@ -119,6 +223,9 @@ public class GloveFingers : MonoBehaviour
         }
 
         finger.noiseSeed = UnityEngine.Random.value * 100f;
+        if (finger.role == FingerRole.Unknown) finger.role = InferRole(finger.name);
+        if (finger.role == FingerRole.Unknown)
+            Debug.LogWarning($"GloveFingers: '{finger.name}' parmağının rolü bulunamadı; Inspector'dan Role seç", this);
     }
 
     // Unity'de AngleAxis(+açı, a × b) a'yı b'ye doğru döndürür: eksen = yön × avuç yönü → parmak avuca kapanır
@@ -132,13 +239,36 @@ public class GloveFingers : MonoBehaviour
     {
         float radius = fingerRadius * transform.lossyScale.x;
         float dt = Mathf.Min(Time.deltaTime, 1f / 30f); // takılmada yay patlamasın
+        float walk = cursor.WalkWeight;
 
-        foreach (Finger finger in fingers)
+        bool idleOnBase = cursor.OnBase && !cursor.IsGripping;
+
+        for (int f = 0; f < fingers.Length; f++)
         {
+            Finger finger = fingers[f];
             if (!finger.valid) continue;
 
-            // Alet sapını kavrarken yüzey aranmaz (aletin collider'ı sallanmada dönmüyor), sabit kavramaya gidilir
-            float target = cursor.IsGripping ? cursor.GripCurl : SolveContact(finger, radius);
+            // Base üstünde beklerken işaret dışındaki parmakların uçları hafifçe aşağı kıvrık, işaretin ritmine eşlik eder.
+            // Temas aramasına dahil: uçlar yere basar, parmak kökü hafif kemerlenir.
+            // Başparmak aşağı değil, yana (işaret parmağına doğru) kıvrılır; kıpırtısı da o eksende.
+            // İşaret parmağı da uçtan kıvrık; kalktıkça ucu daha çok kıvrılır (tıklama dalgasıyla aynı anda).
+            bool isIndex = finger.role == FingerRole.Index;
+            bool isThumb = finger.role == FingerRole.Thumb && finger.sideAxis != null;
+            float idleWave = IdleWave(Time.time - f * idleFingerDelay);
+            float tipCurve = isIndex
+                ? idleFingerCurve + indexTapCurve * IdleWave(Time.time)
+                : idleFingerCurve + idleFingerCurveMotion * idleWave;
+            finger.tipCurve = idleOnBase && !isThumb ? tipCurve * (1f - walk) : 0f;
+            finger.sideCurve = idleOnBase && isThumb
+                ? (thumbCurve + thumbCurveMotion * idleWave) * (1f - walk)
+                : 0f;
+
+            // Alet sapını kavrarken yüzey aranmaz (aletin collider'ı sallanmada dönmüyor), sabit kavramaya gidilir.
+            // Tam yürürken de aranmaz: poz tamamen yürüme döngüsünden gelir.
+            float target;
+            if (cursor.IsGripping) target = cursor.GripCurl;
+            else if (walk >= 0.999f) target = finger.curl;
+            else target = SolveContact(finger, radius);
             target += (Mathf.PerlinNoise(finger.noiseSeed, Time.time * idleSpeed) - 0.5f) * 2f * idleNoise;
 
             // Sönümlü yay
@@ -146,8 +276,62 @@ public class GloveFingers : MonoBehaviour
             finger.velocity += acceleration * dt;
             finger.curl += finger.velocity * dt;
 
-            Apply(finger, finger.curl);
+            // Base üstünde beklerken işaret parmağı yavaşça kalkıp iner (eksi kıvrılma = yukarı kalkar)
+            float tap = idleOnBase && isIndex ? tapLift * IdleWave(Time.time) * (1f - walk) : 0f;
+            Apply(finger, finger.curl - tap);
+
+            if (walk > 0f && !cursor.IsGripping)
+                BlendTowardWalk(finger, Mathf.SmoothStep(0f, 1f, walk));
         }
+    }
+
+    // Bekleme ritmi: 0 → 1 → 0, kesintisiz ve yumuşak (tepede ve dipte yavaşlar)
+    private float IdleWave(float time)
+        => 0.5f - 0.5f * Mathf.Cos(time / Mathf.Max(tapPeriod, 0.01f) * Mathf.PI * 2f);
+
+    // Yürüme pozu: işaret ve orta parmak bacak (yarım döngü farkla), diğerleri kapalı. Mevcut pozdan weight kadar geçilir.
+    private void BlendTowardWalk(Finger finger, float weight)
+    {
+        bool isLeg = finger.role == FingerRole.Index || finger.role == FingerRole.Middle;
+
+        if (finger.palmBone != null)
+        {
+            Quaternion palmWalk = finger.palmRest * Quaternion.AngleAxis(isLeg ? 0f : palmCupAngle, finger.palmAxis);
+            finger.palmBone.localRotation = Quaternion.Slerp(finger.palmBone.localRotation, palmWalk, weight);
+        }
+
+        for (int i = 0; i < finger.bones.Length; i++)
+        {
+            float angle = isLeg
+                ? LegAngle(finger, i)
+                : closedCurl * finger.maxCurlAngle * finger.share[i];
+            Quaternion walkRotation = finger.rest[i] * Quaternion.AngleAxis(angle, finger.axis[i]);
+            finger.bones[i].localRotation = Quaternion.Slerp(finger.bones[i].localRotation, walkRotation, weight);
+        }
+    }
+
+    // Bacak döngüsü (0..1): ilk yarı yere basar ve geriye iter (kalça önden arkaya), ikinci yarı dizini büküp
+    // öne atılır. Pozitif açı avuca doğru; el yatayken avuç aşağı baktığı için kök eklem legDownAngle ile aşağı
+    // iner, bunun üstüne artı = bacak geriye.
+    private float LegAngle(Finger finger, int boneIndex)
+    {
+        float cycle = Mathf.Repeat(cursor.WalkPhase + (finger.role == FingerRole.Middle ? 0.5f : 0f), 1f);
+        float hip, knee;
+        if (cycle < 0.5f)
+        {
+            float s = cycle / 0.5f;
+            hip = Mathf.Lerp(-hipSwing, hipSwing, s);
+            knee = kneeBend;
+        }
+        else
+        {
+            float s = (cycle - 0.5f) / 0.5f;
+            hip = Mathf.Lerp(hipSwing, -hipSwing, Mathf.SmoothStep(0f, 1f, s));
+            knee = kneeBend + kneeLift * Mathf.Sin(s * Mathf.PI);
+        }
+
+        if (boneIndex == 0) return legDownAngle + hip;
+        return knee / Mathf.Max(1, finger.bones.Length - 1); // diz bükülmesi sonraki eklemlere paylaşılır
     }
 
     // Yüzeye değmeden kıvrılabileceği en büyük değer. Hiç değmiyorsa (altında yüzey yok) sarkma değeri.
@@ -191,8 +375,20 @@ public class GloveFingers : MonoBehaviour
         if (finger.palmBone != null)
             finger.palmBone.localRotation = finger.palmRest * Quaternion.AngleAxis(Mathf.Clamp01(curl) * palmCupAngle, finger.palmAxis);
 
-        for (int i = 0; i < finger.bones.Length; i++)
-            finger.bones[i].localRotation = finger.rest[i] * Quaternion.AngleAxis(curl * finger.maxCurlAngle * finger.share[i], finger.axis[i]);
+        int last = finger.bones.Length - 1;
+        for (int i = 0; i <= last; i++)
+        {
+            float angle = curl * finger.maxCurlAngle * finger.share[i] + (i == last ? finger.tipCurve : 0f);
+            Quaternion rotation = finger.rest[i] * Quaternion.AngleAxis(angle, finger.axis[i]);
+
+            // Yana kıvrım uca doğru artar (2 kemikte %40 + %60): doğal bir kavis
+            if (finger.sideAxis != null && finger.sideCurve != 0f)
+            {
+                float sideShare = last == 0 ? 1f : Mathf.Lerp(0.4f, 0.6f, (float)i / last) / (last == 1 ? 1f : (last + 1) * 0.5f);
+                rotation *= Quaternion.AngleAxis(finger.sideCurve * sideShare, finger.sideAxis[i]);
+            }
+            finger.bones[i].localRotation = rotation;
+        }
     }
 
     // Senin rig'indeki isimlerden otomatik doldurur (Isaret/Orta/Yuzuk/Serce × Alt/Orta/Ust, Bas_Alt/Bas_Ust).
@@ -210,6 +406,7 @@ public class GloveFingers : MonoBehaviour
         Finger Make(string label, string prefix, bool isThumb) => new Finger
         {
             name = label,
+            role = InferRole(label),
             palmBone = isThumb ? null : Find(prefix + "_Alt"),
             bones = isThumb
                 ? new[] { Find(prefix + "_Alt"), Find(prefix + "_Ust") }

@@ -22,6 +22,11 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float rotationAngle = 90f;
     [SerializeField] private float rotationSpeed = 200f;
     [SerializeField] private float fallbackOrbitDistance = 10f;
+    [Tooltip("Dönüş merkezi: ekranın ortasında görünen collider. Hangi layer'lar sayılsın")]
+    [SerializeField] private LayerMask pivotMask = ~0;
+    [Tooltip("Ekranın ortasında collider yoksa (su, boşluk) dönüş merkezinin alındığı yatay düzlemin yüksekliği")]
+    [SerializeField] private float pivotFallbackHeight = 0f;
+    [SerializeField] private float maxPivotDistance = 200f;
 
     [Header("Zoom")]
     [SerializeField] private float zoomSpeed = 20f;
@@ -44,7 +49,8 @@ public class CameraController : MonoBehaviour
     void Awake()
     {
         CurrentFacing = FacingSequence[facingIndex]; // static: önceki Play oturumundan kalmasın
-        InputManager.OnR += StartRotation;
+        InputManager.OnE += RotateRight;
+        InputManager.OnQ += RotateLeft;
         currentYaw = transform.eulerAngles.y;
 
         float t = Mathf.InverseLerp(minHeight, maxHeight, transform.position.y);
@@ -54,7 +60,8 @@ public class CameraController : MonoBehaviour
 
     void OnDestroy()
     {
-        InputManager.OnR -= StartRotation;
+        InputManager.OnE -= RotateRight;
+        InputManager.OnQ -= RotateLeft;
     }
 
     void LateUpdate()
@@ -78,19 +85,28 @@ public class CameraController : MonoBehaviour
         transform.position += currentVelocity * Time.deltaTime;
     }
 
-    private void StartRotation()
+    // E sağa, Q sola 90°. Elde obje varken de çalışır (tutulan obje ayrıca R ile döner).
+    private void RotateRight() => StartRotation(1);
+    private void RotateLeft() => StartRotation(-1);
+
+    private void StartRotation(int direction)
     {
         if (isRotating) return;
-        // Elde obje varken R objeyi döndürür (InteractableController), kamerayı değil
-        if (InteractableController.Instance != null && InteractableController.Instance.IsHolding) return;
 
         lockedY = transform.position.y;
 
+        // Dönüş merkezi ekranın ortasında gerçekten görünen nokta: kamera aynı yükseklik ve yatay uzaklıkta onun
+        // etrafında döndüğü için o nokta her yönde ekranın ortasında kalır. (Eskiden y = 0 düzlemi alınıyordu;
+        // karoların üstündeki objeler için pivot objenin arkasına düşüyor, obje dönüşte ortadan kayıyordu.)
         Vector3 fullForward = Quaternion.Euler(pitch, currentYaw, 0) * Vector3.forward;
-        Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
         Ray ray = new Ray(transform.position, fullForward);
+        Plane groundPlane = new Plane(Vector3.up, new Vector3(0f, pivotFallbackHeight, 0f));
 
-        if (groundPlane.Raycast(ray, out float enter))
+        if (Physics.Raycast(ray, out RaycastHit hit, maxPivotDistance, pivotMask, QueryTriggerInteraction.Ignore))
+        {
+            pivotPoint = hit.point;
+        }
+        else if (groundPlane.Raycast(ray, out float enter))
         {
             pivotPoint = ray.GetPoint(enter);
         }
@@ -104,10 +120,10 @@ public class CameraController : MonoBehaviour
         Vector3 flatPivot = new Vector3(pivotPoint.x, 0, pivotPoint.z);
         currentOrbitDistance = Vector3.Distance(flatCamPos, flatPivot);
 
-        targetYaw = currentYaw - rotationAngle;
+        targetYaw = currentYaw - rotationAngle * direction;
         isRotating = true;
 
-        facingIndex = (facingIndex + 1) % FacingSequence.Length;
+        facingIndex = (facingIndex + direction + FacingSequence.Length) % FacingSequence.Length;
         CurrentFacing = FacingSequence[facingIndex];
         OnCameraRotation?.Invoke(CurrentFacing);
     }

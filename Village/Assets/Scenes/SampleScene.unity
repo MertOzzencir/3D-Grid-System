@@ -925,6 +925,11 @@ MonoBehaviour:
   rotationAngle: 90
   rotationSpeed: 400
   fallbackOrbitDistance: 10
+  pivotMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  pivotFallbackHeight: 0
+  maxPivotDistance: 200
   zoomSpeed: 1750
   zoomDamping: 18
   minHeight: 5
@@ -1812,7 +1817,7 @@ Transform:
   m_GameObject: {fileID: 1032872123}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -10, y: 0, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1832,7 +1837,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridManager
   HeightDebugDistance: 0
   showBaseGizmos: 1
-  GridSize: {x: 15, y: 5, z: 15}
+  GridSize: {x: 35, y: 15, z: 35}
 --- !u!114 &1032872126
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2003,6 +2008,15 @@ MonoBehaviour:
   fingerLift: 10
   moveSharpness: 25
   rotateSharpness: 14
+  attachDuration: 0.08
+  walkStartSpeed: 0.4
+  walkStopDelay: 0.2
+  walkBlendTime: 0.18
+  turnSharpness: 10
+  strideLength: 0.35
+  walkPalmTilt: 0
+  walkBob: 0.025
+  walkHeightScale: 1
 --- !u!4 &1068037555
 Transform:
   m_ObjectHideFlags: 0
@@ -2033,6 +2047,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GloveFingers
   fingers:
   - name: "Ba\u015Fparmak"
+    role: 1
     palmBone: {fileID: 0}
     bones:
     - {fileID: 3579315829593450}
@@ -2040,6 +2055,7 @@ MonoBehaviour:
     tip: {fileID: 712208079511741047}
     maxCurlAngle: 90
   - name: "\u0130\u015Faret"
+    role: 2
     palmBone: {fileID: 7983526550496722393}
     bones:
     - {fileID: 6479911540838652763}
@@ -2047,6 +2063,7 @@ MonoBehaviour:
     tip: {fileID: 1710564981328186848}
     maxCurlAngle: 160
   - name: Orta
+    role: 3
     palmBone: {fileID: 1384297609239893000}
     bones:
     - {fileID: 5380844254091083000}
@@ -2054,6 +2071,7 @@ MonoBehaviour:
     tip: {fileID: 3863727356483318849}
     maxCurlAngle: 160
   - name: "Y\xFCz\xFCk"
+    role: 4
     palmBone: {fileID: 6213911459960029589}
     bones:
     - {fileID: 3625331390539702974}
@@ -2061,6 +2079,7 @@ MonoBehaviour:
     tip: {fileID: 8512593263507109549}
     maxCurlAngle: 160
   - name: "Ser\xE7e"
+    role: 5
     palmBone: {fileID: 3869172155514591329}
     bones:
     - {fileID: 5867682714337638557}
@@ -2077,6 +2096,19 @@ MonoBehaviour:
   damping: 20
   idleNoise: 0.03
   idleSpeed: 0.7
+  tapLift: 0.3
+  tapPeriod: 0.43
+  idleFingerCurve: 14
+  idleFingerCurveMotion: 5
+  idleFingerDelay: 0.08
+  indexTapCurve: 32.5
+  thumbCurve: 20.6
+  thumbCurveMotion: 10.3
+  legDownAngle: 75
+  hipSwing: 25
+  kneeBend: 8
+  kneeLift: 55
+  closedCurl: 0.95
 --- !u!1001 &1108215215
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2230,6 +2262,7 @@ MonoBehaviour:
   frontFade:
     visibleAmount: 0.3
     duration: 0.15
+  targetReleaseDistance: 1.8
 --- !u!4 &1126745012
 Transform:
   m_ObjectHideFlags: 0

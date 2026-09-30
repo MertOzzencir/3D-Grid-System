@@ -6,7 +6,8 @@ using UnityEngine;
 public interface IGloveGrip
 {
     // Avucun oturacağı nokta ve yön, PalmContact ile aynı eksenler: Y avucun baktığı yön, Z parmak uçları.
-    // Null ise eldiven normal tutma davranışını kullanır.
+    // Null ise eldiven normal tutma davranışını kullanır. Tutarken değişebilir (örn. kameraya göre yön seçimi);
+    // eldiven her kare sorar ve değişince yeni noktaya kayar.
     Transform GripPoint { get; }
 
     // Kavrarken parmakların kıvrılması (0 = düz, 1 = tam kıvrık); parmaklar yüzey aramaz, buna gider

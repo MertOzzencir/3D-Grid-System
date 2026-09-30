@@ -161,9 +161,15 @@ public class GridManager : MonoBehaviour
     {
         return Grids;
     }
+    // Seçili kat (dünya y'si): gizmolar bu kata kadar çizilir, base yerleştirme de bu kattaki yatay düzleme yapılır.
+    // Ekrandaki ▲ ▼ butonları değiştirir; grid'in yükseklik sınırları içinde kalır.
+    public int LayerLevel => HeightDebugDistance;
+
     public void LayerDebugDistance(int i)
     {
-        HeightDebugDistance += i;
+        int bottom = ManagerPosition.y;
+        int top = ManagerPosition.y + Mathf.Max(0, Mathf.RoundToInt(GridSize.y) - 1);
+        HeightDebugDistance = Mathf.Clamp(HeightDebugDistance + i, bottom, top);
     }
     public void ResetLayerDebugDistance()
     {

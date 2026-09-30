@@ -49,7 +49,8 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
         }
     }
 
-    private bool TryGetTargetPosition(out Vector3 position)
+    // Varsayılan: baktığı objenin üstü, yoksa bu objenin yüksekliğindeki düzlem. Base yerleştirme kendi kuralını kullanır.
+    protected virtual bool TryGetTargetPosition(out Vector3 position)
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 
@@ -98,6 +99,23 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
         }
     }
 
+    // Build mode'da sağ tık basılı tutulurken mouse'un altından geçen entity'ler silinir (tutma build mode'da kapalı).
+    // Bir basışta her sütundan (x, z) sadece bir entity: mouse aynı yerde dururken üst üste katların hepsi gitmesin.
+    private bool deleting;
+    private readonly System.Collections.Generic.HashSet<Vector2Int> deletedColumns = new System.Collections.Generic.HashSet<Vector2Int>();
+
+    private void DeleteOnRightClick(bool pressed)
+    {
+        deleting = pressed;
+        deletedColumns.Clear();
+        if (pressed) DeletePlaced();
+    }
+
+    private void Update()
+    {
+        if (deleting) DeletePlaced();
+    }
+
     // Collider child'da olabilir (örn. blueprint'in collider'ları slot objelerinde): entity collider'dan yukarı doğru aranır
     private void DeletePlaced()
     {
@@ -105,19 +123,24 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
         if (!Physics.Raycast(ray, out RaycastHit hit)) return;
 
         TEntity entity = hit.collider.GetComponentInParent<TEntity>();
-        if (entity != null) RemoveEntity(entity);
+        if (entity == null) return;
+
+        var column = new Vector2Int(entity.OriginWorldPosition.x, entity.OriginWorldPosition.z);
+        if (deletedColumns.Contains(column)) return;
+        if (RemoveEntity(entity)) deletedColumns.Add(column);
     }
 
     protected virtual void OnEnable()
     {
         InputManager.OnNumbers += Place;
-        InputManager.OnE += DeletePlaced;
+        InputManager.OnMouseRight += DeleteOnRightClick;
     }
 
     protected virtual void OnDisable()
     {
         InputManager.OnNumbers -= Place;
-        InputManager.OnE -= DeletePlaced;
+        InputManager.OnMouseRight -= DeleteOnRightClick;
+        deleting = false; // kapalıyken bırakma olayını duyamayız, silme takılı kalmasın
     }
 }
 public abstract class GridPlacementControllerBase : MonoBehaviour

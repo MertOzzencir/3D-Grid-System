@@ -1,7 +1,7 @@
 # 3D Grid System (Village)
 
 Unity 6000.3.11f1 projesi `Village/` klasöründe. Oyun kodu `Village/Assets/_Scripts`, editör kodu `Village/Assets/Editor`.
-Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe.
+Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe. Commit mesajları (GitHub'da görünenler) İngilizce.
 
 ## Çalışma şekli
 - Büyük değişikliklerden önce tasarım konuşulur; kullanıcı "kodu değiştirme" dediyse sadece anlat.
@@ -13,7 +13,7 @@ Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe.
 - **Pivot:** Her modelin pivot'u origin hücresinin ortasında. `transform.position` = `OriginWorldPosition` = pivot hücresi; bunu değiştirecek bir şey yapma (drag, Tree, blueprint buna güveniyor).
 - **Footprint:** `GridFootprint` hücreleri pivot'a göre offset olarak tutar (negatif olabilir). SO'da katman katman tasarlanır (`GridEntitySOBase.layers`, `layers[0]` zemin).
 - **Rotasyon:** Sadece Y ekseninde 90° adımlar. `GridMaskRotator.RotateOffset` ile `ToQuaternion` aynı matematik; görsel ve grid asla ayrışmamalı. Sadece elde tutulan obje döner (R); grid'deki objenin rotasyonu değiştirilmez (`PlacedFootprint` dondurulmuş kopya).
-- **R tuşu:** elde obje varsa objeyi, yoksa kamerayı döndürür.
+- **Tuşlar:** Q/E kamerayı sola/sağa 90° döndürür (elde obje varken de). R sadece elde tutulan objeyi döndürür. Build mode'da sağ tık mouse'un altındaki objeyi siler (normalde sağ tık = tutma). Q aksiyonu `InputActions.inputactions`'ta; `InputActions.cs` Unity tarafından otomatik üretilir.
 - **Taşıma:** `InteractableController` (ne zaman) → `IInteractable` → `GridDragMotor` (nasıl) → `IToolTarget` (hedefte ne olur). Yeni hedef türü = `IToolTarget` uygula.
 - **Obje yok edilecekse** `InteractableController.Release` kullan, `HardCancel` değil (o, objeyi grid'e geri koymaya çalışır).
 

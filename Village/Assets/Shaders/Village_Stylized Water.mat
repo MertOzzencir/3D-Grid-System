@@ -27,37 +27,48 @@ Material:
     m_Ints: []
     m_Floats:
     - _DepthDistance: 2.5
-    - _FoamBreakup: 0.5
-    - _FoamLineWidth: 0.2
-    - _FoamNoiseScale: 3
-    - _FoamSoftness: 0.06
-    - _FoamSpeed: 0.3
-    - _FoamWidth: 0.4
+    - _FoamBreakup: 1
+    - _FoamLineWidth: 1
+    - _FoamNoiseScale: 1
+    - _FoamSoftness: 0.5
+    - _FoamSpeed: 0.1
+    - _FoamWidth: 0.81
     - _HorizonPower: 3
+    - _PatchContrast: 1.84
+    - _PatchScale: 3.3
+    - _PatchSpeed: 1
     - _ReflectionStrength: 1
-    - _RefractionStrength: 0.035
-    - _RippleDirection: 360
-    - _RippleHeight: 0.77
-    - _RippleMorph: 1.01
+    - _RefractionStrength: 0.0328
+    - _RippleDirection: 140
+    - _RippleHeight: 0.819
+    - _RippleMorph: 0.56
     - _RippleScale: 0.59
     - _RippleSecondLayer: 0.682
-    - _RippleSpeed: 0.5
-    - _ShadowStrength: 0.441
-    - _SlopeContrast: 3.18
+    - _RippleSpeed: 0.05
+    - _ShadowStrength: 0.542
+    - _ShoreWaveBreakup: 1
+    - _ShoreWaveCount: 3.43
+    - _ShoreWaveDistance: 3.08
+    - _ShoreWaveSpeed: 1.11
+    - _ShoreWaveWidth: 0.496
+    - _SlopeContrast: 5.28
     - _SpecularHardness: 1
     - _SpecularPower: 1024
-    - _SpecularStrength: 1.59
-    - _WaveHeight: 0.2
-    - _WaveLength: 5.86
-    - _WaveSpeed: 2
+    - _SpecularStrength: 3
+    - _WaveHeight: 0.22
+    - _WaveLength: 11
+    - _WaveSpeed: 1
     m_Colors:
     - _CrestColor: {r: 0.7, g: 1, b: 0.96999997, a: 0.15}
     - _DeepColor: {r: 0.02, g: 0.54999995, b: 0.7, a: 0.93}
-    - _FoamColor: {r: 1, g: 1, b: 1, a: 1}
+    - _FoamColor: {r: 1, g: 1, b: 1, a: 0.16862746}
     - _HorizonColor: {r: 0.03, g: 0.41999996, b: 0.62, a: 0.4}
     - _LitColor: {r: 0.54999995, g: 0.95, b: 0.92, a: 0.35}
+    - _PatchDarkColor: {r: 0.02, g: 0.37999994, b: 0.62, a: 0.4}
+    - _PatchLightColor: {r: 0.19999996, g: 0.85, b: 0.82, a: 0.45}
     - _ShadeColor: {r: 0, g: 0.39999998, b: 0.54999995, a: 0.3}
     - _ShallowColor: {r: 0.24999997, g: 0.88, b: 0.8399999, a: 0.55}
+    - _ShoreWaveColor: {r: 1, g: 1, b: 1, a: 0.9}
     - _SpecularColor: {r: 1, g: 1, b: 0.95, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
