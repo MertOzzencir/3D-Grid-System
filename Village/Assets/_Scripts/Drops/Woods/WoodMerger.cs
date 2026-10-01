@@ -17,7 +17,7 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private DitherFade frontFade = new DitherFade();
     [Tooltip("Taşınan odun bir hedefe yapıştıktan sonra mouse, hedefin ekseninden bu kadar (birim) uzaklaşınca bırakılır. " +
              "Mouse collider'dan çıksa da hedef kaybolmaz.")]
-    [SerializeField] private float targetReleaseDistance = 1.8f;
+    [SerializeField] private float targetReleaseDistance = 5f;
 
     public WoodCatalogSO Catalog => catalog;
     public DitherFade FrontFade => frontFade;

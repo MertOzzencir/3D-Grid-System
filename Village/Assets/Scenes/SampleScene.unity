@@ -354,6 +354,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6283cbcd68dd7c543a683d8076512fcc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  flickReleaseSpeed: 3
 --- !u!114 &82442287
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2262,7 +2263,7 @@ MonoBehaviour:
   frontFade:
     visibleAmount: 0.3
     duration: 0.15
-  targetReleaseDistance: 1.8
+  targetReleaseDistance: 3
 --- !u!4 &1126745012
 Transform:
   m_ObjectHideFlags: 0

@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fca9e232c77ebe1449c1bbd8e3cfff7c, type: 3}
+  m_Name: bahtisikik Data
+  m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
+  Name: bahtisikik
+  Icon: {fileID: 0}
+  saveId: 
+  size: {x: 1, y: 1, z: 1}
+  layers: []
+  layoutSize: {x: 0, y: 0, z: 0}
+  legacySize: {x: 0, y: 0}
+  legacyMask: 
+  Prefab: {fileID: 7368761442706843973, guid: 823fdb4015ae88e4ea2423a459bb3cfb, type: 3}

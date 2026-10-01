@@ -87,6 +87,9 @@ public class GridDragMotor
             return false;
         }
 
+        // Ani (savurma) mouse hareketi kilidi her hedefte bırakır; küçük kaymalar etkileşimi kesmez
+        if (InteractableController.Instance != null && InteractableController.Instance.IsMouseFlicking) return false;
+
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         if (!sticky.IsStillTargeted(interactable, ray)) return false;
 

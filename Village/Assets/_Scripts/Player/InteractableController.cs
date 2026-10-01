@@ -6,9 +6,18 @@ public class InteractableController : MonoBehaviour
     public static InteractableController Instance;
     public static event Action<IInteractable> OnNewInteractable;
     // Açık/kapalı durumunu PlacementController yönetir: build mode'da kapalı
+    [Tooltip("Mouse bu hızı (ekran yüksekliği / saniye) geçerse ani hareket sayılır: yapışkan hedefler (ağaç, odun) bırakılır. " +
+             "Mouse görünmediği için küçük kaymalar etkileşimi kesmesin, sadece bilinçli bir savurma kessin.")]
+    [SerializeField] private float flickReleaseSpeed = 3f;
+
     private IInteractable currentInteracted;
     private bool tryingToInteract = false;
     private IHoverable hovered;
+    private Vector3 lastMousePosition;
+    private float mouseSpeed; // ekran yüksekliği / saniye, kısa süreli yumuşatılmış
+
+    // Mouse şu an ani (savurma) hareket mi yapıyor
+    public bool IsMouseFlicking => mouseSpeed > flickReleaseSpeed;
 
     public bool IsHolding => currentInteracted != null;
     public IInteractable Held => currentInteracted;
@@ -19,6 +28,8 @@ public class InteractableController : MonoBehaviour
     }
     void Update()
     {
+        UpdateMouseSpeed();
+
         if (currentInteracted == null)
         {
             if (tryingToInteract)
@@ -94,6 +105,17 @@ public class InteractableController : MonoBehaviour
 
         if (obj)
             currentInteracted.Interact(out bool f);
+    }
+
+    // Ekran yüksekliğine göre (çözünürlükten bağımsız) hız; tek karelik sıçramalar ani hareket sayılmasın diye
+    // ~0.05 sn'lik yumuşatma
+    private void UpdateMouseSpeed()
+    {
+        Vector3 mouse = Input.mousePosition;
+        float dt = Mathf.Max(Time.unscaledDeltaTime, 0.0001f);
+        float speed = (mouse - lastMousePosition).magnitude / Mathf.Max(Screen.height, 1) / dt;
+        lastMousePosition = mouse;
+        mouseSpeed = Mathf.Lerp(mouseSpeed, speed, 1f - Mathf.Exp(-dt / 0.05f));
     }
 
     // Elde bir şey yokken: mouse'un altındaki ilk collider'ın objesi IHoverable ise o hover'da

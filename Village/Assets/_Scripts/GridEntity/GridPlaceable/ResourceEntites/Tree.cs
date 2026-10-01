@@ -4,7 +4,9 @@ using UnityEngine;
 // Balta ile kesilen ağaç. Oklar (ArrowBase) kesilebilecek yerleri gösterir: balta yaklaşınca mouse yüksekliğine
 // en yakın ok seçilir, her vuruş okun canını düşürür, can bitince ok kesilir ve odun çıkar.
 // Dal oku (ArrowChild) sadece üst kısmı keser; gövde oku (ArrowRoot) ağacı tamamen kaldırır.
-public class Tree : ResourceEntity, IToolTarget
+// Yapışkan hedef: balta bir kez yapışınca mouse gövdeden çıksa da kopmaz; ani mouse hareketiyle (GridDragMotor)
+// ya da mouse gövdenin ekseninden releaseDistance'tan fazla uzaklaşınca bırakılır.
+public class Tree : ResourceEntity, IStickyToolTarget
 {
     [SerializeField] private ArrowBase[] Arrows;
     [SerializeField] private GameObject mainVisual;
@@ -13,8 +15,10 @@ public class Tree : ResourceEntity, IToolTarget
     [Header("Oklar")]
     [Tooltip("Okların gövde merkezinden (kameraya göre yan tarafa) uzaklığı")]
     [SerializeField] private float arrowDistance = 1f;
-    [Tooltip("Balta noktası gövde merkezine bundan uzaksa ok seçilmez")]
+    [Tooltip("Balta noktası gövde merkezine bundan uzaksa yeni ok seçilmez (son seçili ok korunur)")]
     [SerializeField] private float targetRadius = 2f;
+    [Tooltip("Balta yapıştıktan sonra mouse, okların düzleminde gövde ekseninden bu kadar (birim) uzaklaşınca bırakılır")]
+    [SerializeField] private float releaseDistance = 4f;
 
     [Header("VFX")]
     [Tooltip("Balta vurunca vuruş noktasında oynar. Particle'lar yerel +Z yönüne saçılmalı: +Z ağaçtan dışarı (baltaya doğru) bakar.")]
@@ -69,11 +73,23 @@ public class Tree : ResourceEntity, IToolTarget
             return transform.position;
 
         Vector3 point = ray.GetPoint(enter);
-        if (Vector3.Distance(point, transform.position + TrunkCenterLocal) > targetRadius)
-            return transform.position;
-
-        Select(FindClosestArrow(point));
+        // Seçim yarıçapının dışında: yeni ok seçilmez, seçili ok varsa balta onda kalır (kaymasın)
+        if (Vector3.Distance(point, transform.position + TrunkCenterLocal) <= targetRadius)
+            Select(FindClosestArrow(point));
         return selectedArrow != null ? selectedArrow.GetTransform().position : transform.position;
+    }
+
+    // Kilit: mouse okların düzleminde gövdenin dikey ekseninden releaseDistance'tan fazla uzaklaşmadıkça devam
+    public bool IsStillTargeted(IInteractable interactable, Ray mouseRay)
+    {
+        if (!(interactable is Axe)) return false;
+        if (!TryGetArrowPlane(out Plane plane) || !plane.Raycast(mouseRay, out float enter)) return false;
+
+        Vector3 point = mouseRay.GetPoint(enter);
+        Vector3 trunk = transform.position + TrunkCenterLocal;
+        float height = (PlacedFootprint ?? GetFootprint()).Size.y;
+        Vector3 closestOnAxis = new Vector3(trunk.x, Mathf.Clamp(point.y, trunk.y, trunk.y + height), trunk.z);
+        return Vector3.Distance(point, closestOnAxis) <= releaseDistance;
     }
 
     public Quaternion GetToolTargetRotation()

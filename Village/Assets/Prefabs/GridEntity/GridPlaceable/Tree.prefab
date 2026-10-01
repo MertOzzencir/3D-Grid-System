@@ -776,6 +776,9 @@ MonoBehaviour:
   - {fileID: 1279819870920587138}
   mainVisual: {fileID: 3825020336649192257}
   cutedVisual: {fileID: 517392376609033704}
+  arrowDistance: 1
+  targetRadius: 2
+  releaseDistance: 4
   chopEffect: {fileID: 1730389791503193954, guid: eb8080ea09e95584aa4f30de2aa8312c, type: 3}
   trunkRadius: 0.3
   hitShake:
