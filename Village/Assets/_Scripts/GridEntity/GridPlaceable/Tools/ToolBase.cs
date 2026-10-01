@@ -16,6 +16,9 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
     [SerializeField] private bool gloveGripFourSides = true;
     [Tooltip("gloveGrip'ten sapın eksenine uzaklık (avuç yönünde). Sap ekseni gloveGrip'in X'i. Sahnede gizmo ile kontrol et.")]
     [SerializeField] private float gloveGripHandleRadius = 0.11f;
+    [Tooltip("Elle ayarlanmış dört tutma noktası (sapın dört yanı). Doluysa otomatik üretim yerine bunlar kullanılır. " +
+             "Bileşen menüsünden \"Eldiven: 4 tutma noktasını oluştur\" ile başlangıç halleri üretilir, sonra tek tek ayarlanır.")]
+    [SerializeField] private Transform[] gloveGripSides = new Transform[0];
 
     private const float GripSwitchMargin = 0.15f; // sınır açılarda iki yön arasında gidip gelmesin
 
@@ -23,7 +26,16 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
     private int currentGrip = -1;
 
     public Transform GripPoint => gloveGrips == null ? gloveGrip : SelectGrip();
-    public float GripCurl => gloveGripCurl;
+
+    // Şu an seçili tutma noktasının kendi değeri (GloveGripPoint), yoksa aletin genel değeri
+    public float GripCurl
+    {
+        get
+        {
+            Transform point = gloveGrips != null && currentGrip >= 0 ? gloveGrips[currentGrip] : gloveGrip;
+            return point != null && point.TryGetComponent(out GloveGripPoint settings) ? settings.curl : gloveGripCurl;
+        }
+    }
 
     [Header("Kullanım")]
     [Tooltip("İki kullanım arasındaki en kısa süre (saniye). Tıklama anından itibaren sayılır.")]
@@ -50,6 +62,13 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
     // Kopyalar gloveGrip'le aynı parent'ta (görsel altında), vuruşta aletle birlikte savrulurlar.
     private void CreateGloveGrips()
     {
+        // Elle ayarlanmış noktalar varsa onlar
+        if (HasManualGripSides())
+        {
+            gloveGrips = gloveGripSides;
+            return;
+        }
+
         if (gloveGrip == null || !gloveGripFourSides) return;
 
         GetGripAxis(gloveGrip, out Vector3 center, out Vector3 axis);
@@ -72,6 +91,59 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
         axis = grip.right;
     }
 
+#if UNITY_EDITOR
+    // gloveGrip'ten sapın etrafında 90°, 180°, 270° döndürülmüş üç kopyayı prefab'a gerçek obje olarak ekler ve
+    // gloveGripSides'a bağlar. Başlangıç hali otomatik hesapla aynı; sonra her biri elle sapa oturtulur.
+    [ContextMenu("Eldiven: 4 tutma noktasını oluştur")]
+    private void CreateGripSidesInEditor()
+    {
+        if (gloveGrip == null)
+        {
+            Debug.LogWarning("Önce Glove Grip'i ata", this);
+            return;
+        }
+
+        UnityEditor.Undo.RecordObject(this, "Eldiven tutma noktaları");
+
+        // Noktalar zaten varsa yenilerini üretme, sadece eksik ayar bileşenlerini ekle
+        if (HasManualGripSides())
+        {
+            AddMissingGripSettings(gloveGripSides);
+            UnityEditor.EditorUtility.SetDirty(this);
+            return;
+        }
+
+        GetGripAxis(gloveGrip, out Vector3 center, out Vector3 axis);
+
+        var sides = new Transform[4];
+        sides[0] = gloveGrip;
+        for (int k = 1; k < 4; k++)
+        {
+            Quaternion turn = Quaternion.AngleAxis(90f * k, axis);
+            var copy = new GameObject($"{gloveGrip.name} {90 * k}").transform;
+            UnityEditor.Undo.RegisterCreatedObjectUndo(copy.gameObject, "Eldiven tutma noktaları");
+            copy.SetParent(gloveGrip.parent, false);
+            copy.SetPositionAndRotation(center + turn * (gloveGrip.position - center), turn * gloveGrip.rotation);
+            sides[k] = copy;
+        }
+
+        AddMissingGripSettings(sides);
+        gloveGripSides = sides;
+        UnityEditor.EditorUtility.SetDirty(this);
+    }
+
+    // Her noktaya kendi kıvrılma ayarı; başlangıç değeri aletin genel değeri
+    private void AddMissingGripSettings(Transform[] sides)
+    {
+        foreach (Transform side in sides)
+        {
+            if (side.TryGetComponent(out GloveGripPoint _)) continue;
+            var settings = UnityEditor.Undo.AddComponent<GloveGripPoint>(side.gameObject);
+            settings.curl = gloveGripCurl;
+        }
+    }
+#endif
+
     // Avucu kameradan en çok uzağa bakan (eldivenin sapın kamera tarafında kaldığı) yön.
     // Mevcut yön, yenisi belirgin şekilde daha iyi olmadıkça korunur.
     private Transform SelectGrip()
@@ -90,8 +162,32 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
         return gloveGrips[currentGrip];
     }
 
+    private bool HasManualGripSides()
+    {
+        if (gloveGripSides == null || gloveGripSides.Length == 0) return false;
+        foreach (Transform side in gloveGripSides)
+            if (side == null) return false;
+        return true;
+    }
+
     private void OnDrawGizmosSelected()
     {
+        // Elle ayarlanmış noktalar: her birinin yeri ve avucun baktığı yön
+        if (HasManualGripSides())
+        {
+            for (int k = 0; k < gloveGripSides.Length; k++)
+            {
+                Transform side = gloveGripSides[k];
+                float s = 0.03f * side.lossyScale.x;
+                Gizmos.color = k == 0 ? Color.green : Color.yellow;
+                Gizmos.DrawSphere(side.position, s);
+                Gizmos.DrawLine(side.position, side.position + side.up * s * 3f);      // avucun baktığı yön
+                Gizmos.color = Color.blue;
+                Gizmos.DrawLine(side.position, side.position + side.forward * s * 3f); // parmak uçları
+            }
+            return;
+        }
+
         if (gloveGrip == null || !gloveGripFourSides) return;
 
         GetGripAxis(gloveGrip, out Vector3 center, out Vector3 axis);

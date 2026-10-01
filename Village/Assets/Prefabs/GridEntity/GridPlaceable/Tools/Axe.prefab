@@ -1,5 +1,95 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1140649332053056863
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7912661929288257729}
+  - component: {fileID: 8592724924057766875}
+  m_Layer: 0
+  m_Name: GloveGrip 270
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7912661929288257729
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1140649332053056863}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0.5000002, y: -0.49999982, z: -0.49999982, w: -0.5000002}
+  m_LocalPosition: {x: -0.06, y: 0.6, z: -0.117}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3542210693720370261}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8592724924057766875
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1140649332053056863}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ab8cddefcdc12147b73bdbc842729e1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GloveGripPoint
+  curl: 0.37
+--- !u!1 &1579655786484351016
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2183188111794227557}
+  - component: {fileID: 8560794593643902162}
+  m_Layer: 0
+  m_Name: GloveGrip 90
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2183188111794227557
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1579655786484351016}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.5000002, y: 0.49999982, z: -0.49999982, w: -0.5000002}
+  m_LocalPosition: {x: 0.067, y: 0.6, z: 0.141}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3542210693720370261}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8560794593643902162
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1579655786484351016}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ab8cddefcdc12147b73bdbc842729e1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GloveGripPoint
+  curl: 0.395
 --- !u!1 &4207388408965412591
 GameObject:
   m_ObjectHideFlags: 0
@@ -32,6 +122,9 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6664325138797416904}
+  - {fileID: 2183188111794227557}
+  - {fileID: 1556639905223781000}
+  - {fileID: 7912661929288257729}
   m_Father: {fileID: 5447338256143925065}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &470536338274640880
@@ -91,6 +184,51 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &4342649026124578023
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1556639905223781000}
+  - component: {fileID: 8062894174851908159}
+  m_Layer: 0
+  m_Name: GloveGrip 180
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1556639905223781000
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4342649026124578023}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0.00000003090863, y: -0.00000003090861, z: -0.7071066, w: -0.707107}
+  m_LocalPosition: {x: 0.117, y: 0.6, z: -0.074}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3542210693720370261}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8062894174851908159
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4342649026124578023}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ab8cddefcdc12147b73bdbc842729e1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GloveGripPoint
+  curl: 0.242
 --- !u!1 &7416646094670411025
 GameObject:
   m_ObjectHideFlags: 0
@@ -142,9 +280,14 @@ MonoBehaviour:
   VisualTransform: {fileID: 3542210693720370261}
   followSpeed: 15
   gloveGrip: {fileID: 6664325138797416904}
-  gloveGripCurl: 0.7
+  gloveGripCurl: 0.369
   gloveGripFourSides: 1
   gloveGripHandleRadius: 0.11
+  gloveGripSides:
+  - {fileID: 6664325138797416904}
+  - {fileID: 2183188111794227557}
+  - {fileID: 1556639905223781000}
+  - {fileID: 7912661929288257729}
   cooldown: 0.6
   swing:
     axis: {x: 1, y: 0, z: 0}
@@ -185,6 +328,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6664325138797416904}
+  - component: {fileID: 522615188610098757}
   m_Layer: 0
   m_Name: GloveGrip
   m_TagString: Untagged
@@ -201,9 +345,22 @@ Transform:
   m_GameObject: {fileID: 8988710083010378065}
   serializedVersion: 2
   m_LocalRotation: {x: 0.70710707, y: 0.70710653, z: 0, w: -0}
-  m_LocalPosition: {x: -0.114, y: 0.601, z: -0.046}
+  m_LocalPosition: {x: -0.114, y: 0.6, z: 0.098}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 3542210693720370261}
   m_LocalEulerAnglesHint: {x: -180, y: 0, z: -450}
+--- !u!114 &522615188610098757
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8988710083010378065}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ab8cddefcdc12147b73bdbc842729e1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GloveGripPoint
+  curl: 0.227
