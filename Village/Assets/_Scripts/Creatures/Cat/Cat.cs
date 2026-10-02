@@ -39,6 +39,27 @@ public class Cat : Creature
     [SerializeField] private float bunnyKickSeconds = 0.9f;
     [SerializeField] private int runAwayRadius = 8;
 
+    [Header("Oyun: ele zıplama")]
+    [Tooltip("Boş el (base üstünde) görüşe her girdiğinde: kafayla takip → çömelip kıç sallama → elin hücresine zıplama")]
+    [SerializeField] private bool pounceAtHand = true;
+    [Tooltip("Çömelmeden önce eli kafasıyla izleme süresi (saniye, aralıktan rastgele)")]
+    [SerializeField] private Vector2 pounceWatchSeconds = new Vector2(0.6f, 1.2f);
+    [Tooltip("Çömelip kıç sallama süresi (saniye)")]
+    [SerializeField] private float pounceCrouchSeconds = 1.1f;
+    [Tooltip("Süre dolunca el zıplanamaz bir yerdeyse (dolu hücre, çok uzak) bu kadar daha çömelik bekler, sonra vazgeçer")]
+    [SerializeField] private float pounceWaitSeconds = 1.5f;
+    [Tooltip("En uzak zıplama (kafa hücresinden yatay, hücre)")]
+    [SerializeField] private float maxLeapDistance = 3.5f;
+    [Tooltip("Yayın yüksekliği (birim); uzaklık arttıkça biraz artar")]
+    [SerializeField] private float leapHeight = 0.45f;
+    [Tooltip("Zıplama süresi = taban + hücre başına ek (saniye)")]
+    [SerializeField] private float leapBaseSeconds = 0.3f;
+    [SerializeField] private float leapSecondsPerCell = 0.08f;
+    [Tooltip("İnişten sonra çömelip doğrulma süresi (saniye)")]
+    [SerializeField] private float landSeconds = 0.4f;
+    [Tooltip("Bir oyun bitince yenisi için en az bekleme (saniye)")]
+    [SerializeField] private float pounceCooldown = 1f;
+
     [Header("Şaplak")]
     [Tooltip("Kıça şaplakta vurulan nokta jöle gibi titrer. Kedinin materyali 'Village/Creature Jiggle Lit' olmalı.")]
     [SerializeField] private CreatureJiggle slapJiggle = new CreatureJiggle();
@@ -78,6 +99,8 @@ public class Cat : Creature
     private float bellyLift = 0.6f;
     private readonly System.Collections.Generic.List<Collider> bodyColliders = new System.Collections.Generic.List<Collider>(); // bacak ve kuyruk hariç // sırtüstü dönünce sırt yere otursun diye kaldırma (mesh'ten ölçülür)
     private Vector3 lastMouse;
+    private bool handInSight;
+    private float lastPounceTime = float.MinValue;
 
     public GridWalker Walker => walker;
     public float Affection => affection;
@@ -113,6 +136,56 @@ public class Cat : Creature
         Transform lookTarget = Glove != null && CanSee(Glove.transform.position) ? Glove.transform : null;
         if (rig != null) rig.LookTarget = lookTarget;
         if (eyes != null) eyes.LookTarget = lookTarget;
+
+        // El görüşe her yeni girdiğinde oyun başlar (görüşte kalan el tekrar tetiklemez)
+        bool wasInSight = handInSight;
+        handInSight = IsHandInSight();
+        if (handInSight && !wasInSight && CanStartPounce()) ChangeState(new PounceState(this));
+    }
+
+    // Boş el base üstünde, görüş alanında ve bakma mesafesinde
+    private bool IsHandInSight()
+    {
+        if (Glove == null || !Glove.OnBase || !CanSee(Glove.SurfacePoint)) return false;
+        Vector3 eye = rig != null && rig.Head != null ? rig.Head.position : transform.position;
+        float radius = rig != null ? rig.LookRadius : 3.5f;
+        return Vector3.Distance(Glove.SurfacePoint, eye) < radius;
+    }
+
+    // Sadece gezinirken / beklerken / otururken; uyurken, sevilirken ya da tepki verirken değil
+    private bool CanStartPounce()
+    {
+        if (!pounceAtHand || Time.time - lastPounceTime < pounceCooldown) return false;
+        return CurrentState is WanderState || CurrentState is TimedState timed && timed.Name != "Sleep";
+    }
+
+    // Elin altındaki hücre zıplanabilir mi: boş (base ve placeable yok), altında base, en fazla bir kat fark,
+    // menzil içinde ve kedinin kendi hücreleri değil. Gövde, iniş hücresinin kediye en yakın komşusuna konur
+    // (kedi zıpladığı yöne bakarak iner).
+    private bool TryGetLeapTarget(out Vector3Int head, out Vector3Int body)
+    {
+        head = body = default;
+        if (!handInSight) return false;
+
+        Vector3Int cell = Vector3Int.RoundToInt(Glove.SurfacePoint + Vector3.up * 0.5f);
+        Vector3Int from = walker.HeadCell;
+        if (cell == walker.HeadCell || cell == walker.BodyCell || Mathf.Abs(cell.y - from.y) > 1) return false;
+        if (new Vector2(cell.x - from.x, cell.z - from.z).magnitude > maxLeapDistance) return false;
+        if (!GridPathfinder.IsStandable(cell)) return false;
+
+        float best = float.MaxValue;
+        foreach (Vector3Int direction in new[] { Vector3Int.right, Vector3Int.left, Vector3Int.forward, Vector3Int.back })
+        {
+            Vector3Int candidate = cell + direction;
+            if (!GridPathfinder.IsStandable(candidate)) continue;
+            float distance = (GridWalker.FeetPosition(candidate) - transform.position).sqrMagnitude;
+            if (distance >= best) continue;
+            best = distance;
+            body = candidate;
+        }
+        if (best == float.MaxValue) return false;
+        head = cell;
+        return true;
     }
 
     // Sırtüstüyken her kare: gövde collider'larının en alçak noktası tam yere gelsin (kıvrılma, nefes, okşanırken
@@ -178,6 +251,7 @@ public class Cat : Creature
     public override void OnZoneClicked(CreatureZoneType zone, RaycastHit hit)
     {
         if (CurrentState is BellyState || CurrentState is BunnyKickState) return;
+        if (CurrentState is PounceState pounce && pounce.Airborne) return; // havadayken yakalanmaz
 
         if (zone == CreatureZoneType.Head)
         {
@@ -199,6 +273,7 @@ public class Cat : Creature
     public override bool OnZoneHoldBegin(CreatureZoneType zone)
     {
         if (CurrentState is BunnyKickState) return false;
+        if (CurrentState is PounceState pounce && pounce.Airborne) return false;
         lastMouse = Input.mousePosition;
         ChangeState(new BellyState(this));
         return true;
@@ -330,6 +405,105 @@ public class Cat : Creature
         {
             if (routine != null) owner.StopCoroutine(routine);
             owner.ResetPlaceholderPose();
+        }
+    }
+
+    // Ele zıplama oyunu: izle (kafa eli takip eder) → çömel, kıç salla → elin hücresine zıpla → in, doğrul.
+    // Zıplama anında el zıplanamaz bir yerdeyse çömelik bekler (el boş bir hücreye gelirse zıplar), süre dolunca vazgeçer.
+    // Klip yoksa her şey CatRig'de prosedürel; "Crouch" / "Pounce" klipleri gelirse oynar.
+    private class PounceState : CreatureState<Cat>
+    {
+        private enum Phase { Watch, Crouch, Leap, Land }
+        private Phase phase;
+        private float phaseTime;
+        private readonly float watchDuration;
+
+        public bool Airborne => phase == Phase.Leap;
+        public override string Name => $"Pounce.{phase}";
+
+        public PounceState(Cat owner) : base(owner)
+        {
+            watchDuration = Random.Range(owner.pounceWatchSeconds.x, owner.pounceWatchSeconds.y);
+        }
+
+        public override void Enter()
+        {
+            owner.walker.Stop(); // o anki adım biter, sonra izlemeye başlar
+            owner.Animator?.Play("Idle");
+            owner.SetMood(CatMood.Hunt);
+        }
+
+        public override void Tick()
+        {
+            phaseTime += Time.deltaTime;
+            switch (phase)
+            {
+                case Phase.Watch:
+                    if (owner.walker.IsMoving) { phaseTime = 0f; return; }
+                    if (!owner.handInSight) { owner.ChooseNext(); return; } // el gitti, ilgisi dağıldı
+                    if (phaseTime >= watchDuration) Begin(Phase.Crouch);
+                    break;
+
+                case Phase.Crouch:
+                    if (owner.rig != null)
+                    {
+                        owner.rig.Crouch = 1f;
+                        owner.rig.Wiggle = phaseTime > owner.pounceCrouchSeconds * 0.35f ? 1f : 0f;
+                    }
+                    if (phaseTime < owner.pounceCrouchSeconds) return;
+                    if (owner.TryGetLeapTarget(out Vector3Int head, out Vector3Int body)) Leap(head, body);
+                    else if (phaseTime >= owner.pounceCrouchSeconds + owner.pounceWaitSeconds) owner.ChooseNext();
+                    break;
+
+                case Phase.Leap:
+                    if (owner.rig != null) owner.rig.LeapProgress = owner.walker.JumpProgress;
+                    if (owner.walker.IsJumping) return;
+                    // İniş: kısa bir çömelme (yaylanma), sonra doğrulur
+                    if (owner.rig != null)
+                    {
+                        owner.rig.LeapProgress = -1f;
+                        owner.rig.Crouch = 0.7f;
+                        owner.rig.Wiggle = 0f;
+                    }
+                    Begin(Phase.Land);
+                    break;
+
+                case Phase.Land:
+                    if (owner.rig != null && phaseTime > 0.12f) owner.rig.Crouch = 0f;
+                    if (phaseTime >= owner.landSeconds) owner.ChangeState(new TimedState(owner, "Idle", owner.idleSeconds));
+                    break;
+            }
+        }
+
+        private void Begin(Phase next)
+        {
+            phase = next;
+            phaseTime = 0f;
+            if (next == Phase.Crouch) owner.Animator?.Play("Crouch");
+        }
+
+        private void Leap(Vector3Int head, Vector3Int body)
+        {
+            Vector3Int from = owner.walker.HeadCell;
+            float distance = new Vector2(head.x - from.x, head.z - from.z).magnitude;
+            owner.walker.JumpTo(head, body, owner.leapBaseSeconds + distance * owner.leapSecondsPerCell,
+                                owner.leapHeight + distance * 0.06f);
+            owner.Animator?.Play("Pounce", true);
+            if (owner.rig != null)
+            {
+                owner.rig.Wiggle = 0f;
+                owner.rig.LeapProgress = 0f;
+            }
+            Begin(Phase.Leap);
+        }
+
+        public override void Exit()
+        {
+            owner.lastPounceTime = Time.time;
+            if (owner.rig == null) return;
+            owner.rig.Crouch = 0f;
+            owner.rig.Wiggle = 0f;
+            owner.rig.LeapProgress = -1f;
         }
     }
 

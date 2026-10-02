@@ -65,7 +65,8 @@ public class CatEyes : MonoBehaviour
         float targetOpen = Mood == CatMood.Sleep ? 0f : 1f;
         happy = Mathf.Lerp(happy, Mood == CatMood.Happy ? 1f : 0f, k);
         angry = Mathf.Lerp(angry, Mood == CatMood.Angry ? 1f : 0f, k);
-        surprise = Mathf.Lerp(surprise, Mood == CatMood.Alert ? 1f : 0f, k);
+        // Pusudayken de gözler iri açılır (avlanan kedi)
+        surprise = Mathf.Lerp(surprise, Mood == CatMood.Alert || Mood == CatMood.Hunt ? 1f : 0f, k);
 
         // Kırpma: kısa bir kapanıp açılma (uyurken ve mutluyken yok)
         if (Mood != CatMood.Sleep && Mood != CatMood.Happy && Time.time >= nextBlink)

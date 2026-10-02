@@ -20,11 +20,17 @@ public class GridWalker : MonoBehaviour
     private float stepDuration = 1f;
     private bool turningAround;
     private Vector3 turnStartFacing;
+    private bool jumping;
+    private float jumpHeight;
+    private Quaternion jumpStartRotation, jumpEndRotation;
 
     public bool IsPlaced { get; private set; }
     public Vector3Int HeadCell { get; private set; }
     public Vector3Int BodyCell { get; private set; }
     public bool IsMoving => stepProgress < 1f || path.Count > 0;
+    public bool IsJumping => jumping && stepProgress < 1f;
+    // Zıplamanın ilerlemesi (0 kalkış, 1 iniş); zıplamıyorsa 1
+    public float JumpProgress => jumping ? stepProgress : 1f;
     public float Speed => speed;
     // Şu anki ilerleme hızı (animasyon hızını eşlemek için); dururken 0
     public float CurrentSpeed { get; private set; }
@@ -89,7 +95,26 @@ public class GridWalker : MonoBehaviour
         return true;
     }
 
-    public void Stop() => path.Clear(); // o anki adım tamamlanır
+    public void Stop() => path.Clear(); // o anki adım tamamlanır (zıplama da yarıda kesilmez)
+
+    // Yay çizerek yeni iki hücreye zıplar (yol bulmadan, aradakilerin üstünden). Hücreler kalkışta ayrılır.
+    // height: yayın en yüksek noktasının, kalkış ve iniş arasındaki düz çizginin üstündeki yüksekliği.
+    public void JumpTo(Vector3Int head, Vector3Int body, float duration, float height)
+    {
+        if (!IsPlaced) return;
+        path.Clear();
+        turningAround = false;
+        jumping = true;
+        jumpHeight = height;
+        jumpStartRotation = transform.rotation;
+        Vector3 facing = FeetPosition(head) - FeetPosition(body);
+        facing.y = 0f;
+        jumpEndRotation = facing.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(facing.normalized, Vector3.up) : transform.rotation;
+
+        HeadCell = head;
+        BodyCell = body;
+        StartStep(FeetPosition(head), FeetPosition(body), duration);
+    }
 
     private void Update()
     {
@@ -98,14 +123,16 @@ public class GridWalker : MonoBehaviour
         if (stepProgress < 1f)
         {
             stepProgress = Mathf.Min(1f, stepProgress + Time.deltaTime / stepDuration);
-            CurrentSpeed = turningAround ? 0f : speed;
+            CurrentSpeed = turningAround || jumping ? 0f : speed;
         }
         else if (path.Count > 0)
         {
+            jumping = false;
             BeginNextStep();
         }
         else
         {
+            jumping = false;
             CurrentSpeed = 0f;
         }
 
@@ -158,6 +185,14 @@ public class GridWalker : MonoBehaviour
         Vector3 head = Vector3.Lerp(headFrom, headTo, stepProgress);
         Vector3 body = Vector3.Lerp(bodyFrom, bodyTo, stepProgress);
         transform.position = (head + body) * 0.5f;
+
+        // Zıplama: yatayda düz, dikeyde yay; yön kalkıştaki yönden inişteki yöne yumuşakça döner
+        if (jumping)
+        {
+            transform.position += Vector3.up * (4f * jumpHeight * stepProgress * (1f - stepProgress));
+            transform.rotation = Quaternion.Slerp(jumpStartRotation, jumpEndRotation, Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, stepProgress * 1.6f)));
+            return;
+        }
 
         // Yerinde dönüş: konum aynı kalır (orta nokta değişmez), yön dikey eksen etrafında 180° döner
         if (turningAround && stepProgress < 1f)

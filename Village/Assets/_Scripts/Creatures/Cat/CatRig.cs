@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public enum CatMood { Idle, Walk, Happy, Alert, Angry, Sleep }
+public enum CatMood { Idle, Walk, Happy, Alert, Angry, Sleep, Hunt }
 
 // Kedinin prosedürel katmanı: animasyondan SONRA (LateUpdate) onun pozunun üstüne ekler.
 //   yürüyüş: dört vuruşlu (arka sol → ön sol → arka sağ → ön sağ), adımlar katedilen mesafeyle ilerler; gövde zıplar/sallanır
@@ -20,6 +20,7 @@ public class CatRig : MonoBehaviour
         public Vector3 upperAxis, bottomAxis; // kedinin sağ ekseni, kemiklerin yerel uzayında
         public float phaseOffset;
         public bool front;
+        public float restHeight; // rest pozunda kalçanın (üst kemiğin) yerden yüksekliği
     }
 
     private struct TailSettings
@@ -75,6 +76,22 @@ public class CatRig : MonoBehaviour
     [SerializeField] private float bellyHeadNod = 30f;
     [SerializeField] private float bellyBlendSpeed = 3f;
 
+    [Header("Pusu ve zıplama")]
+    [Tooltip("Çömelince gövdenin inmesi (birim)")]
+    [SerializeField] private float crouchDepth = 0.12f;
+    [Tooltip("Çömelince ön tarafın alçalması (derece); kıç hafif kalkık kalır")]
+    [SerializeField] private float crouchPitch = 6f;
+    [SerializeField] private float crouchBlendSpeed = 5f;
+    [Tooltip("Zıplamadan önce kıç sallama: açı (derece) ve hız (salınım/sn)")]
+    [SerializeField] private float wiggleAngle = 9f;
+    [SerializeField] private float wiggleSpeed = 4.5f;
+    [Tooltip("Havada bacakların açılması: ön patiler ileri, arka patiler geri (derece)")]
+    [SerializeField] private float leapReach = 45f;
+    [Tooltip("Havada gövdenin eğimi: çıkarken burun yukarı, inerken aşağı (derece)")]
+    [SerializeField] private float leapPitch = 18f;
+    [Tooltip("Çömelmede patilerin yerde kalması için bacak bükülmesinin çarpanı (patiler gömülüyorsa artır, havada kalıyorsa azalt)")]
+    [SerializeField] private float crouchLegBend = 1f;
+
     [Header("Yedek tepkiler (klip yoksa)")]
     [SerializeField] private float headPatSquash = 0.22f;
     [SerializeField] private float buttRaiseAngle = 14f;
@@ -87,6 +104,13 @@ public class CatRig : MonoBehaviour
 
     // Göbek modu: gövde karna doğru kıvrılır (sırtüstü yatan kedinin "C" duruşu)
     public bool BellyUp { get; set; }
+
+    // Pusu: 0..1 çömelme hedefi (yumuşakça geçilir), 0..1 kıç sallama, havadaki ilerleme (0..1; havada değilse <0)
+    public float Crouch { get; set; }
+    public float Wiggle { get; set; }
+    public float LeapProgress { get; set; } = -1f;
+    private float crouchWeight, wiggleWeight, wigglePhase;
+    private Vector3 rootYawAxis;
     private Transform[] tail;
     private Vector3[] tailYaw, tailPitch;
     private Leg[] legs;
@@ -110,6 +134,7 @@ public class CatRig : MonoBehaviour
     public Transform LookTarget { get; set; }
     private Vector3 lastLookPoint;
     public Transform Head => head;
+    public float LookRadius => lookRadius;
 
     // Kedi modeli kurulunca çağrılır. Kemikler isimden bulunur (orange-cat rig'i).
     public void Setup(Transform catTransform, Transform model)
@@ -124,7 +149,11 @@ public class CatRig : MonoBehaviour
 
         Vector3 right = catRoot.right, up = catRoot.up, forward = catRoot.forward;
         upperBody = upper;
-        if (root != null) rootPitchAxis = Local(root, right);
+        if (root != null)
+        {
+            rootPitchAxis = Local(root, right);
+            rootYawAxis = Local(root, up);
+        }
         if (middle != null)
         {
             middleSwayAxis = Local(middle, forward);
@@ -209,6 +238,7 @@ public class CatRig : MonoBehaviour
             upper = upperBone, bottom = bottomBone,
             upperAxis = Local(upperBone, catRoot.right), bottomAxis = Local(bottomBone, catRoot.right),
             phaseOffset = phase, front = front,
+            restHeight = Mathf.Max(0.01f, Vector3.Dot(upperBone.position - catRoot.position, catRoot.up)),
         };
     }
 
@@ -250,6 +280,7 @@ public class CatRig : MonoBehaviour
         ApplyTurnBend(dt, yawRate);
         ApplyBellyCurl(dt);
         ApplyReactions(dt);
+        ApplyPounce(dt);
         ApplyBreath();
         ApplyTail(dt, yawRate);
         ApplyHead(dt);
@@ -344,6 +375,60 @@ public class CatRig : MonoBehaviour
         }
     }
 
+    // Pusu: gövde alçalır (ön taraf biraz daha), kıç sağa sola sallanır; bacaklar patiler yerde kalacak kadar bükülür.
+    // Havada: çıkarken burun yukarı, inerken aşağı; ön patiler ileri uzanır, arka patiler geride açılır.
+    private void ApplyPounce(float dt)
+    {
+        bool airborne = LeapProgress >= 0f;
+        // Kalkışta çömelme hızla açılır (yaylanma), inişte tekrar çömelince yumuşar
+        float crouchSpeed = airborne ? crouchBlendSpeed * 3f : crouchBlendSpeed;
+        crouchWeight = Mathf.MoveTowards(crouchWeight, airborne ? 0f : Crouch, dt * crouchSpeed);
+        wiggleWeight = Mathf.MoveTowards(wiggleWeight, airborne ? 0f : Wiggle, dt * 4f);
+        wigglePhase += dt * wiggleSpeed;
+        if (crouchWeight <= 0f && !airborne) return;
+        if (root == null) return;
+
+        if (crouchWeight > 0f)
+        {
+            float w = Mathf.SmoothStep(0f, 1f, crouchWeight);
+            root.position -= catRoot.up * (crouchDepth * w);
+            root.localRotation *= Quaternion.AngleAxis(crouchPitch * w, rootPitchAxis);
+
+            // Kıç sallama: kalça bir yana, gövdenin önü ters yana döner, böylece kafa ve göğüs yerinde kalır
+            float wiggle = Mathf.Sin(wigglePhase * Mathf.PI * 2f) * wiggleAngle * Mathf.SmoothStep(0f, 1f, wiggleWeight) * w;
+            root.localRotation *= Quaternion.AngleAxis(wiggle, rootYawAxis);
+            if (middle != null) middle.localRotation *= Quaternion.AngleAxis(-wiggle, middleYawAxis);
+
+            // Bacaklar zikzak bükülür: kalçanın yeni yüksekliği / rest yüksekliği = cos(açı).
+            // Ön bacakta dirsek geriye, arka bacakta diz öne (kedinin doğal çömelmesi).
+            foreach (Leg leg in legs)
+            {
+                if (leg == null) continue;
+                float height = Vector3.Dot(leg.upper.position - catRoot.position, catRoot.up);
+                float ratio = Mathf.Clamp(height / leg.restHeight, 0.2f, 1f);
+                float bend = Mathf.Acos(ratio) * Mathf.Rad2Deg * crouchLegBend;
+                float sign = leg.front ? 1f : -1f;
+                leg.upper.localRotation *= Quaternion.AngleAxis(bend * sign, leg.upperAxis);
+                leg.bottom.localRotation *= Quaternion.AngleAxis(-2f * bend * sign, leg.bottomAxis);
+            }
+        }
+
+        if (airborne)
+        {
+            float s = Mathf.Clamp01(LeapProgress);
+            float stretch = Mathf.Sin(s * Mathf.PI);
+            // Artı açı ön tarafı indirir: başta eksi (burun yukarı), sonda artı (burun aşağı)
+            root.localRotation *= Quaternion.AngleAxis(-leapPitch * Mathf.Cos(s * Mathf.PI) * Mathf.Min(1f, stretch * 2f), rootPitchAxis);
+            foreach (Leg leg in legs)
+            {
+                if (leg == null) continue;
+                // Yürüyüşteki gibi artı = geri: ön bacak ileri (eksi), arka bacak geri (artı)
+                leg.upper.localRotation *= Quaternion.AngleAxis((leg.front ? -leapReach : leapReach) * stretch, leg.upperAxis);
+                leg.bottom.localRotation *= Quaternion.AngleAxis((leg.front ? -0.3f : 0.3f) * leapReach * stretch, leg.bottomAxis);
+            }
+        }
+    }
+
     private void ApplyBreath()
     {
         if (breath == null) return;
@@ -370,6 +455,7 @@ public class CatRig : MonoBehaviour
             CatMood.Alert => new TailSettings(5f, 12f, 35f),
             CatMood.Angry => new TailSettings(30f, 5f, 5f),
             CatMood.Sleep => new TailSettings(2f, 0.3f, -5f),
+            CatMood.Hunt => new TailSettings(6f, 4f, -6f), // alçakta, ucu seğiren kuyruk
             _ => new TailSettings(8f, 0.8f, 5f),
         };
         float blend = 1f - Mathf.Exp(-4f * dt);
