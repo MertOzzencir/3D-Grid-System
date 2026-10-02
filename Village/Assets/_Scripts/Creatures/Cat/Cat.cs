@@ -265,6 +265,8 @@ public class Cat : Creature
         {
             Glove?.PlayPress(slapLift, slapDuration);
             ChangeState(new ReactionState(this, "ButtSlap", buttSlapSeconds, CatMood.Alert, PlaceholderButtSlap()));
+            // Gözler pat-pat'teki gibi mutlu kısılır (kuyruk ve nefes Alert'te kalır)
+            if (eyes != null) eyes.Mood = CatMood.Happy;
             // Vurulan nokta jöle gibi titrer (içeri göçüp sekerek söner); kıç kalkmaz, patiler oynamaz
             if (bodyRenderer != null) StartCoroutine(slapJiggle.Play(new[] { bodyRenderer }, hit.point, -hit.normal));
             // Klip yoksa prosedürel yedek: kafa tatlı tatlı sağa sola sallanır
