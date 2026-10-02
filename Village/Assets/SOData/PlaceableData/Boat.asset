@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fca9e232c77ebe1449c1bbd8e3cfff7c, type: 3}
+  m_Name: Boat
+  m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
+  Name: Boat
+  Icon: {fileID: 21300000, guid: 99d7e777338ab8f4ba890cc738794dba, type: 3}
+  saveId: 
+  size: {x: 1, y: 1, z: 2}
+  layers:
+  - cells: 0101
+  layoutSize: {x: 1, y: 1, z: 2}
+  legacySize: {x: 0, y: 0}
+  legacyMask: 
+  Prefab: {fileID: 7188416339491848764, guid: bcf116717c0ee1540a8e0d5896a752fa, type: 3}

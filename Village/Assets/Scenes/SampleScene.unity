@@ -2010,6 +2010,11 @@ MonoBehaviour:
   moveSharpness: 25
   rotateSharpness: 14
   attachDuration: 0.08
+  shoreSearchRadius: 6
+  shoreInset: 0.2
+  rideHopDuration: 0.3
+  rideHopHeight: 0.35
+  captureAttachDuration: 0.15
   walkStartSpeed: 0.4
   walkStopDelay: 0.2
   walkBlendTime: 0.18
@@ -2106,6 +2111,9 @@ MonoBehaviour:
   thumbCurve: 20.6
   thumbCurveMotion: 10.3
   legDownAngle: 75
+  capturedCurl: 0.35
+  capturedFlail: 0.35
+  capturedFlailSpeed: 2.4
   hipSwing: 25
   kneeBend: 8
   kneeLift: 55
