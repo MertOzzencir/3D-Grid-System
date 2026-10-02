@@ -134,6 +134,17 @@ public class GridWalker : MonoBehaviour
         return true;
     }
 
+    // Yol bulmadan tek komşu hücreye adım (o anki adım bitince başlar; önceki sıra silinir).
+    // Gövdenin hücresiyse yerinde döner. Klavyeyle sürülenler (bot) için.
+    public void StepTo(Vector3Int cell)
+    {
+        if (!IsPlaced) return;
+        path.Clear();
+        path.Add(cell);
+    }
+
+    public bool HasQueuedSteps => path.Count > 0;
+
     public void Stop() => path.Clear(); // o anki adım tamamlanır (zıplama da yarıda kesilmez)
 
     // Yay çizerek yeni iki hücreye zıplar (yol bulmadan, aradakilerin üstünden). İniş hücreleri kalkıştan ÖNCE grid'de

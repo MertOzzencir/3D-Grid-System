@@ -2,9 +2,9 @@ using UnityEngine;
 
 // Su üstünde giden 2×1 bot (yürüyen placeable, kedi gibi): sadece suya konur (CanOccupy), su hücrelerinde
 // GridWalker ile gider (Medium = Water); grid'deki yerini GridWalker her adımda günceller.
-// Binme: eldiven kıyıdayken (mouse suda) botun yanındaysa biner, koltuğa (Seat) oturur. Bot mouse'un su üstündeki
-// hücresine yol bulup gider. Mouse karada botun yanındaki bir yeri gösterince eldiven iner. Mouse uzak bir karayı
-// gösterirse bot oraya en yakın su hücresine gider. Binerken oyuncu girişi kilitli (şimdilik sadece gezme).
+// Binme: eldiven kıyıdayken (mouse suda) botun yanındaysa biner, koltuğa (Seat) oturur. Binmişken WASD botu kameranın
+// açısına göre hücre hücre sürer (W ileri, S geri, A/D sola/sağa; yol bulma yok), kamera botu takip eder.
+// Bot dururken mouse botun yanındaki karayı gösterirse eldiven iner. Binerken oyuncu girişi kilitli (şimdilik sadece gezme).
 // Görsel: model kodla kurulur; giderken kürekler yol başına çekilir, bot suda hafif inip kalkar, yalpalar, dönüşte yatar.
 [RequireComponent(typeof(GridWalker))]
 [DefaultExecutionOrder(10)] // GridWalker'dan (0) sonra: görsel ve koltuk bu karenin konumuyla, eldiven (LateUpdate) okumadan önce
@@ -57,7 +57,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     private float lastYaw, rowWeight, rowPhase, lean;
     private bool riding;
     private float lastRideEnd = float.MinValue;
-    private Vector3Int lastTarget;
     private Vector3Int? restoredHeadOffset; // kayıttan: arka hücreden ön hücreye
 
     public bool IsRidden => riding;
@@ -131,8 +130,9 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         if (Time.time - lastRideEnd < boardCooldown || DistanceToBoat(g.SurfacePoint) > boardDistance) return;
 
         riding = true;
-        lastTarget = walker.HeadCell;
+        walker.Stop();
         InputManager.SetLocked(this, true);
+        CameraController.Follow(transform);
         g.BeginRide(seat != null ? seat : transform);
     }
 
@@ -145,28 +145,40 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             return;
         }
 
-        Vector3Int target;
-        if (g.MouseOverLand)
+        // Bot dururken mouse yanındaki karayı gösteriyorsa in
+        if (!walker.IsMoving && g.MouseOverLand && DistanceToBoat(g.MouseLandPoint) <= disembarkDistance)
         {
-            // Botun yanındaki karayı gösteriyor: in
-            if (DistanceToBoat(g.MouseLandPoint) <= disembarkDistance)
-            {
-                EndRide();
-                return;
-            }
-            if (!TryNearestWater(g.MouseLandPoint, 4, out target)) return;
-        }
-        else
-        {
-            Vector3 point = g.MouseWaterPoint;
-            target = new Vector3Int(Mathf.RoundToInt(point.x), walker.HeadCell.y, Mathf.RoundToInt(point.z));
+            EndRide();
+            return;
         }
 
-        // Hedef değişince yeniden yol bulunur (her kare değil)
-        if (target == lastTarget) return;
-        lastTarget = target;
-        if (target == walker.HeadCell || target == walker.BodyCell) walker.Stop();
-        else if (walker.IsWalkable(target)) walker.MoveTo(target);
+        // WASD: tuş bırakılınca o anki adım biter ve durur. Basılıyken adım bitmeden bir sonraki sıraya girer (kesintisiz).
+        Vector2 input = InputManager.MovementVectorNormalized();
+        if (input.sqrMagnitude < 0.01f || walker.HasQueuedSteps) return;
+
+        Vector3Int next = walker.HeadCell + GridDirection(input);
+        if (next == walker.BodyCell || walker.IsWalkable(next)) walker.StepTo(next); // gövdenin hücresi = yerinde dön
+    }
+
+    // Kameraya göre girdi → grid yönü (kamera 90° adımlarla döndüğü için eksenler grid'e denk).
+    // Çapraz basılıysa (W+D) bot zaten o yönlerden birine gidiyorsa ona devam eder, yoksa baskın eksen.
+    private Vector3Int GridDirection(Vector2 input)
+    {
+        Transform cam = Camera.main.transform;
+        Vector3 forward = Vector3.ProjectOnPlane(cam.forward, Vector3.up).normalized;
+        Vector3 right = Vector3.ProjectOnPlane(cam.right, Vector3.up).normalized;
+        Vector3 world = forward * input.y + right * input.x;
+
+        var alongX = new Vector3Int(world.x > 0f ? 1 : -1, 0, 0);
+        var alongZ = new Vector3Int(0, 0, world.z > 0f ? 1 : -1);
+        if (Mathf.Abs(world.x) > 0.3f && Mathf.Abs(world.z) > 0.3f)
+        {
+            Vector3Int facing = walker.HeadCell - walker.BodyCell;
+            facing.y = 0;
+            if (facing == alongX) return alongX;
+            if (facing == alongZ) return alongZ;
+        }
+        return Mathf.Abs(world.x) >= Mathf.Abs(world.z) ? alongX : alongZ;
     }
 
     private void EndRide()
@@ -176,6 +188,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         lastRideEnd = Time.time;
         walker.Stop();
         InputManager.SetLocked(this, false);
+        CameraController.Follow(null);
         if (Glove != null) Glove.EndRide();
     }
 
@@ -188,25 +201,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         float head = Vector2.Distance(p, new Vector2(walker.HeadCell.x, walker.HeadCell.z));
         float body = Vector2.Distance(p, new Vector2(walker.BodyCell.x, walker.BodyCell.z));
         return Mathf.Min(head, body);
-    }
-
-    // Noktaya en yakın gidilebilir su hücresi (botun katında)
-    private bool TryNearestWater(Vector3 point, int radius, out Vector3Int result)
-    {
-        result = default;
-        float best = float.MaxValue;
-        int cx = Mathf.RoundToInt(point.x), cz = Mathf.RoundToInt(point.z), y = walker.HeadCell.y;
-        for (int dz = -radius; dz <= radius; dz++)
-        for (int dx = -radius; dx <= radius; dx++)
-        {
-            var cell = new Vector3Int(cx + dx, y, cz + dz);
-            if (!walker.IsWalkable(cell)) continue;
-            float distance = new Vector2(cell.x - point.x, cell.z - point.z).sqrMagnitude;
-            if (distance >= best) continue;
-            best = distance;
-            result = cell;
-        }
-        return best < float.MaxValue;
     }
 
     // --- Görsel ---

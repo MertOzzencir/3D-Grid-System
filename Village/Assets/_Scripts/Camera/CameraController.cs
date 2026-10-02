@@ -36,6 +36,16 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float minPitch = 35f;
     [SerializeField] private float maxPitch = 55f;
 
+    // Takip edilen (örn. binilen bot): WASD kamerayı kaydırmaz, kamera onun yatay yer değiştirmesi kadar kayar
+    private static Transform followTarget;
+    private static Vector3 lastFollowPosition;
+
+    public static void Follow(Transform target)
+    {
+        followTarget = target;
+        if (target != null) lastFollowPosition = target.position;
+    }
+
     private Vector3 currentVelocity;
     private bool isRotating;
     private float currentYaw;
@@ -49,6 +59,7 @@ public class CameraController : MonoBehaviour
     void Awake()
     {
         CurrentFacing = FacingSequence[facingIndex]; // static: önceki Play oturumundan kalmasın
+        followTarget = null;
         InputManager.OnE += RotateRight;
         InputManager.OnQ += RotateLeft;
         currentYaw = transform.eulerAngles.y;
@@ -73,6 +84,17 @@ public class CameraController : MonoBehaviour
 
     private void HandleMovement()
     {
+        if (followTarget != null)
+        {
+            Vector3 delta = followTarget.position - lastFollowPosition;
+            delta.y = 0f;
+            lastFollowPosition = followTarget.position;
+            transform.position += delta;
+            pivotPoint += delta; // dönerken de takip etsin (dönüş pozisyonu pivot'tan hesaplanıyor)
+            currentVelocity = Vector3.zero;
+            return;
+        }
+
         Vector2 movement = InputManager.MovementVectorNormalized();
 
         Vector3 forward = Quaternion.Euler(0, currentYaw, 0) * Vector3.forward;
