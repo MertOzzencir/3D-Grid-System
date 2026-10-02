@@ -67,6 +67,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     private void Awake()
     {
         walker = GetComponent<GridWalker>();
+        walker.WalkMedium = GridWalker.Medium.Water; // bot hep suda gider
         if (modelPrefab != null) BuildModel();
     }
 

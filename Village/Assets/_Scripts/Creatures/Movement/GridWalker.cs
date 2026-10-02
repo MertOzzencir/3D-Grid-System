@@ -13,6 +13,13 @@ public class GridWalker : MonoBehaviour
 
     [Tooltip("Ground: base'lerin üstünde yürür (kedi). Water: en alt kattaki su hücrelerinde gider (bot).")]
     [SerializeField] private Medium medium = Medium.Ground;
+
+    // Türü belli olanlar (bot) kendisi ayarlar: prefab'daki ayara güvenilmez
+    public Medium WalkMedium
+    {
+        get => medium;
+        set => medium = value;
+    }
     [Tooltip("Birim / saniye")]
     [SerializeField] private float speed = 1.2f;
     [Tooltip("Yerinde dönerken (kafa-gövde yer değiştirme) süre (saniye)")]
