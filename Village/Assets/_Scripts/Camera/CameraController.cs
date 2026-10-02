@@ -18,6 +18,9 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float speed;
     [SerializeField] private float acceleration;
 
+    [Tooltip("Takip edilen (bot) ekranın ortasına bu hızla oturur")]
+    [SerializeField] private float followSharpness = 6f;
+
     [Header("Rotation")]
     [SerializeField] private float rotationAngle = 90f;
     [SerializeField] private float rotationSpeed = 200f;
@@ -36,7 +39,8 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float minPitch = 35f;
     [SerializeField] private float maxPitch = 55f;
 
-    // Takip edilen (örn. binilen bot): WASD kamerayı kaydırmaz, kamera onun yatay yer değiştirmesi kadar kayar
+    // Takip edilen (örn. binilen bot): WASD kamerayı kaydırmaz. Kamera onunla birlikte kayar ve onu ekranın ortasına
+    // yumuşakça oturtur (zoom bakış yönünde olduğu için ortadaki şey ortada kalır); Q/E onun etrafında döner.
     private static Transform followTarget;
     private static Vector3 lastFollowPosition;
 
@@ -86,12 +90,22 @@ public class CameraController : MonoBehaviour
     {
         if (followTarget != null)
         {
-            Vector3 delta = followTarget.position - lastFollowPosition;
+            Vector3 target = followTarget.position;
+            Vector3 delta = target - lastFollowPosition;
             delta.y = 0f;
-            lastFollowPosition = followTarget.position;
+            lastFollowPosition = target;
             transform.position += delta;
             pivotPoint += delta; // dönerken de takip etsin (dönüş pozisyonu pivot'tan hesaplanıyor)
             currentVelocity = Vector3.zero;
+            if (isRotating) return;
+
+            // Ekranın ortası: bakış ışınının hedefin yüksekliğindeki yatay düzlemi kestiği nokta. Hedefe doğru kayar.
+            Vector3 forward = transform.forward;
+            if (forward.y > -0.01f) return;
+            Vector3 center = transform.position + forward * ((target.y - transform.position.y) / forward.y);
+            Vector3 offset = target - center;
+            offset.y = 0f;
+            transform.position += offset * (1f - Mathf.Exp(-followSharpness * Time.deltaTime));
             return;
         }
 
@@ -124,7 +138,11 @@ public class CameraController : MonoBehaviour
         Ray ray = new Ray(transform.position, fullForward);
         Plane groundPlane = new Plane(Vector3.up, new Vector3(0f, pivotFallbackHeight, 0f));
 
-        if (Physics.Raycast(ray, out RaycastHit hit, maxPivotDistance, pivotMask, QueryTriggerInteraction.Ignore))
+        if (followTarget != null)
+        {
+            pivotPoint = followTarget.position; // takip edilen ortada: onun etrafında dön
+        }
+        else if (Physics.Raycast(ray, out RaycastHit hit, maxPivotDistance, pivotMask, QueryTriggerInteraction.Ignore))
         {
             pivotPoint = hit.point;
         }
