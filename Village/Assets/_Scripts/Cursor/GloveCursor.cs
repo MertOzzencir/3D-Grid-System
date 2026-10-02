@@ -185,7 +185,7 @@ public class GloveCursor : MonoBehaviour
         Vector3 fingerDirection = OnBase ? heading : FingerDirectionOn(normal);
         Quaternion palmRotation = Quaternion.LookRotation(fingerDirection, -normal)
                                   * Quaternion.Euler(fingerLift, 0f, 0f); // +X etrafında: parmak uçları yüzeyden kalkar
-        Vector3 palmPosition = SurfacePoint + normal * surfaceOffset;
+        Vector3 palmPosition = SurfacePoint + normal * (surfaceOffset + PressOffset());
 
         if (WalkWeight > 0f && fingers != null)
         {
@@ -239,11 +239,33 @@ public class GloveCursor : MonoBehaviour
             WalkPhase += distance / Mathf.Max(strideLength * scale, 0.0001f);
     }
 
-    // Elde tutulan obje (yok edildiyse Unity null'u → null)
+    // Elde tutulan obje (yok edildiyse Unity null'u → null). IGloveFreeHold ise eldiven ona bağlanmaz,
+    // mouse'u takip etmeye devam eder (örn. kedinin göbeğini okşarken).
     private static Transform HeldTransform()
     {
         InteractableController controller = InteractableController.Instance;
-        return controller != null && controller.Held is Component component && component != null ? component.transform : null;
+        if (controller == null || controller.Held is IGloveFreeHold) return null;
+        return controller.Held is Component component && component != null ? component.transform : null;
+    }
+
+    // Pat / şaplak gibi kısa hareket: avuç yüzeyden kalkıp geri iner. lift: kalkma yüksekliği (ölçek 1'de)
+    public void PlayPress(float lift, float duration)
+    {
+        pressLift = lift;
+        pressDuration = Mathf.Max(duration, 0.01f);
+        pressTime = 0f;
+    }
+
+    private float pressLift, pressDuration = 1f, pressTime = float.MaxValue;
+
+    // Şu anki kalkma: sürenin %60'ında kalkar, kalan %40'ında hızla iner (tokat gibi)
+    private float PressOffset()
+    {
+        if (pressTime >= pressDuration) return 0f;
+        pressTime += Time.deltaTime;
+        float t = Mathf.Clamp01(pressTime / pressDuration);
+        float shaped = t < 0.6f ? Mathf.Sin(t / 0.6f * Mathf.PI * 0.5f) : Mathf.Cos((t - 0.6f) / 0.4f * Mathf.PI * 0.5f);
+        return pressLift * shaped * transform.lossyScale.x;
     }
 
     // Tutma anında eldivenin objedeki yeri: son kare zaten objenin üstündeysek o nokta, değilse mouse ray'inin objeye

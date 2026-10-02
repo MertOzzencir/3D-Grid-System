@@ -141,6 +141,10 @@ public class GridManager : MonoBehaviour
 
     private Vector3Int GetIndexFromWorldPosition(Vector3 worldPosition)
         => Vector3Int.RoundToInt(worldPosition - transform.position);
+
+    // Dünya hücresinin verisi (grid dışındaysa false). Canlılar yol bulurken kullanır.
+    public bool TryGetCell(Vector3Int worldCell, out GridData data)
+        => Grids.TryGetValue(worldCell - ManagerPosition, out data);
     // Hücre grid içinde mi ve placeable slotu boş mu
     public bool IsPlaceableCellFree(Vector3 worldPosition)
         => Grids.TryGetValue(GetIndexFromWorldPosition(worldPosition), out GridData data) && data.Placeable == null;

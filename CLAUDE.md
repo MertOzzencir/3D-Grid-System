@@ -64,6 +64,13 @@ Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe. Commit mesajları (
 - Rig (sağ el, 5 parmak, Blender'da dik duruyor → Unity'de düzeltme açısı): kök `Avuç İçi` (ASCII'ye çevrilmesi önerildi); parmaklar `Isaret/Orta/Yuzuk/Serce` × `Alt/Orta/Ust`, başparmak `Bas_Alt/Bas_Ust`. `*_Alt` avuç kemiği sayılır (sadece hafif çukurlaşma), kıvrılma `Orta`+`Ust` ile; başparmakta iki kemik de kıvrılır. Kemikler Inspector'a sürüklenir (isim kuralı yok). Bone roll: dört parmakta yerel X ortak kıvrılma ekseni; kıvrılma işareti açılışta otomatik kalibre edilir.
 - FBX: Add Leaf Bones ✓ (parmak ucu = `*_end` kemikleri), Apply Modifiers ✓, sadece Armature + LOW.
 
+## Canlılar (`_Scripts/Creatures`)
+- Ortak: `Creature` (sadece durum makinesi; ihtiyaçlar türe özel), `CreatureAnimator` (klipleri Playables ile isimden oynatır, Animator Controller yok; "Armature|Idle" = "Idle"; klip yoksa sessizce geçer), `CreatureZone` (kafa/kıç/gövde bölgeleri: sol tık `IClickable`, sağ tık basılı `IInteractable`, hover), hareket modülü (`GridWalker` + `GridPathfinder`, A*; ileride kuş/balık için yeni modüller).
+- Kedi (`Cat`, 2×1: kafa + gövde hücresi): gezinir/oturur/uyur; sol tık kafa = pat, kıç = şaplak; sağ tık basılı = göbek modu (eldiven `IGloveFreeHold` ile çakılmaz, okşar), fazla okşanınca tekmeleyip kaçar. Sevgi ve aşırı sevilme kediye özel. Kayıt henüz yok.
+- Model (`Models/Cat/orange-cat.fbx`): kod yerleştirir (origin kafa hücresinde → +0.5 ileri, `GroundToPaws` patileri yere indirir), gözleri `Head` kemiğine takar, bölgeleri kemiklere bağlar. "Kedi: klipleri modelden doldur" menüsü.
+- `CatRig` (prosedürel): yürüyüş (dört vuruşlu, mesafeye bağlı), dönüşte gövde kavisi, kuyruk, nefes (`Breath` kemiği ölçeği), kafa eldivene bakar (±22.5° yatay, ±15° dikey, görüş alanı `Cat.lookFieldOfView`). Dokunulan kemikler her kare animasyondan önce rest'e döndürülür (eklemeler birikmesin). Kuyruk/nefes/yürüyüş animasyonda key'lenmez.
+- Gözler: `Village/Cat Eyes` shader'ı küre gözleri görüş uzayında çizer (UV gerekmez), `CatEyes` kırpma/ifade/bakış.
+
 ## Save sistemi
 - Kayıt = dünyayı yeniden kuran tarif: her obje için SO `SaveId` + hücre + rotasyon (+ `ISaveState` ile ekstra durum). JSON, `Application.persistentDataPath/<slot>.json`, güvenli yazma (`SaveStorage`).
 - Sahneye elle obje konmaz; her şey build mode ile yerleşir, bu yüzden yükleme boş dünyaya yapılır.

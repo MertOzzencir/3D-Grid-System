@@ -101,10 +101,22 @@ public class InteractableController : MonoBehaviour
 
     private void FinishInteract(bool obj)
     {
-        if (currentInteracted == null) return;
+        // Elde bir şey yokken sol tık: mouse'un altındaki ilk obje IClickable ise ona iletilir (örn. kediyi sevmek)
+        if (currentInteracted == null)
+        {
+            if (obj) TryClick();
+            return;
+        }
 
         if (obj)
             currentInteracted.Interact(out bool f);
+    }
+
+    private void TryClick()
+    {
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        if (Physics.Raycast(ray, out RaycastHit hit) && hit.collider.TryGetComponent(out IClickable clickable))
+            clickable.OnClicked(hit);
     }
 
     // Ekran yüksekliğine göre (çözünürlükten bağımsız) hız; tek karelik sıçramalar ani hareket sayılmasın diye
