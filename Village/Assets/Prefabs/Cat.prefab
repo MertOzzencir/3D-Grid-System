@@ -61,7 +61,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4bb727f741c4a324baf1c685e9ef1d07, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Cat
-  creatureAnimator: {fileID: 0}
+  data: {fileID: 11400000, guid: d9631ee0ebbd5f444a0970473ab99a44, type: 2}
+  rotation: 0
+  creatureAnimator: {fileID: 7904187915132065202}
   wanderRadius: 5
   idleSeconds: {x: 2, y: 5}
   sitSeconds: {x: 3, y: 6}
@@ -76,13 +78,23 @@ MonoBehaviour:
   buttSlapSeconds: 2.2
   bunnyKickSeconds: 0.9
   runAwayRadius: 8
+  pounceAtHand: 1
+  pounceWatchSeconds: {x: 0.6, y: 1.2}
+  pounceCrouchSeconds: 1.1
+  pounceWaitSeconds: 1.5
+  maxLeapDistance: 3.5
+  leapHeight: 0.45
+  leapBaseSeconds: 0.3
+  leapSecondsPerCell: 0.08
+  landSeconds: 0.4
+  pounceCooldown: 1
   slapJiggle:
-    depth: 0.07
-    radius: 0.4
-    duration: 0.8
-    oscillations: 3.5
-    waveLength: 0.15
-    waveAmount: 0.35
+    depth: 0.1
+    radius: 1
+    duration: 1.5
+    oscillations: 5
+    waveLength: 0.5
+    waveAmount: 0.562
     swellAmount: 0.06
     swellOscillations: 2
     swellCenterDepth: 0.25
@@ -91,6 +103,7 @@ MonoBehaviour:
   slapLift: 0.25
   slapDuration: 0.16
   modelPrefab: {fileID: 919132149155446097, guid: 36c232d8537dcf14dbb0d95a1deecede, type: 3}
+  eyeShader: {fileID: 4800000, guid: 0ee50840fc76f0741b683b0ef8d95213, type: 3}
   modelOffset: {x: 0, y: 0, z: 0.5}
   modelRotation: {x: 0, y: 0, z: 0}
   groundToPaws: 1
