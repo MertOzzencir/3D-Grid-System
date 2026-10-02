@@ -7,9 +7,11 @@ using UnityEngine;
 //   arka ayaklarıyla tekmeler (BunnyKick) ve kaçar.
 // Animasyonlar CreatureAnimator ile isimden oynatılır; model gelmeden yer tutucu (iki kutu) kendini kurar ve
 // tepkileri basit kutu hareketleriyle gösterir.
+// Grid'de "yürüyen placeable": build menüsünden konur, kayıtla gelir (ISaveState: kafanın yönü + sevgi), durduğu iki
+// hücreye (gövde = origin, kafa) başka obje konamaz. Sahneye elle konan kedi grid'e girmez, kaydedilmez (sadece test için).
 [RequireComponent(typeof(GridWalker))]
 [DefaultExecutionOrder(60)] // CatRig'den (50) sonra: sırtüstü yere oturtma kemiklerin son pozuyla yapılır
-public class Cat : Creature
+public class Cat : Creature, ISaveState
 {
     [Header("Gezinme")]
     [SerializeField] private int wanderRadius = 5;
@@ -100,6 +102,7 @@ public class Cat : Creature
     private readonly System.Collections.Generic.List<Collider> bodyColliders = new System.Collections.Generic.List<Collider>(); // bacak ve kuyruk hariç // sırtüstü dönünce sırt yere otursun diye kaldırma (mesh'ten ölçülür)
     private Vector3 lastMouse;
     private bool handInSight;
+    private Vector3Int? restoredHeadOffset; // kayıttan: gövde hücresinden kafa hücresine
     private float lastPounceTime = float.MinValue;
 
     public GridWalker Walker => walker;
@@ -125,9 +128,10 @@ public class Cat : Creature
         // Base'ler kayıttan yüklenene kadar yerleşmeyi dene
         if (!walker.IsPlaced)
         {
-            if (walker.TryPlaceNear(transform.position)) ChooseNext();
-            return;
+            // Grid'e yerleşen kedi OnPlaced'da yerini alır; sahneye elle konmuşsa (base'ler yüklenene kadar) yakına yerleşir
+            if (PlacedFootprint != null || !walker.TryPlaceNear(transform.position)) return;
         }
+        if (CurrentState == null) ChooseNext();
 
         overpet = Mathf.Max(0f, overpet - overpetDecay * Time.deltaTime);
         base.Update();
@@ -171,13 +175,13 @@ public class Cat : Creature
         Vector3Int from = walker.HeadCell;
         if (cell == walker.HeadCell || cell == walker.BodyCell || Mathf.Abs(cell.y - from.y) > 1) return false;
         if (new Vector2(cell.x - from.x, cell.z - from.z).magnitude > maxLeapDistance) return false;
-        if (!GridPathfinder.IsStandable(cell)) return false;
+        if (!walker.IsWalkable(cell)) return false;
 
         float best = float.MaxValue;
         foreach (Vector3Int direction in new[] { Vector3Int.right, Vector3Int.left, Vector3Int.forward, Vector3Int.back })
         {
             Vector3Int candidate = cell + direction;
-            if (!GridPathfinder.IsStandable(candidate)) continue;
+            if (!walker.IsWalkable(candidate)) continue;
             float distance = (GridWalker.FeetPosition(candidate) - transform.position).sqrMagnitude;
             if (distance >= best) continue;
             best = distance;
@@ -231,6 +235,45 @@ public class Cat : Creature
         Vector3 toTarget = Vector3.ProjectOnPlane(point - eye, transform.up);
         if (toTarget.sqrMagnitude < 0.0001f) return true; // tam tepesinde
         return Vector3.Angle(transform.forward, toTarget) <= lookFieldOfView * 0.5f;
+    }
+
+    // --- Grid ve kayıt ---
+
+    // Gövde hücresi (origin) + kafa hücresi. Yerleşikken yürüyüşten, yerleşmeden önce kayıttan ya da rotasyondan
+    // (Deg0'da kafa +Z'de). Kafa bir kat yukarıda/aşağıda olabilir (merdiven çıkarken), bu yüzden SO'nun maskesi kullanılmaz.
+    public override GridFootprint GetFootprint()
+    {
+        Vector3Int head = walker != null && walker.IsPlaced ? walker.HeadCell - walker.BodyCell
+                        : restoredHeadOffset ?? GridMaskRotator.RotateOffset(Vector3Int.forward, Rotation);
+        return new GridFootprint(new[] { Vector3Int.zero, head });
+    }
+
+    // Grid'e konunca (build menüsü ya da kayıt): yürüyüş modülü bu iki hücreden başlar
+    public override void OnPlaced(Vector3Int origin)
+    {
+        base.OnPlaced(origin);
+        walker.Place(origin + PlacedFootprint.FilledCells()[1], origin);
+    }
+
+    [System.Serializable]
+    private class SaveState
+    {
+        public Vector3Int head; // gövde hücresinden kafa hücresine
+        public float affection;
+    }
+
+    public string CaptureState() => JsonUtility.ToJson(new SaveState
+    {
+        head = walker.IsPlaced ? walker.HeadCell - walker.BodyCell : Vector3Int.forward,
+        affection = affection,
+    });
+
+    public void RestoreState(string state)
+    {
+        SaveState saved = JsonUtility.FromJson<SaveState>(state);
+        if (saved == null) return;
+        if (saved.head != Vector3Int.zero) restoredHeadOffset = saved.head;
+        affection = Mathf.Clamp01(saved.affection);
     }
 
     // --- Davranış seçimi ---
@@ -328,7 +371,7 @@ public class Cat : Creature
             {
                 Vector3Int head = owner.walker.HeadCell;
                 var target = head + new Vector3Int(Random.Range(-radius, radius + 1), Random.Range(-1, 2), Random.Range(-radius, radius + 1));
-                if (target == head || !GridPathfinder.IsStandable(target)) continue;
+                if (target == head || !owner.walker.IsWalkable(target)) continue;
                 if (owner.walker.MoveTo(target))
                 {
                     // Yürüyüş prosedürel; klip varsa (yoksa yok sayılır) Idle'ın kafa bakınması yine kapatılır
@@ -455,8 +498,8 @@ public class Cat : Creature
                         owner.rig.Wiggle = phaseTime > owner.pounceCrouchSeconds * 0.35f ? 1f : 0f;
                     }
                     if (phaseTime < owner.pounceCrouchSeconds) return;
-                    if (owner.TryGetLeapTarget(out Vector3Int head, out Vector3Int body)) Leap(head, body);
-                    else if (phaseTime >= owner.pounceCrouchSeconds + owner.pounceWaitSeconds) owner.ChooseNext();
+                    if (owner.TryGetLeapTarget(out Vector3Int head, out Vector3Int body) && Leap(head, body)) return;
+                    if (phaseTime >= owner.pounceCrouchSeconds + owner.pounceWaitSeconds) owner.ChooseNext();
                     break;
 
                 case Phase.Leap:
@@ -486,12 +529,13 @@ public class Cat : Creature
             if (next == Phase.Crouch) owner.Animator?.Play("Crouch");
         }
 
-        private void Leap(Vector3Int head, Vector3Int body)
+        // İniş hücreleri kalkıştan önce grid'de doldurulur (GridWalker.JumpTo); doldurulamazsa zıplamaz
+        private bool Leap(Vector3Int head, Vector3Int body)
         {
             Vector3Int from = owner.walker.HeadCell;
             float distance = new Vector2(head.x - from.x, head.z - from.z).magnitude;
-            owner.walker.JumpTo(head, body, owner.leapBaseSeconds + distance * owner.leapSecondsPerCell,
-                                owner.leapHeight + distance * 0.06f);
+            if (!owner.walker.JumpTo(head, body, owner.leapBaseSeconds + distance * owner.leapSecondsPerCell,
+                                     owner.leapHeight + distance * 0.06f)) return false;
             owner.Animator?.Play("Pounce", true);
             if (owner.rig != null)
             {
@@ -499,6 +543,7 @@ public class Cat : Creature
                 owner.rig.LeapProgress = 0f;
             }
             Begin(Phase.Leap);
+            return true;
         }
 
         public override void Exit()

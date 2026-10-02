@@ -5,6 +5,8 @@ using UnityEngine;
 // Yol kafa hücresi için bulunur; gövde kafanın bir önceki hücresine geçer, yani kafanın izinden gelir.
 // Geri dönmek gerekirse (ilk adım gövdenin hücresi) kafa ile gövde yer değiştirir: canlı yerinde döner.
 // Obje kökü kafa ile gövdenin ortasında durur, yüzü kafaya bakar. Yükseklik: hücrenin tabanı (altındaki base'in üstü).
+// Aynı objede grid'e yerleşmiş bir GridPlaceable (canlı) varsa iki hücreyi grid'de kaplar: her adımın / zıplamanın
+// BAŞINDA yeni hücreler doldurulur (origin = gövde hücresi, footprint = gövde + kafa), eskiler boşalır.
 public class GridWalker : MonoBehaviour
 {
     [Tooltip("Birim / saniye")]
@@ -35,14 +37,37 @@ public class GridWalker : MonoBehaviour
     // Şu anki ilerleme hızı (animasyon hızını eşlemek için); dururken 0
     public float CurrentSpeed { get; private set; }
 
-    // Yürünebilir: üstünde durulabilir ve gövdenin bulunduğu hücre değil (kafa gövdeye giremez)
-    public bool IsWalkable(Vector3Int cell) => GridPathfinder.IsStandable(cell);
+    private GridPlaceable occupant;
+    private bool occupantSearched;
+
+    // Grid'e yerleşmiş placeable ise o (kendi hücreleri ona engel değil); sahneye elle konmuşsa null
+    private GridPlaceable Occupant
+    {
+        get
+        {
+            if (!occupantSearched) { occupant = GetComponent<GridPlaceable>(); occupantSearched = true; }
+            return occupant != null && occupant.PlacedFootprint != null ? occupant : null;
+        }
+    }
+
+    // Yürünebilir: üstünde durulabilir (kendi kapladığı hücreler sayılmaz)
+    public bool IsWalkable(Vector3Int cell) => GridPathfinder.IsStandable(cell, Occupant);
+
+    // Grid'deki yerini günceller; başka bir obje hücreyi kapadıysa false
+    private bool Occupy(Vector3Int head, Vector3Int body)
+    {
+        GridPlaceable self = Occupant;
+        if (self == null || GridManager.Instance == null) return true;
+        var footprint = new GridFootprint(new[] { Vector3Int.zero, head - body });
+        return GridManager.Instance.TryMovePlaceable(self, body, footprint);
+    }
 
     // Hücrenin tabanı (ayakların bastığı yer)
     public static Vector3 FeetPosition(Vector3Int cell) => cell + Vector3.down * 0.5f;
 
     public void Place(Vector3Int head, Vector3Int body)
     {
+        Occupy(head, body);
         HeadCell = head;
         BodyCell = body;
         headFrom = headTo = FeetPosition(head);
@@ -69,7 +94,7 @@ public class GridWalker : MonoBehaviour
             float distance = (head - origin).sqrMagnitude;
             if (distance >= best) continue;
 
-            foreach (Vector3Int neighbour in GridPathfinder.Neighbours(head, GridPathfinder.IsStandable))
+            foreach (Vector3Int neighbour in GridPathfinder.Neighbours(head, c => GridPathfinder.IsStandable(c)))
             {
                 if (neighbour.y != head.y) continue;
                 best = distance;
@@ -87,7 +112,7 @@ public class GridWalker : MonoBehaviour
     public bool MoveTo(Vector3Int goal)
     {
         if (!IsPlaced) return false;
-        List<Vector3Int> found = GridPathfinder.FindPath(HeadCell, goal, IsWalkable);
+        List<Vector3Int> found = GridPathfinder.FindPath(HeadCell, goal, IsWalkable, ignore: Occupant);
         if (found == null) return false;
 
         path.Clear();
@@ -97,11 +122,12 @@ public class GridWalker : MonoBehaviour
 
     public void Stop() => path.Clear(); // o anki adım tamamlanır (zıplama da yarıda kesilmez)
 
-    // Yay çizerek yeni iki hücreye zıplar (yol bulmadan, aradakilerin üstünden). Hücreler kalkışta ayrılır.
+    // Yay çizerek yeni iki hücreye zıplar (yol bulmadan, aradakilerin üstünden). İniş hücreleri kalkıştan ÖNCE grid'de
+    // doldurulur (havadayken oraya obje konamasın), eskiler boşalır. Hücreler doluysa zıplamaz (false).
     // height: yayın en yüksek noktasının, kalkış ve iniş arasındaki düz çizginin üstündeki yüksekliği.
-    public void JumpTo(Vector3Int head, Vector3Int body, float duration, float height)
+    public bool JumpTo(Vector3Int head, Vector3Int body, float duration, float height)
     {
-        if (!IsPlaced) return;
+        if (!IsPlaced || !Occupy(head, body)) return false;
         path.Clear();
         turningAround = false;
         jumping = true;
@@ -114,6 +140,7 @@ public class GridWalker : MonoBehaviour
         HeadCell = head;
         BodyCell = body;
         StartStep(FeetPosition(head), FeetPosition(body), duration);
+        return true;
     }
 
     private void Update()
@@ -144,7 +171,8 @@ public class GridWalker : MonoBehaviour
         Vector3Int next = path[0];
 
         // Arada yol kapandıysa (yeni obje kondu) dur; canlının beyni yeni hedef seçer
-        if (!IsWalkable(next))
+        // Yeni hücreler adımın başında grid'de doldurulur (geri dönüşte kafa ile gövde yer değiştirir, hücreler aynı)
+        if (!IsWalkable(next) || !Occupy(next, HeadCell))
         {
             path.Clear();
             return;

@@ -1,10 +1,13 @@
 using UnityEngine;
 
 // Bütün canlıların (kedi, ileride kuş, balık) ortak çekirdeği: durum makinesi + modüllerin bağlantısı.
+// Canlı "yürüyen placeable"dır: build menüsünden konur, kayıtla gelir, durduğu hücrelere başka obje konamaz.
+// Pivot kuralı canlıya uymaz: transform canlının kendisinde (hareket modülü sürer); grid'deki yeri
+// (OriginWorldPosition + PlacedFootprint) hareket modülü her adımda GridManager.TryMovePlaceable ile günceller.
 // İhtiyaçlar (sevgi, açlık) burada değil: her canlı beslenmez, onlar türe özel bileşenlerde.
 // Modüller: hareket (türe göre: GridWalker, ileride yüzme), animasyon köprüsü (CreatureAnimator),
 // etkileşim bölgeleri (CreatureZone), prosedürel katman.
-public abstract class Creature : MonoBehaviour
+public abstract class Creature : GridPlaceable
 {
     [SerializeField] private CreatureAnimator creatureAnimator;
 

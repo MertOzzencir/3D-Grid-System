@@ -43,6 +43,30 @@ public class GridManager : MonoBehaviour
     public bool PlaceablePlaceOn(GridPlaceable entity, Vector3 position) => PlaceGeneric(entity, position, d => d.Placeable, (d, e) => d.Placeable = e);
     public bool PlaceableRemoveOn(GridPlaceable entity, bool destroy = true) => RemoveGeneric(entity, d => d.Placeable, d => d.Placeable = null, destroy);
 
+    // Yürüyen placeable'lar (canlılar): eski hücreleri bırakıp yenilerini kaplar, transform'a dokunmaz.
+    // Yeni hücrelerden biri grid dışındaysa ya da başka bir placeable'la doluysa hiçbir şey değişmez (false).
+    public bool TryMovePlaceable(GridPlaceable entity, Vector3Int originWorld, GridFootprint footprint)
+    {
+        Vector3Int origin = GetIndexFromWorldPosition(originWorld);
+        foreach (Vector3Int offset in footprint.FilledCells())
+        {
+            if (!Grids.TryGetValue(origin + offset, out GridData data)) return false;
+            if (data.Placeable != null && data.Placeable != entity) return false;
+        }
+
+        if (entity.PlacedFootprint != null)
+        {
+            Vector3Int oldOrigin = GetIndexFromWorldPosition(entity.OriginWorldPosition);
+            foreach (Vector3Int offset in entity.PlacedFootprint.FilledCells())
+                if (Grids.TryGetValue(oldOrigin + offset, out GridData data) && data.Placeable == entity) data.Placeable = null;
+        }
+
+        foreach (Vector3Int offset in footprint.FilledCells())
+            Grids[origin + offset].Placeable = entity;
+        entity.SetPlacement(originWorld, footprint);
+        return true;
+    }
+
     // Grid'deki her obje bir kez (çok hücreli objeler tekrar etmez)
     public List<GridBase> GetAllBases() => GetPlacedEntities(d => d.Base);
     public List<GridPlaceable> GetAllPlaceables() => GetPlacedEntities(d => d.Placeable);

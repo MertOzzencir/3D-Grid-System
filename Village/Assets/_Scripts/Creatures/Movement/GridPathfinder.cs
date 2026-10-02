@@ -11,17 +11,19 @@ public static class GridPathfinder
         new Vector3Int(1, 0, 0), new Vector3Int(-1, 0, 0), new Vector3Int(0, 0, 1), new Vector3Int(0, 0, -1),
     };
 
-    // Kedi gibi yerde yürüyenler için: hücre boş (base ve placeable yok), altında base var
-    public static bool IsStandable(Vector3Int cell)
+    // Kedi gibi yerde yürüyenler için: hücre boş (base ve placeable yok), altında base var.
+    // ignore: canlının kendisi (kendi kapladığı hücreler ona engel değil)
+    public static bool IsStandable(Vector3Int cell, GridPlaceable ignore = null)
     {
         GridManager grid = GridManager.Instance;
         if (grid == null || !grid.TryGetCell(cell, out GridData data)) return false;
-        if (data.Base != null || data.Placeable != null) return false;
+        if (data.Base != null || (data.Placeable != null && data.Placeable != ignore)) return false;
         return grid.TryGetCell(cell + Vector3Int.down, out GridData below) && below.Base != null;
     }
 
     // start'tan goal'a yol (start hariç, goal dahil). Bulunamazsa null. maxNodes: arama sınırı (büyük grid'de takılmasın).
-    public static List<Vector3Int> FindPath(Vector3Int start, Vector3Int goal, Func<Vector3Int, bool> isWalkable, int maxNodes = 2000)
+    public static List<Vector3Int> FindPath(Vector3Int start, Vector3Int goal, Func<Vector3Int, bool> isWalkable, int maxNodes = 2000,
+                                           GridPlaceable ignore = null)
     {
         if (start == goal) return new List<Vector3Int>();
         if (!isWalkable(goal)) return null;
@@ -52,7 +54,7 @@ public static class GridPathfinder
             open.RemoveAt(bestIndex);
             closed.Add(current);
 
-            foreach (Vector3Int next in Neighbours(current, isWalkable))
+            foreach (Vector3Int next in Neighbours(current, isWalkable, ignore))
             {
                 if (closed.Contains(next)) continue;
                 float nextCost = cost[current] + (next.y == current.y ? 1f : 1.5f); // zıplama biraz pahalı
@@ -66,7 +68,7 @@ public static class GridPathfinder
         return null;
     }
 
-    public static IEnumerable<Vector3Int> Neighbours(Vector3Int cell, Func<Vector3Int, bool> isWalkable)
+    public static IEnumerable<Vector3Int> Neighbours(Vector3Int cell, Func<Vector3Int, bool> isWalkable, GridPlaceable ignore = null)
     {
         foreach (Vector3Int direction in Directions)
         {
@@ -75,17 +77,18 @@ public static class GridPathfinder
 
             // Bir kat yukarı: önündeki hücre dolu ama üstü boş ve başının üstü açık
             Vector3Int up = flat + Vector3Int.up;
-            if (isWalkable(up) && IsOpen(cell + Vector3Int.up)) { yield return up; continue; }
+            if (isWalkable(up) && IsOpen(cell + Vector3Int.up, ignore)) { yield return up; continue; }
 
             // Bir kat aşağı
             Vector3Int down = flat + Vector3Int.down;
-            if (isWalkable(down) && IsOpen(flat)) yield return down;
+            if (isWalkable(down) && IsOpen(flat, ignore)) yield return down;
         }
     }
 
     // Hücre grid içinde ve boş (içinden geçilebilir)
-    private static bool IsOpen(Vector3Int cell)
-        => GridManager.Instance.TryGetCell(cell, out GridData data) && data.Base == null && data.Placeable == null;
+    private static bool IsOpen(Vector3Int cell, GridPlaceable ignore)
+        => GridManager.Instance.TryGetCell(cell, out GridData data) && data.Base == null &&
+           (data.Placeable == null || data.Placeable == ignore);
 
     private static float Heuristic(Vector3Int a, Vector3Int b)
         => Mathf.Abs(a.x - b.x) + Mathf.Abs(a.z - b.z) + Mathf.Abs(a.y - b.y) * 1.5f;
