@@ -62,6 +62,16 @@ public class Cat : Creature, ISaveState
     [Tooltip("Bir oyun bitince yenisi için en az bekleme (saniye)")]
     [SerializeField] private float pounceCooldown = 1f;
 
+    [Header("Oyun: eli yakalama")]
+    [Tooltip("İnişte el, kafanın indiği hücreye yataydan bu kadar yakınsa yakalanır")]
+    [SerializeField] private float catchRadius = 0.7f;
+    [Tooltip("Eldiveni ağzında tutup kemirme süresi; bu sürede oyuncu hiçbir şeyle etkileşemez (kamera serbest)")]
+    [SerializeField] private float caughtSeconds = 3.5f;
+    [Tooltip("Ağız: eldivenin avucunun tutulduğu nokta, kafa kemiğine göre (kedinin eksenlerinde: x sağ, y yukarı, z ileri)")]
+    [SerializeField] private Vector3 mouthOffset = new Vector3(0f, -0.08f, 0.22f);
+    [Tooltip("Eldivenin ağızdaki duruşuna ek dönüş (derece). Varsayılan: parmaklar kedinin sağına ve aşağı sarkar, avuç kedinin yüzüne bakar.")]
+    [SerializeField] private Vector3 mouthGloveRotation = Vector3.zero;
+
     [Header("Şaplak")]
     [Tooltip("Kıça şaplakta vurulan nokta jöle gibi titrer. Kedinin materyali 'Village/Creature Jiggle Lit' olmalı.")]
     [SerializeField] private CreatureJiggle slapJiggle = new CreatureJiggle();
@@ -104,6 +114,7 @@ public class Cat : Creature, ISaveState
     private readonly System.Collections.Generic.List<Collider> bodyColliders = new System.Collections.Generic.List<Collider>(); // bacak ve kuyruk hariç // sırtüstü dönünce sırt yere otursun diye kaldırma (mesh'ten ölçülür)
     private Vector3 lastMouse;
     private bool handInSight;
+    private Transform mouth; // eldivenin ağızda tutulduğu nokta (kafa kemiğinin child'ı)
     private Vector3Int? restoredHeadOffset; // kayıttan: gövde hücresinden kafa hücresine
     private float lastPounceTime = float.MinValue;
 
@@ -139,7 +150,8 @@ public class Cat : Creature, ISaveState
         base.Update();
 
         // Kafa ve gözler eldivene bakar: yakındaysa (CatRig / CatEyes kendi mesafesine bakar) ve görüş alanındaysa
-        Transform lookTarget = Glove != null && CanSee(Glove.transform.position) ? Glove.transform : null;
+        // Kemirirken bakmaz: eldiven zaten ağzında, kafa ona dönmeye çalışırsa kendi kendini kovalar
+        Transform lookTarget = !(CurrentState is CaughtState) && Glove != null && CanSee(Glove.transform.position) ? Glove.transform : null;
         if (rig != null) rig.LookTarget = lookTarget;
         if (eyes != null) eyes.LookTarget = lookTarget;
 
@@ -198,6 +210,13 @@ public class Cat : Creature, ISaveState
     // kıpırdanma ne olursa olsun sırt yerde). Yükseklik yumuşakça takip edilir.
     private void LateUpdate()
     {
+        // Yakalanmış eldiven ağza oturur (CatRig kemikleri pozladıktan sonra, GloveFingers'tan önce)
+        if (CurrentState is CaughtState && Glove != null)
+        {
+            Transform anchor = mouth != null ? mouth : transform;
+            Glove.FollowCapture(anchor.position, anchor.rotation * Quaternion.Euler(mouthGloveRotation));
+        }
+
         if (!(CurrentState is BellyState) || visual == null || bodyColliders.Count == 0) return;
 
         float lowest = float.MaxValue;
@@ -507,6 +526,12 @@ public class Cat : Creature, ISaveState
                 case Phase.Leap:
                     if (owner.rig != null) owner.rig.LeapProgress = owner.walker.JumpProgress;
                     if (owner.walker.IsJumping) return;
+                    // El hâlâ oradaysa yakaladı: ağzına alıp kemirir
+                    if (owner.HandInCatchReach())
+                    {
+                        owner.ChangeState(new CaughtState(owner));
+                        return;
+                    }
                     // İniş: kısa bir çömelme (yaylanma), sonra doğrulur
                     if (owner.rig != null)
                     {
@@ -555,6 +580,43 @@ public class Cat : Creature, ISaveState
             owner.rig.Crouch = 0f;
             owner.rig.Wiggle = 0f;
             owner.rig.LeapProgress = -1f;
+        }
+    }
+
+    // Eli yakaladı: eldiven ağzında (GloveCursor.BeginCapture, her kare Cat.LateUpdate ağza oturtur), kedi çömelik
+    // ön patileriyle sarılıp kemirir, arada kafasını sallar. Bu sürede oyuncu girişi kilitli (InputManager.SetLocked),
+    // kamera serbest. Süre dolunca bırakır; eldiven yumuşakça mouse'a döner. Klip ("ChewGlove") gelirse o oynar.
+    private class CaughtState : CreatureState<Cat>
+    {
+        public CaughtState(Cat owner) : base(owner) { }
+
+        public override void Enter()
+        {
+            owner.walker.Stop();
+            owner.Animator?.Play("ChewGlove");
+            owner.SetMood(CatMood.Hunt);
+            if (owner.eyes != null) owner.eyes.Mood = CatMood.Happy; // keyifli, gözler kısık
+            if (owner.rig != null)
+            {
+                owner.rig.Crouch = 0.8f;
+                owner.rig.Chew = true;
+            }
+            InputManager.SetLocked(true);
+            owner.Glove?.BeginCapture();
+        }
+
+        public override void Tick()
+        {
+            if (owner.StateTime >= owner.caughtSeconds) owner.ChangeState(new TimedState(owner, "Idle", owner.idleSeconds));
+        }
+
+        public override void Exit()
+        {
+            owner.ReleaseGlove();
+            owner.lastPounceTime = Time.time;
+            if (owner.rig == null) return;
+            owner.rig.Chew = false;
+            owner.rig.Crouch = 0f;
         }
     }
 
@@ -654,6 +716,41 @@ public class Cat : Creature, ISaveState
         eyes = GetComponent<CatEyes>();
         if (eyes == null) eyes = gameObject.AddComponent<CatEyes>();
         eyes.Setup(transform, head, leftEye, rightEye, eyeShader);
+
+        mouth = CreateMouth(head != null ? head : transform);
+    }
+
+    // Ağız noktası: kafaya göre mouthOffset (kedinin eksenlerinde, rest pozunda). Yönü: parmaklar (Z) kedinin sağına ve
+    // aşağı, avuç (Y) kedinin yüzüne doğru (geri) bakar.
+    private Transform CreateMouth(Transform parent)
+    {
+        var anchor = new GameObject("Mouth").transform;
+        anchor.SetParent(parent, false);
+        anchor.position = parent.position + transform.rotation * mouthOffset;
+        Vector3 fingers = (transform.right - transform.up * 0.6f).normalized;
+        anchor.rotation = Quaternion.LookRotation(fingers, -transform.forward);
+        return anchor;
+    }
+
+    private void OnDisable()
+    {
+        // Kemirirken kedi silinirse / kapanırsa eldiven ve giriş takılı kalmasın
+        if (CurrentState is CaughtState) ReleaseGlove();
+    }
+
+    private void ReleaseGlove()
+    {
+        Glove?.EndCapture();
+        InputManager.SetLocked(false);
+    }
+
+    // İnişte el kafanın indiği hücrede mi (boş el, base üstünde)
+    private bool HandInCatchReach()
+    {
+        if (Glove == null || !Glove.OnBase) return false;
+        Vector3 offset = Glove.SurfacePoint - GridWalker.FeetPosition(walker.HeadCell);
+        offset.y = 0f;
+        return offset.magnitude < catchRadius;
     }
 
     // En alttaki pati ucunu (rest pozunda) kedi kökünün yüksekliğine (yer) indirir

@@ -92,6 +92,19 @@ public class CatRig : MonoBehaviour
     [Tooltip("Çömelmede patilerin yerde kalması için bacak bükülmesinin çarpanı (patiler gömülüyorsa artır, havada kalıyorsa azalt)")]
     [SerializeField] private float crouchLegBend = 1f;
 
+    [Header("Eldiveni kemirme")]
+    [Tooltip("Kafanın eldivene doğru eğilmesi (derece) ve kemirirken inip kalkması (derece, salınım/sn)")]
+    [SerializeField] private float chewHeadDown = 18f;
+    [SerializeField] private float chewNod = 9f;
+    [SerializeField] private float chewSpeed = 3.2f;
+    [Tooltip("Arada bir kafayı hızlı hızlı sağa sola sallar (oyuncağı 'öldüren' kedi): açı, hız, kaç saniyede bir, ne kadar sürer")]
+    [SerializeField] private float chewShakeAngle = 16f;
+    [SerializeField] private float chewShakeSpeed = 7f;
+    [SerializeField] private float chewShakeEvery = 1.4f;
+    [SerializeField] private float chewShakeSeconds = 0.45f;
+    [Tooltip("Ön patilerin eldivene sarılması: ileri uzanma (derece)")]
+    [SerializeField] private float chewPawReach = 30f;
+
     [Header("Yedek tepkiler (klip yoksa)")]
     [SerializeField] private float headPatSquash = 0.22f;
     [Tooltip("Şaplakta kafanın sağa sola sallanması (derece), yana yatması (derece), hızı (salınım/sn) ve süresi (sn)")]
@@ -114,6 +127,10 @@ public class CatRig : MonoBehaviour
     public float Crouch { get; set; }
     public float Wiggle { get; set; }
     public float LeapProgress { get; set; } = -1f;
+
+    // Eldiveni ağzında kemiriyor: kafa eğik inip kalkar, arada sallar; ön patiler sarılır
+    public bool Chew { get; set; }
+    private float chewWeight, chewTime;
     private float crouchWeight, wiggleWeight, wigglePhase;
     private Vector3 rootYawAxis;
     private Transform[] tail;
@@ -298,7 +315,39 @@ public class CatRig : MonoBehaviour
         ApplyBreath();
         ApplyTail(dt, yawRate);
         ApplyHead(dt);
+        ApplyChew(dt);
         ApplyHeadShake(dt);
+    }
+
+    // Artı açı (kedinin sağ ekseni etrafında) burnu aşağı indirir
+    private void ApplyChew(float dt)
+    {
+        chewWeight = Mathf.MoveTowards(chewWeight, Chew ? 1f : 0f, dt * 4f);
+        if (chewWeight <= 0f)
+        {
+            chewTime = 0f;
+            return;
+        }
+        chewTime += dt;
+        float w = Mathf.SmoothStep(0f, 1f, chewWeight);
+
+        if (head != null)
+        {
+            float nod = chewHeadDown + chewNod * (0.5f - 0.5f * Mathf.Cos(chewTime * chewSpeed * Mathf.PI * 2f));
+            float cycle = Mathf.Repeat(chewTime, Mathf.Max(chewShakeEvery, 0.01f));
+            float burst = cycle < chewShakeSeconds ? Mathf.Sin(cycle / Mathf.Max(chewShakeSeconds, 0.01f) * Mathf.PI) : 0f;
+            float shake = Mathf.Sin(chewTime * chewShakeSpeed * Mathf.PI * 2f) * chewShakeAngle * burst;
+            head.localRotation *= Quaternion.AngleAxis(nod * w, headPitchAxis) * Quaternion.AngleAxis(shake * w, headYawAxis);
+        }
+
+        // Ön patiler ileri uzanıp sırayla hafifçe yoğurur (eldiveni tutuyor)
+        foreach (Leg leg in legs)
+        {
+            if (leg == null || !leg.front) continue;
+            float knead = Mathf.Sin(chewTime * 5f + leg.phaseOffset * Mathf.PI * 4f) * 6f;
+            leg.upper.localRotation *= Quaternion.AngleAxis((-chewPawReach + knead) * w, leg.upperAxis);
+            leg.bottom.localRotation *= Quaternion.AngleAxis(chewPawReach * 0.5f * w, leg.bottomAxis);
+        }
     }
 
     // Sağa sola sallanma + yana yatma (yatma biraz gecikmeli: kafa "hıh" der gibi yuvarlanır); hızla girer, sönerek biter

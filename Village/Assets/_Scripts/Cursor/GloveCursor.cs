@@ -37,6 +37,10 @@ public class GloveCursor : MonoBehaviour
     [Tooltip("Tutma anında eldivenin tutma noktasına kayma süresi; sonra objeye katı bağlı kalır")]
     [SerializeField] private float attachDuration = 0.08f;
 
+    [Header("Yakalanınca (kedi ağzına alınca)")]
+    [Tooltip("Yakalanınca ağza kayma süresi (saniye)")]
+    [SerializeField] private float captureAttachDuration = 0.15f;
+
     [Header("Base Üstünde (yürüme / bekleme)")]
     [Tooltip("Bu hızın (birim/sn, ölçek 1'de) üstünde yürümeye başlar")]
     [SerializeField] private float walkStartSpeed = 0.4f;
@@ -85,6 +89,11 @@ public class GloveCursor : MonoBehaviour
     private float smoothedSpeed;
     private float lastMoveTime = float.MinValue;
 
+    // Bir canlı yakaladı: mouse takip edilmez, pozu her kare yakalayan verir (FollowCapture)
+    private bool captured;
+    private float captureProgress;
+    public bool IsCaptured => captured;
+
     // Base karosunun üstünde ve elde bir şey yok: yürüme / bekleme modu
     public bool OnBase { get; private set; }
     // 0 = bekleme (el yerde, işaret parmağı vuruyor), 1 = yürüme
@@ -132,6 +141,13 @@ public class GloveCursor : MonoBehaviour
     // Kamera ve taşınan objeler Update'te hareket ediyor; eldiven onlardan sonra yerleşsin
     private void LateUpdate()
     {
+        // Yakalanmışken pozu yakalayan verir (kendi LateUpdate'inde, kemikleri pozlandıktan sonra)
+        if (captured)
+        {
+            SetHidden(false);
+            return;
+        }
+
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
 
         // Tutma başladıysa eldiven objeye katı bağlanır: tutarken ray atılmaz, yumuşatma yok (child gibi).
@@ -246,6 +262,42 @@ public class GloveCursor : MonoBehaviour
         InteractableController controller = InteractableController.Instance;
         if (controller == null || controller.Held is IGloveFreeHold) return null;
         return controller.Held is Component component && component != null ? component.transform : null;
+    }
+
+    // Bir canlı eldiveni yakaladı (örn. kedi ağzına aldı): mouse takibi durur, eldiven yakalayanın verdiği noktaya oturur.
+    // Bırakınca normal takip kaldığı yerden yumuşakça mouse'a döner.
+    public void BeginCapture()
+    {
+        if (captured) return;
+        EndGrip();
+        captured = true;
+        captureProgress = 0f;
+        OnBase = false;
+        WalkWeight = 0f;
+        hasLastSurfacePoint = false;
+        HasSurface = false;
+        SurfaceCollider = null;
+    }
+
+    public void EndCapture()
+    {
+        captured = false;
+        hasLastSurfacePoint = false; // ağızdan mouse'a dönüş adım sayılmasın
+    }
+
+    // Avucu (palmContact) verilen noktaya ve yöne oturtur. Yakalayan her kare, kendi pozu hesaplandıktan sonra çağırır.
+    public void FollowCapture(Vector3 palmPosition, Quaternion palmRotation)
+    {
+        if (!captured) return;
+        Quaternion rootRotation = palmRotation * Quaternion.Inverse(palmLocalRotation);
+        Vector3 rootPosition = palmPosition - rootRotation * Vector3.Scale(palmLocalPosition, transform.lossyScale);
+
+        captureProgress = Mathf.MoveTowards(captureProgress, 1f, Time.deltaTime / Mathf.Max(captureAttachDuration, 0.0001f));
+        float t = captureProgress >= 1f ? 1f : Mathf.SmoothStep(0f, 1f, captureProgress);
+        transform.SetPositionAndRotation(Vector3.Lerp(transform.position, rootPosition, t),
+                                         Quaternion.Slerp(transform.rotation, rootRotation, t));
+        SurfacePoint = palmPosition;
+        SurfaceNormal = palmRotation * Vector3.down;
     }
 
     // Pat / şaplak gibi kısa hareket: avuç yüzeyden kalkıp geri iner. lift: kalkma yüksekliği (ölçek 1'de)

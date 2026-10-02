@@ -16,6 +16,22 @@ public class InputManager : MonoBehaviour
 
     private static InputActions baseInput;
 
+    // Oyuncu girişi kilitli (örn. kedi eldiveni yakaladı): fare tıkları, sayılar, R, Tab, Space iletilmez.
+    // Kamera (Q/E, WASD, tekerlek) ve F5 serbest.
+    public static bool Locked { get; private set; }
+
+    public static void SetLocked(bool locked)
+    {
+        if (Locked == locked) return;
+        if (locked)
+        {
+            // Basılı tuşlar bırakılmış sayılır (kilitliyken bırakma olayı iletilmez): tutulan obje bırakılır, silme durur
+            OnMouseLeft?.Invoke(false);
+            OnMouseRight?.Invoke(false);
+        }
+        Locked = locked;
+    }
+
     private void Awake()
     {
         baseInput = new InputActions();
@@ -53,21 +69,23 @@ public class InputManager : MonoBehaviour
 
     private void NumbersPerformed(InputAction.CallbackContext context)
     {
+        if (Locked) return;
         OnNumbers?.Invoke(GetNumberFromControl(context), true);
     }
 
     private void NumbersCanceled(InputAction.CallbackContext context)
     {
+        if (Locked) return;
         OnNumbers?.Invoke(GetNumberFromControl(context), false);
     }
-    private void MouseLeft(InputAction.CallbackContext context) => OnMouseLeft?.Invoke(context.performed ? true : false);
-    private void MouseRight(InputAction.CallbackContext context) => OnMouseRight?.Invoke(context.performed ? true : false);
+    private void MouseLeft(InputAction.CallbackContext context) { if (!Locked) OnMouseLeft?.Invoke(context.performed); }
+    private void MouseRight(InputAction.CallbackContext context) { if (!Locked) OnMouseRight?.Invoke(context.performed); }
     private void E(InputAction.CallbackContext context) => OnE?.Invoke();
     private void Q(InputAction.CallbackContext context) => OnQ?.Invoke();
-    private void R(InputAction.CallbackContext context) => OnR?.Invoke();
+    private void R(InputAction.CallbackContext context) { if (!Locked) OnR?.Invoke(); }
     private void F5(InputAction.CallbackContext context) => OnF5?.Invoke();
-    private void TabKey(InputAction.CallbackContext context) => OnTab?.Invoke();
-    private void SpaceKey(InputAction.CallbackContext context) => OnSpace?.Invoke();
+    private void TabKey(InputAction.CallbackContext context) { if (!Locked) OnTab?.Invoke(); }
+    private void SpaceKey(InputAction.CallbackContext context) { if (!Locked) OnSpace?.Invoke(); }
 
     void OnEnable()
     {

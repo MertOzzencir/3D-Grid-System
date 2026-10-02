@@ -98,6 +98,13 @@ public class GloveFingers : MonoBehaviour
     [Header("Base Üstünde Yürüme (işaret + orta parmak bacak)")]
     [Tooltip("El yatayken bacakların kök eklemden aşağı kıvrılma açısı (derece): 90 = dimdik aşağı, az = uçlar öne")]
     [SerializeField] private float legDownAngle = 75f;
+
+    [Header("Yakalanınca (kedi ağzında)")]
+    [Tooltip("Parmakların ortalama kıvrılması (0 düz, 1 tam kıvrık)")]
+    [SerializeField, Range(0f, 1f)] private float capturedCurl = 0.35f;
+    [Tooltip("Çırpınma: kıvrılmanın inip çıkma miktarı ve hızı (salınım/sn); parmaklar sırayla çırpınır")]
+    [SerializeField] private float capturedFlail = 0.35f;
+    [SerializeField] private float capturedFlailSpeed = 2.4f;
     [Tooltip("Kalçanın (parmak kök eklemi) öne-arkaya sallanması (derece)")]
     [SerializeField] private float hipSwing = 25f;
     [Tooltip("Yere basarken dizin (sonraki eklemler) hafif bükülmesi (derece)")]
@@ -266,7 +273,9 @@ public class GloveFingers : MonoBehaviour
             // Alet sapını kavrarken yüzey aranmaz (aletin collider'ı sallanmada dönmüyor), sabit kavramaya gidilir.
             // Tam yürürken de aranmaz: poz tamamen yürüme döngüsünden gelir.
             float target;
-            if (cursor.IsGripping) target = cursor.GripCurl;
+            if (cursor.IsCaptured)
+                target = capturedCurl + Mathf.Sin((Time.time * capturedFlailSpeed + f * 0.27f) * Mathf.PI * 2f) * capturedFlail;
+            else if (cursor.IsGripping) target = cursor.GripCurl;
             else if (walk >= 0.999f) target = finger.curl;
             else target = SolveContact(finger, radius);
             target += (Mathf.PerlinNoise(finger.noiseSeed, Time.time * idleSpeed) - 0.5f) * 2f * idleNoise;
