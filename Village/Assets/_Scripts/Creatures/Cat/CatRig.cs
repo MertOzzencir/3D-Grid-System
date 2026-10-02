@@ -94,12 +94,17 @@ public class CatRig : MonoBehaviour
 
     [Header("Yedek tepkiler (klip yoksa)")]
     [SerializeField] private float headPatSquash = 0.22f;
+    [Tooltip("Şaplakta kafanın sağa sola sallanması (derece), yana yatması (derece), hızı (salınım/sn) ve süresi (sn)")]
+    [SerializeField] private float headShakeYaw = 14f;
+    [SerializeField] private float headShakeTilt = 9f;
+    [SerializeField] private float headShakeSpeed = 2.6f;
+    [SerializeField] private float headShakeSeconds = 1.1f;
     [SerializeField] private float buttRaiseAngle = 14f;
     [SerializeField] private float kneadSwing = 18f;
 
     private Transform catRoot, root, middle, upperBody, head, breath;
     private Vector3 middleYawAxis, upperYawAxis;
-    private Vector3 middlePitchAxis, upperPitchAxis, headPitchAxis;
+    private Vector3 middlePitchAxis, upperPitchAxis, headPitchAxis, headYawAxis, headRollAxis;
     private float bend, bendVelocity, bellyWeight;
 
     // Göbek modu: gövde karna doğru kıvrılır (sırtüstü yatan kedinin "C" duruşu)
@@ -127,6 +132,7 @@ public class CatRig : MonoBehaviour
 
     private float walkWeight, walkPhase, lookWeight, tailYawOffset, tailYawVelocity, lastYaw;
     private Vector3 lastPosition;
+    private float shakeTime = float.MaxValue;
     private float patTime = float.MaxValue, slapTime = float.MaxValue, slapDuration;
     private TailSettings tailNow = new TailSettings(8f, 0.8f, 0f);
 
@@ -165,7 +171,12 @@ public class CatRig : MonoBehaviour
             upperYawAxis = Local(upperBody, up);
             upperPitchAxis = Local(upperBody, right);
         }
-        if (head != null) headPitchAxis = Local(head, right);
+        if (head != null)
+        {
+            headPitchAxis = Local(head, right);
+            headYawAxis = Local(head, up);
+            headRollAxis = Local(head, forward);
+        }
         if (root != null && upper != null) bodyLength = Vector3.Distance(root.position, upper.position);
         if (head != null)
         {
@@ -253,6 +264,9 @@ public class CatRig : MonoBehaviour
 
     public void PlayHeadPat() => patTime = 0f;
 
+    // Şaplakta kafa tatlı tatlı sağa sola sallanır (ApplyHead'in sonunda, bakışın üstüne eklenir)
+    public void PlayHeadShake() => shakeTime = 0f;
+
     public void PlayButtSlap(float duration)
     {
         slapTime = 0f;
@@ -284,6 +298,19 @@ public class CatRig : MonoBehaviour
         ApplyBreath();
         ApplyTail(dt, yawRate);
         ApplyHead(dt);
+        ApplyHeadShake(dt);
+    }
+
+    // Sağa sola sallanma + yana yatma (yatma biraz gecikmeli: kafa "hıh" der gibi yuvarlanır); hızla girer, sönerek biter
+    private void ApplyHeadShake(float dt)
+    {
+        if (head == null || shakeTime >= headShakeSeconds) return;
+        shakeTime += dt;
+        float t = Mathf.Min(shakeTime, headShakeSeconds);
+        float envelope = Mathf.Min(1f, t / 0.12f) * Mathf.Pow(1f - t / headShakeSeconds, 1.5f);
+        float phase = t * headShakeSpeed * Mathf.PI * 2f;
+        head.localRotation *= Quaternion.AngleAxis(Mathf.Sin(phase) * headShakeYaw * envelope, headYawAxis)
+                            * Quaternion.AngleAxis(Mathf.Sin(phase - 0.9f) * headShakeTilt * envelope, headRollAxis);
     }
 
     private void ApplyWalk()

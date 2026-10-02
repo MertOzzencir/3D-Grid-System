@@ -267,6 +267,8 @@ public class Cat : Creature
             ChangeState(new ReactionState(this, "ButtSlap", buttSlapSeconds, CatMood.Alert, PlaceholderButtSlap()));
             // Vurulan nokta jöle gibi titrer (içeri göçüp sekerek söner); kıç kalkmaz, patiler oynamaz
             if (bodyRenderer != null) StartCoroutine(slapJiggle.Play(new[] { bodyRenderer }, hit.point, -hit.normal));
+            // Klip yoksa prosedürel yedek: kafa tatlı tatlı sağa sola sallanır
+            if (rig != null && Animator != null && !Animator.Has("ButtSlap")) rig.PlayHeadShake();
         }
     }
 
