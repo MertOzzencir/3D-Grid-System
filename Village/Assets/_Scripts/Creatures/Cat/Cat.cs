@@ -601,7 +601,7 @@ public class Cat : Creature, ISaveState
                 owner.rig.Crouch = 0.8f;
                 owner.rig.Chew = true;
             }
-            InputManager.SetLocked(true);
+            InputManager.SetLocked(owner, true);
             owner.Glove?.BeginCapture();
         }
 
@@ -741,7 +741,7 @@ public class Cat : Creature, ISaveState
     private void ReleaseGlove()
     {
         Glove?.EndCapture();
-        InputManager.SetLocked(false);
+        InputManager.SetLocked(this, false);
     }
 
     // İnişte el kafanın indiği hücrede mi (boş el, base üstünde)

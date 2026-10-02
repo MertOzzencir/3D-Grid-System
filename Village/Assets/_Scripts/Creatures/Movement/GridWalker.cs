@@ -9,6 +9,10 @@ using UnityEngine;
 // BAŞINDA yeni hücreler doldurulur (origin = gövde hücresi, footprint = gövde + kafa), eskiler boşalır.
 public class GridWalker : MonoBehaviour
 {
+    public enum Medium { Ground, Water }
+
+    [Tooltip("Ground: base'lerin üstünde yürür (kedi). Water: en alt kattaki su hücrelerinde gider (bot).")]
+    [SerializeField] private Medium medium = Medium.Ground;
     [Tooltip("Birim / saniye")]
     [SerializeField] private float speed = 1.2f;
     [Tooltip("Yerinde dönerken (kafa-gövde yer değiştirme) süre (saniye)")]
@@ -51,7 +55,10 @@ public class GridWalker : MonoBehaviour
     }
 
     // Yürünebilir: üstünde durulabilir (kendi kapladığı hücreler sayılmaz)
-    public bool IsWalkable(Vector3Int cell) => GridPathfinder.IsStandable(cell, Occupant);
+    public bool IsWalkable(Vector3Int cell) => IsFree(cell, Occupant);
+
+    private bool IsFree(Vector3Int cell, GridPlaceable ignore)
+        => medium == Medium.Water ? GridPathfinder.IsSwimmable(cell, ignore) : GridPathfinder.IsStandable(cell, ignore);
 
     // Grid'deki yerini günceller; başka bir obje hücreyi kapadıysa false
     private bool Occupy(Vector3Int head, Vector3Int body)
@@ -90,11 +97,11 @@ public class GridWalker : MonoBehaviour
         for (int z = -radius; z <= radius; z++)
         {
             Vector3Int head = origin + new Vector3Int(x, y, z);
-            if (!GridPathfinder.IsStandable(head)) continue;
+            if (!IsFree(head, null)) continue;
             float distance = (head - origin).sqrMagnitude;
             if (distance >= best) continue;
 
-            foreach (Vector3Int neighbour in GridPathfinder.Neighbours(head, c => GridPathfinder.IsStandable(c)))
+            foreach (Vector3Int neighbour in GridPathfinder.Neighbours(head, c => IsFree(c, null)))
             {
                 if (neighbour.y != head.y) continue;
                 best = distance;

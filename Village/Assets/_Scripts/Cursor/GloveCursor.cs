@@ -43,6 +43,11 @@ public class GloveCursor : MonoBehaviour
     [Tooltip("Kıyıda el karonun kenarından bu kadar içeride durur (birim)")]
     [SerializeField] private float shoreInset = 0.2f;
 
+    [Header("Bot")]
+    [Tooltip("Bota binerken koltuğa zıplama süresi (saniye) ve yüksekliği")]
+    [SerializeField] private float rideHopDuration = 0.3f;
+    [SerializeField] private float rideHopHeight = 0.35f;
+
     [Header("Yakalanınca (kedi ağzına alınca)")]
     [Tooltip("Yakalanınca ağza kayma süresi (saniye)")]
     [SerializeField] private float captureAttachDuration = 0.15f;
@@ -100,6 +105,18 @@ public class GloveCursor : MonoBehaviour
     private float captureProgress;
     public bool IsCaptured => captured;
 
+    // Bota binmiş: eldiven koltukta, mouse'un gösterdiği yeri bot okur (MouseOverLand / MouseLandPoint / MouseWaterPoint)
+    private Transform rideSeat;
+    private float rideProgress;
+    private Vector3 rideStartPosition;
+    private Quaternion rideStartRotation;
+    public bool IsRiding => rideSeat != null;
+    public bool MouseOverLand { get; private set; }
+    public Vector3 MouseLandPoint { get; private set; }
+    public Vector3 MouseWaterPoint { get; private set; }
+    // Mouse suda (ya da botun üstünde), el en yakın kıyıda bekliyor
+    public bool IsAtShore { get; private set; }
+
     // Base karosunun üstünde ve elde bir şey yok: yürüme / bekleme modu
     public bool OnBase { get; private set; }
     // 0 = bekleme (el yerde, işaret parmağı vuruyor), 1 = yürüme
@@ -155,6 +172,13 @@ public class GloveCursor : MonoBehaviour
         }
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+
+        if (rideSeat != null)
+        {
+            SetHidden(false);
+            FollowRide(ray);
+            return;
+        }
 
         // Tutma başladıysa eldiven objeye katı bağlanır: tutarken ray atılmaz, yumuşatma yok (child gibi).
         // UI kontrolünden önce: mouse UI üstündeyken bırakılan aletten de hemen ayrılsın.
@@ -304,6 +328,58 @@ public class GloveCursor : MonoBehaviour
                                          Quaternion.Slerp(transform.rotation, rootRotation, t));
         SurfacePoint = palmPosition;
         SurfaceNormal = palmRotation * Vector3.down;
+    }
+
+    // Bota bin: eldiven kısa bir zıplamayla koltuğa oturur (avuç aşağı, parmaklar botun ön tarafına), bot onu taşır
+    public void BeginRide(Transform seat)
+    {
+        rideSeat = seat;
+        rideProgress = 0f;
+        rideStartPosition = transform.position;
+        rideStartRotation = transform.rotation;
+        OnBase = false;
+        WalkWeight = 0f;
+        IsAtShore = false;
+        hasLastSurfacePoint = false;
+    }
+
+    // İn: normal takip kaldığı yerden yumuşakça mouse'a döner
+    public void EndRide()
+    {
+        rideSeat = null;
+        hasLastSurfacePoint = false;
+    }
+
+    private void FollowRide(Ray ray)
+    {
+        // Mouse'un gösterdiği yer: kara (bir collider) ya da su
+        if (TryRaycastSolid(ray, out RaycastHit hit))
+        {
+            MouseOverLand = true;
+            MouseLandPoint = hit.point;
+        }
+        else
+        {
+            MouseOverLand = false;
+            MouseWaterPoint = WaterPoint(ray);
+        }
+
+        Vector3 up = rideSeat.up;
+        HasSurface = true;
+        SurfaceCollider = null;
+        SurfacePoint = rideSeat.position;
+        SurfaceNormal = up;
+
+        Quaternion palmRotation = Quaternion.LookRotation(rideSeat.forward, -up);
+        Vector3 palmPosition = rideSeat.position + up * surfaceOffset;
+        Quaternion rootRotation = palmRotation * Quaternion.Inverse(palmLocalRotation);
+        Vector3 rootPosition = palmPosition - rootRotation * Vector3.Scale(palmLocalPosition, transform.lossyScale);
+
+        // Binerken yay çizerek koltuğa, sonra katı bağlı (bot sallandıkça eldiven de sallanır)
+        rideProgress = Mathf.MoveTowards(rideProgress, 1f, Time.deltaTime / Mathf.Max(rideHopDuration, 0.0001f));
+        float t = Mathf.SmoothStep(0f, 1f, rideProgress);
+        Vector3 position = Vector3.Lerp(rideStartPosition, rootPosition, t) + Vector3.up * (Mathf.Sin(t * Mathf.PI) * rideHopHeight);
+        transform.SetPositionAndRotation(position, Quaternion.Slerp(rideStartRotation, rootRotation, t));
     }
 
     // Pat / şaplak gibi kısa hareket: avuç yüzeyden kalkıp geri iner. lift: kalkma yüksekliği (ölçek 1'de)
@@ -472,7 +548,8 @@ public class GloveCursor : MonoBehaviour
 
     private void FindSurface(Ray ray)
     {
-        if (Physics.Raycast(ray, out RaycastHit hit, maxDistance, surfaceMask, QueryTriggerInteraction.Ignore))
+        IsAtShore = false;
+        if (TryRaycastSolid(ray, out RaycastHit hit))
         {
             HasSurface = true;
             SurfacePoint = hit.point;
@@ -482,10 +559,11 @@ public class GloveCursor : MonoBehaviour
         }
 
         // Boşluk / su (suyun collider'ı yok): mouse'un su seviyesindeki noktasına en yakın kıyıda durur
-        var plane = new Plane(Vector3.up, new Vector3(0f, fallbackHeight, 0f));
-        Vector3 waterPoint = plane.Raycast(ray, out float enter) ? ray.GetPoint(enter) : ray.GetPoint(20f);
+        Vector3 waterPoint = WaterPoint(ray);
+        MouseWaterPoint = waterPoint;
         if (TryFindShore(waterPoint, out RaycastHit shore))
         {
+            IsAtShore = true;
             HasSurface = true;
             SurfacePoint = shore.point;
             SurfaceNormal = shore.normal;
@@ -498,6 +576,27 @@ public class GloveCursor : MonoBehaviour
         SurfaceCollider = null;
         SurfaceNormal = Vector3.up;
         SurfacePoint = waterPoint;
+    }
+
+    private Vector3 WaterPoint(Ray ray)
+    {
+        var plane = new Plane(Vector3.up, new Vector3(0f, fallbackHeight, 0f));
+        return plane.Raycast(ray, out float enter) ? ray.GetPoint(enter) : ray.GetPoint(20f);
+    }
+
+    // Eldivenin basabileceği ilk collider: IGlovePassThrough olanlar (örn. bot) atlanır, onların üstü su sayılır
+    private bool TryRaycastSolid(Ray ray, out RaycastHit result)
+    {
+        RaycastHit[] hits = Physics.RaycastAll(ray, maxDistance, surfaceMask, QueryTriggerInteraction.Ignore);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider.GetComponentInParent<IGlovePassThrough>() != null) continue;
+            result = hit;
+            return true;
+        }
+        result = default;
+        return false;
     }
 
     // Noktaya yataydan en yakın kara sütunu (en üstteki base) bulunur; nokta o karonun içine (kenardan shoreInset

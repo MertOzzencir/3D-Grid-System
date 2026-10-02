@@ -21,6 +21,14 @@ public static class GridPathfinder
         return grid.TryGetCell(cell + Vector3Int.down, out GridData below) && below.Base != null;
     }
 
+    // Bot gibi su üstünde gidenler için: su hücresi (en alt kat, base yok) ve placeable yok (kendisi hariç)
+    public static bool IsSwimmable(Vector3Int cell, GridPlaceable ignore = null)
+    {
+        GridManager grid = GridManager.Instance;
+        return grid != null && grid.IsWater(cell) && grid.TryGetCell(cell, out GridData data) &&
+               (data.Placeable == null || data.Placeable == ignore);
+    }
+
     // start'tan goal'a yol (start hariç, goal dahil). Bulunamazsa null. maxNodes: arama sınırı (büyük grid'de takılmasın).
     public static List<Vector3Int> FindPath(Vector3Int start, Vector3Int goal, Func<Vector3Int, bool> isWalkable, int maxNodes = 2000,
                                            GridPlaceable ignore = null)

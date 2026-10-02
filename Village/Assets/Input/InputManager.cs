@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -16,24 +17,26 @@ public class InputManager : MonoBehaviour
 
     private static InputActions baseInput;
 
-    // Oyuncu girişi kilitli (örn. kedi eldiveni yakaladı): fare tıkları, sayılar, R, Tab, Space iletilmez.
-    // Kamera (Q/E, WASD, tekerlek) ve F5 serbest.
-    public static bool Locked { get; private set; }
+    // Oyuncu girişi kilitli (örn. kedi eldiveni yakaladı, eldiven botta): fare tıkları, sayılar, R, Tab, Space iletilmez.
+    // Kamera (Q/E, WASD, tekerlek) ve F5 serbest. Her kilitleyen kendini sahip olarak verir; hepsi bırakınca açılır.
+    private static readonly HashSet<object> lockOwners = new HashSet<object>();
+    public static bool Locked => lockOwners.Count > 0;
 
-    public static void SetLocked(bool locked)
+    public static void SetLocked(object owner, bool locked)
     {
-        if (Locked == locked) return;
-        if (locked)
-        {
-            // Basılı tuşlar bırakılmış sayılır (kilitliyken bırakma olayı iletilmez): tutulan obje bırakılır, silme durur
-            OnMouseLeft?.Invoke(false);
-            OnMouseRight?.Invoke(false);
-        }
-        Locked = locked;
+        bool wasLocked = Locked;
+        if (locked) lockOwners.Add(owner);
+        else lockOwners.Remove(owner);
+        if (wasLocked || !Locked) return;
+
+        // Basılı tuşlar bırakılmış sayılır (kilitliyken bırakma olayı iletilmez): tutulan obje bırakılır, silme durur
+        OnMouseLeft?.Invoke(false);
+        OnMouseRight?.Invoke(false);
     }
 
     private void Awake()
     {
+        lockOwners.Clear(); // domain reload kapalıyken önceki oturumdan kalmasın
         baseInput = new InputActions();
         baseInput.Enable();
     }
