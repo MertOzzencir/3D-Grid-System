@@ -30,9 +30,15 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [Tooltip("İndikten sonra tekrar binmek için en az bekleme (saniye)")]
     [SerializeField] private float boardCooldown = 0.8f;
 
+    [Header("Hız")]
+    [Tooltip("Botun hızı (birim/sn); GridWalker'daki hızın yerine geçer")]
+    [SerializeField] private float moveSpeed = 3f;
+    [Tooltip("Yerinde geri dönme süresi (saniye)")]
+    [SerializeField] private float turnAroundSeconds = 0.3f;
+
     [Header("Kürek")]
     [Tooltip("Bir kürek çekişinde alınan yol (birim)")]
-    [SerializeField] private float strokeLength = 0.7f;
+    [SerializeField] private float strokeLength = 1.2f;
     [Tooltip("Küreğin öne-arkaya süpürmesi (derece)")]
     [SerializeField] private float oarSweep = 28f;
     [Tooltip("Geri dönüşte küreğin sudan kalkması (derece)")]
@@ -44,9 +50,12 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [SerializeField] private float bobSpeed = 0.5f;
     [SerializeField] private float rockAngle = 2.5f;
     [Tooltip("Dönüş hızı (derece/sn) başına yana yatma (derece)")]
-    [SerializeField] private float turnLean = 0.04f;
+    [SerializeField] private float turnLean = 0.09f;
     [Tooltip("Giderken burnun kalkması (derece)")]
     [SerializeField] private float surgePitch = 2f;
+    [Tooltip("Her kürek çekişinde botun ileri atılması (birim) ve burnunun kalkması (derece); dönüşte geri süzülür")]
+    [SerializeField] private float strokeLunge = 0.08f;
+    [SerializeField] private float strokePitch = 3f;
 
     private GridWalker walker;
     private GloveCursor glove;
@@ -67,6 +76,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     {
         walker = GetComponent<GridWalker>();
         walker.WalkMedium = GridWalker.Medium.Water; // bot hep suda gider
+        walker.Speed = moveSpeed;
+        walker.TurnAroundDuration = turnAroundSeconds;
         if (modelPrefab != null) BuildModel();
     }
 
@@ -264,15 +275,20 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         float yawRate = Mathf.DeltaAngle(lastYaw, yaw) / Mathf.Max(dt, 0.0001f);
         lastYaw = yaw;
 
-        rowWeight = Mathf.MoveTowards(rowWeight, distance > 0.0001f ? 1f : 0f, dt * 3f);
+        rowWeight = Mathf.MoveTowards(rowWeight, distance > 0.0001f ? 1f : 0f, dt * 5f);
         rowPhase += distance / Mathf.Max(strokeLength, 0.01f);
-        lean = Mathf.Lerp(lean, Mathf.Clamp(-yawRate * turnLean, -8f, 8f), 1f - Mathf.Exp(-4f * dt));
+        lean = Mathf.Lerp(lean, Mathf.Clamp(-yawRate * turnLean, -14f, 14f), 1f - Mathf.Exp(-6f * dt));
+
+        // Kürek çekişinin itişi: çekiş yarısında bot ileri atılır, burnu kalkar; dönüş yarısında geri süzülür
+        float stroke = Mathf.Repeat(rowPhase, 1f);
+        float drive = (stroke < 0.5f ? Mathf.Sin(stroke / 0.5f * Mathf.PI) : -0.35f * Mathf.Sin((stroke - 0.5f) / 0.5f * Mathf.PI))
+                      * Mathf.SmoothStep(0f, 1f, rowWeight);
 
         // Suda inip kalkma ve yalpalama (farklı hızlarda: tekrar eden bir döngü gibi görünmesin)
         float t = Time.time * bobSpeed * Mathf.PI * 2f;
-        visual.localPosition = visualRest + Vector3.up * (Mathf.Sin(t) * bobAmount);
+        visual.localPosition = visualRest + Vector3.up * (Mathf.Sin(t) * bobAmount) + Vector3.forward * (drive * strokeLunge);
         float roll = Mathf.Sin(t * 0.8f) * rockAngle + lean;
-        float pitch = Mathf.Sin(t * 0.6f + 1f) * rockAngle * 0.6f - surgePitch * rowWeight; // eksi = burun yukarı
+        float pitch = Mathf.Sin(t * 0.6f + 1f) * rockAngle * 0.6f - surgePitch * rowWeight - strokePitch * Mathf.Max(0f, drive); // eksi = burun yukarı
         visual.localRotation = Quaternion.Euler(pitch, 0f, roll);
 
         AnimateOar(leftOar, leftOarRest, -1f);

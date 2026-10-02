@@ -44,7 +44,18 @@ public class GridWalker : MonoBehaviour
     public bool IsJumping => jumping && stepProgress < 1f;
     // Zıplamanın ilerlemesi (0 kalkış, 1 iniş); zıplamıyorsa 1
     public float JumpProgress => jumping ? stepProgress : 1f;
-    public float Speed => speed;
+    // Türü belli olanlar (bot) kendi hızını verir
+    public float Speed
+    {
+        get => speed;
+        set => speed = Mathf.Max(0.01f, value);
+    }
+
+    public float TurnAroundDuration
+    {
+        get => turnAroundDuration;
+        set => turnAroundDuration = Mathf.Max(0.01f, value);
+    }
     // Şu anki ilerleme hızı (animasyon hızını eşlemek için); dururken 0
     public float CurrentSpeed { get; private set; }
 
