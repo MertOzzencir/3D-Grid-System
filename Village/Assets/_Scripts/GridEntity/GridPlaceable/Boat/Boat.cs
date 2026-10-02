@@ -4,7 +4,8 @@ using UnityEngine;
 // GridWalker ile gider (Medium = Water); grid'deki yerini GridWalker her adımda günceller.
 // Binme: eldiven kıyıdayken (mouse suda) botun yanındaysa biner, koltuğa (Seat) oturur. Binmişken WASD botu kameranın
 // açısına göre hücre hücre sürer (W ileri, S geri, A/D sola/sağa; yol bulma yok), kamera botu takip eder.
-// Bot dururken mouse botun yanındaki karayı gösterirse eldiven iner. Binerken oyuncu girişi kilitli (şimdilik sadece gezme).
+// WASD ile gidilecek hücre kara (base) ise eldiven oraya iner, mouse imleci de oraya taşınır. Binerken oyuncu girişi
+// kilitli (şimdilik sadece gezme).
 // Görsel: model kodla kurulur; giderken kürekler yol başına çekilir, bot suda hafif inip kalkar, yalpalar, dönüşte yatar.
 [RequireComponent(typeof(GridWalker))]
 [DefaultExecutionOrder(10)] // GridWalker'dan (0) sonra: görsel ve koltuk bu karenin konumuyla, eldiven (LateUpdate) okumadan önce
@@ -25,8 +26,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [Header("Binme / inme")]
     [Tooltip("Eldiven kıyıdayken (mouse suda) botun bir hücresine yataydan bu kadar yakınsa biner")]
     [SerializeField] private float boardDistance = 1.3f;
-    [Tooltip("Binmişken mouse karada botun bir hücresine bu kadar yakın bir yeri gösterirse eldiven iner")]
-    [SerializeField] private float disembarkDistance = 1.6f;
     [Tooltip("İndikten sonra tekrar binmek için en az bekleme (saniye)")]
     [SerializeField] private float boardCooldown = 0.8f;
 
@@ -156,19 +155,20 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             return;
         }
 
-        // Bot dururken mouse yanındaki karayı gösteriyorsa in
-        if (!walker.IsMoving && g.MouseOverLand && DistanceToBoat(g.MouseLandPoint) <= disembarkDistance)
-        {
-            EndRide();
-            return;
-        }
-
         // WASD: tuş bırakılınca o anki adım biter ve durur. Basılıyken adım bitmeden bir sonraki sıraya girer (kesintisiz).
         Vector2 input = InputManager.MovementVectorNormalized();
         if (input.sqrMagnitude < 0.01f || walker.HasQueuedSteps) return;
 
         Vector3Int next = walker.HeadCell + GridDirection(input);
-        if (next == walker.BodyCell || walker.IsWalkable(next)) walker.StepTo(next); // gövdenin hücresi = yerinde dön
+        if (next == walker.BodyCell || walker.IsWalkable(next))
+        {
+            walker.StepTo(next); // gövdenin hücresi = yerinde dön
+            return;
+        }
+
+        // Gidilecek yer kara: eldiven o karonun üstüne iner (mouse da oraya taşınır), bot kalır
+        if (GridManager.Instance != null && GridManager.Instance.TryGetTopBase(next.x, next.z, out GridData land))
+            EndRide(land.WorldPosition + Vector3.up * 0.5f);
     }
 
     // Kameraya göre girdi → grid yönü (kamera 90° adımlarla döndüğü için eksenler grid'e denk).
@@ -192,7 +192,10 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         return Mathf.Abs(world.x) >= Mathf.Abs(world.z) ? alongX : alongZ;
     }
 
-    private void EndRide()
+    private void EndRide() => EndRide(null);
+
+    // landing: eldivenin ineceği nokta (karonun üstü); yoksa eldiven mouse'un olduğu yere döner
+    private void EndRide(Vector3? landing)
     {
         if (!riding) return;
         riding = false;
@@ -200,7 +203,9 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         walker.Stop();
         InputManager.SetLocked(this, false);
         CameraController.Follow(null);
-        if (Glove != null) Glove.EndRide();
+        if (Glove == null) return;
+        if (landing.HasValue) Glove.EndRideAt(landing.Value);
+        else Glove.EndRide();
     }
 
     private void OnDisable() => EndRide(); // binilmişken silinirse eldiven ve giriş takılı kalmasın

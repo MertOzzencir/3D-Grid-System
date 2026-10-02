@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 
 // 3D eldiven imleç. Mouse'tan dünyaya ray atılır; eldiven, avucunun ortası (palmContact) çarpılan noktaya gelecek ve
 // avucu yüzeye bakacak şekilde yerleşir. Normal etrafındaki dönüş kameraya göre sabittir: parmaklar hep ekranın
@@ -348,6 +349,16 @@ public class GloveCursor : MonoBehaviour
     {
         rideSeat = null;
         hasLastSurfacePoint = false;
+    }
+
+    // Botten bir noktaya in: mouse imleci o noktanın ekrandaki yerine taşınır, eldiven normal takiple oraya zıplar
+    public void EndRideAt(Vector3 worldPoint)
+    {
+        EndRide();
+        Vector3 screen = cam.WorldToScreenPoint(worldPoint);
+        if (screen.z <= 0f || Mouse.current == null) return;
+        Mouse.current.WarpCursorPosition(new Vector2(Mathf.Clamp(screen.x, 0f, Screen.width - 1),
+                                                     Mathf.Clamp(screen.y, 0f, Screen.height - 1)));
     }
 
     private void FollowRide(Ray ray)
