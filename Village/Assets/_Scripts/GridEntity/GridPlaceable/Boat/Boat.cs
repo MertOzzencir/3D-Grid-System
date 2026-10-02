@@ -23,6 +23,11 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [Tooltip("Eldivenin oturduğu yer, modelin uzayında (botun tabanı)")]
     [SerializeField] private Vector3 seatOffset = new Vector3(0f, -0.2f, 0f);
 
+    [Header("Su efektleri")]
+    [Tooltip("Köpük izi ve sıçrama shader'ı (Village/Water Foam). Referansla tutulur ki build'e girsin.")]
+    [SerializeField] private Shader effectShader;
+    [SerializeField] private BoatWakeFx waterFx = new BoatWakeFx();
+
     [Header("Binme / inme")]
     [Tooltip("Eldiven kıyıdayken (mouse suda) botun bir hücresine yataydan bu kadar yakınsa biner")]
     [SerializeField] private float boardDistance = 1.3f;
@@ -259,6 +264,9 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             box.center = transform.InverseTransformPoint(bounds.center);
             box.size = bounds.size;
         }
+
+        // Su seviyesi kökün 0.5 üstünde (kök hücrenin tabanında, su en alt kat hücresinin ortasında)
+        waterFx.Setup(transform, effectShader, 0.5f);
     }
 
     private static Transform Find(Transform parent, string objectName)
@@ -281,7 +289,21 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         lastYaw = yaw;
 
         rowWeight = Mathf.MoveTowards(rowWeight, distance > 0.0001f ? 1f : 0f, dt * 5f);
+        float previousPhase = rowPhase;
         rowPhase += distance / Mathf.Max(strokeLength, 0.01f);
+
+        // Kürek suya giriyor (tur başı) / çıkıyor (yarım tur): sıçrama
+        if (rowWeight > 0.5f)
+        {
+            bool entered = Mathf.Floor(rowPhase) > Mathf.Floor(previousPhase);
+            bool exited = Mathf.Floor(rowPhase - 0.5f) > Mathf.Floor(previousPhase - 0.5f);
+            if (entered || exited)
+            {
+                if (leftOar != null) waterFx.OarSplash(leftOar.position, -1f, entered);
+                if (rightOar != null) waterFx.OarSplash(rightOar.position, 1f, entered);
+            }
+        }
+        waterFx.Tick(dt, rowWeight > 0.3f);
         lean = Mathf.Lerp(lean, Mathf.Clamp(-yawRate * turnLean, -14f, 14f), 1f - Mathf.Exp(-6f * dt));
 
         // Kürek çekişinin itişi: çekiş yarısında bot ileri atılır, burnu kalkar; dönüş yarısında geri süzülür
