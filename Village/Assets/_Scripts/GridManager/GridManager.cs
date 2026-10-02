@@ -39,8 +39,37 @@ public class GridManager : MonoBehaviour
         return removed;
     }
 
-    public bool CanPlaceablePlaceOn(GridPlaceable entity, Vector3 position) => CanPlaceGeneric(entity, position, d => d.Placeable);
-    public bool PlaceablePlaceOn(GridPlaceable entity, Vector3 position) => PlaceGeneric(entity, position, d => d.Placeable, (d, e) => d.Placeable = e);
+    public bool CanPlaceablePlaceOn(GridPlaceable entity, Vector3 position)
+        => CanPlaceGeneric(entity, position, d => d.Placeable) && PlaceableAllowsCells(entity, position);
+    public bool PlaceablePlaceOn(GridPlaceable entity, Vector3 position)
+        => PlaceableAllowsCells(entity, position) && PlaceGeneric(entity, position, d => d.Placeable, (d, e) => d.Placeable = e);
+
+    // Su: en alt kattaki base'siz hücre. Ayrıca tutulmaz/kaydedilmez; base konup silindikçe kendiliğinden değişir.
+    // (İleride başka katlarda su gerekirse ayrı bir parametreyle.)
+    public bool IsWater(Vector3Int worldCell)
+        => worldCell.y == ManagerPosition.y && TryGetCell(worldCell, out GridData data) && data.Base == null;
+
+    // Sütundaki (dünya x, z) en üstteki base. Yoksa false.
+    public bool TryGetTopBase(int worldX, int worldZ, out GridData top)
+    {
+        Vector3Int manager = ManagerPosition;
+        for (int y = Mathf.RoundToInt(GridSize.y) - 1; y >= 0; y--)
+        {
+            if (Grids.TryGetValue(new Vector3Int(worldX - manager.x, y, worldZ - manager.z), out top) && top.Base != null)
+                return true;
+        }
+        top = null;
+        return false;
+    }
+
+    // Türe özel hücre kuralı (GridPlaceable.CanOccupy): örn. placeable'lar suya, bot karaya konmaz
+    private bool PlaceableAllowsCells(GridPlaceable entity, Vector3 position)
+    {
+        Vector3Int origin = ManagerPosition + GetIndexFromWorldPosition(position);
+        foreach (Vector3Int offset in entity.GetFootprint().FilledCells())
+            if (!entity.CanOccupy(origin + offset)) return false;
+        return true;
+    }
     public bool PlaceableRemoveOn(GridPlaceable entity, bool destroy = true) => RemoveGeneric(entity, d => d.Placeable, d => d.Placeable = null, destroy);
 
     // Yürüyen placeable'lar (canlılar): eski hücreleri bırakıp yenilerini kaplar, transform'a dokunmaz.
@@ -52,6 +81,7 @@ public class GridManager : MonoBehaviour
         {
             if (!Grids.TryGetValue(origin + offset, out GridData data)) return false;
             if (data.Placeable != null && data.Placeable != entity) return false;
+            if (!entity.CanOccupy(originWorld + offset)) return false;
         }
 
         if (entity.PlacedFootprint != null)

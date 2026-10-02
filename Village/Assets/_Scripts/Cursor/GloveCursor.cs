@@ -37,6 +37,12 @@ public class GloveCursor : MonoBehaviour
     [Tooltip("Tutma anında eldivenin tutma noktasına kayma süresi; sonra objeye katı bağlı kalır")]
     [SerializeField] private float attachDuration = 0.08f;
 
+    [Header("Su (kıyı)")]
+    [Tooltip("Mouse suya (ya da boşluğa) gidince el en yakın kıyıda durur: kara en fazla bu kadar hücre uzakta aranır")]
+    [SerializeField] private int shoreSearchRadius = 6;
+    [Tooltip("Kıyıda el karonun kenarından bu kadar içeride durur (birim)")]
+    [SerializeField] private float shoreInset = 0.2f;
+
     [Header("Yakalanınca (kedi ağzına alınca)")]
     [Tooltip("Yakalanınca ağza kayma süresi (saniye)")]
     [SerializeField] private float captureAttachDuration = 0.15f;
@@ -475,12 +481,62 @@ public class GloveCursor : MonoBehaviour
             return;
         }
 
-        // Boşluk / su: su seviyesindeki yatay düzlem
+        // Boşluk / su (suyun collider'ı yok): mouse'un su seviyesindeki noktasına en yakın kıyıda durur
+        var plane = new Plane(Vector3.up, new Vector3(0f, fallbackHeight, 0f));
+        Vector3 waterPoint = plane.Raycast(ray, out float enter) ? ray.GetPoint(enter) : ray.GetPoint(20f);
+        if (TryFindShore(waterPoint, out RaycastHit shore))
+        {
+            HasSurface = true;
+            SurfacePoint = shore.point;
+            SurfaceNormal = shore.normal;
+            SurfaceCollider = shore.collider;
+            return;
+        }
+        if (placedOnce && HasSurface) return; // yakında kara yok: el son yerinde bekler
+
         HasSurface = false;
         SurfaceCollider = null;
         SurfaceNormal = Vector3.up;
-        var plane = new Plane(Vector3.up, new Vector3(0f, fallbackHeight, 0f));
-        SurfacePoint = plane.Raycast(ray, out float enter) ? ray.GetPoint(enter) : ray.GetPoint(20f);
+        SurfacePoint = waterPoint;
+    }
+
+    // Noktaya yataydan en yakın kara sütunu (en üstteki base) bulunur; nokta o karonun içine (kenardan shoreInset
+    // içeride) çekilip yukarıdan base'in collider'ına ray atılır. Base'in collider'ı olduğu için el normal base
+    // üstündeki gibi durur (yürüme / bekleme).
+    private bool TryFindShore(Vector3 point, out RaycastHit result)
+    {
+        result = default;
+        GridManager grid = GridManager.Instance;
+        if (grid == null) return false;
+
+        int cx = Mathf.RoundToInt(point.x), cz = Mathf.RoundToInt(point.z);
+        float best = float.MaxValue;
+        GridData bestCell = null;
+        for (int dz = -shoreSearchRadius; dz <= shoreSearchRadius; dz++)
+        for (int dx = -shoreSearchRadius; dx <= shoreSearchRadius; dx++)
+        {
+            if (!grid.TryGetTopBase(cx + dx, cz + dz, out GridData top)) continue;
+            // Noktanın karoya (1×1 kare) yatay uzaklığı
+            float ox = Mathf.Max(0f, Mathf.Abs(point.x - top.WorldPosition.x) - 0.5f);
+            float oz = Mathf.Max(0f, Mathf.Abs(point.z - top.WorldPosition.z) - 0.5f);
+            float distance = ox * ox + oz * oz;
+            if (distance >= best) continue;
+            best = distance;
+            bestCell = top;
+        }
+        if (bestCell == null) return false;
+
+        float half = Mathf.Max(0f, 0.5f - shoreInset);
+        Vector3 center = bestCell.WorldPosition;
+        Vector3 target = new Vector3(Mathf.Clamp(point.x, center.x - half, center.x + half), center.y + 2f,
+                                     Mathf.Clamp(point.z, center.z - half, center.z + half));
+        var down = new Ray(target, Vector3.down);
+        foreach (Collider collider in bestCell.Base.GetComponentsInChildren<Collider>())
+            if (!collider.isTrigger && collider.Raycast(down, out result, 4f)) return true;
+
+        // Collider'a denk gelmediyse karonun düz tepesi
+        if (!Physics.Raycast(down, out result, 4f, surfaceMask, QueryTriggerInteraction.Ignore)) return false;
+        return result.collider.GetComponentInParent<GridBase>() != null;
     }
 
     // Kameranın yukarı yönünün yüzeydeki izdüşümü. Yüzey kameranın yukarısına dik bakıyorsa (izdüşüm sıfıra yakın)
