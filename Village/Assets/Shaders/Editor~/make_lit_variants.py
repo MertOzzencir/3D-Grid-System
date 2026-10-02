@@ -18,6 +18,9 @@ VARIANTS = [
     dict(name="Village/Wood Wobble Lit", output="WoodWobbleLit.shader",
          description="birleşmede jöle gibi sallanma (Wobble.hlsl) + noktalı saydamlık (Fade.hlsl)",
          vertex=("Wobble.hlsl", "ApplyWobble"), fragment=("Fade.hlsl", "ApplyFade")),
+    dict(name="Village/Creature Jiggle Lit", output="CreatureJiggleLit.shader",
+         description="vuruşta yerel jöle titreşimi, örn. kediye şaplak (Jiggle.hlsl)",
+         vertex=("Jiggle.hlsl", "ApplyJiggle"), fragment=None),
 ]
 
 # (orijinal vertex, pass include'u, pozisyon alanı, normal alanı ya da None)

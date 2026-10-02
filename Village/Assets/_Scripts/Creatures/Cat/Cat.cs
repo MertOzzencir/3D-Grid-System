@@ -8,6 +8,7 @@ using UnityEngine;
 // Animasyonlar CreatureAnimator ile isimden oynatılır; model gelmeden yer tutucu (iki kutu) kendini kurar ve
 // tepkileri basit kutu hareketleriyle gösterir.
 [RequireComponent(typeof(GridWalker))]
+[DefaultExecutionOrder(60)] // CatRig'den (50) sonra: sırtüstü yere oturtma kemiklerin son pozuyla yapılır
 public class Cat : Creature
 {
     [Header("Gezinme")]
@@ -38,6 +39,10 @@ public class Cat : Creature
     [SerializeField] private float bunnyKickSeconds = 0.9f;
     [SerializeField] private int runAwayRadius = 8;
 
+    [Header("Şaplak")]
+    [Tooltip("Kıça şaplakta vurulan nokta jöle gibi titrer. Kedinin materyali 'Village/Creature Jiggle Lit' olmalı.")]
+    [SerializeField] private CreatureJiggle slapJiggle = new CreatureJiggle();
+
     [Header("Eldiven hareketi")]
     [SerializeField] private float patLift = 0.15f;
     [SerializeField] private float patDuration = 0.28f;
@@ -52,7 +57,10 @@ public class Cat : Creature
     [SerializeField] private Vector3 modelRotation = Vector3.zero;
     [Tooltip("Açılışta modeli patilerin uçları (leg_*_end) yere değecek kadar indirir; Blender'daki origin yüksekliği önemsiz olur")]
     [SerializeField] private bool groundToPaws = true;
-    [Tooltip("Gövde bölgelerinin (kıç, sırt) genişliği ve yüksekliği")]
+    [Tooltip("Mesh'ten kemik collider'ı uydururken yarıçapın alındığı dilim: 0.85 = vertex'lerin %85'i içeride. " +
+             "Collider görselden büyükse düşür, parmaklar mesh'e gömülüyorsa artır.")]
+    [SerializeField, Range(0.5f, 1f)] private float colliderFitPercentile = 0.85f;
+    [Tooltip("Yedek kutu bölgelerin (mesh okunamazsa) genişliği ve yüksekliği")]
     [SerializeField] private Vector2 bodyZoneSize = new Vector2(0.75f, 0.65f);
 
     [Header("Yer tutucu (model yokken)")]
@@ -63,9 +71,12 @@ public class Cat : Creature
     private GloveCursor glove;
     private CatRig rig;
     private CatEyes eyes;
+    private Renderer bodyRenderer; // gövde (en büyük skinned mesh): şaplak titreşimi buna
     private Transform visual;     // model ya da yer tutucunun kökü: göbek modunda döner
     private Transform headBox, bodyBox;
     private float overpet;
+    private float bellyLift = 0.6f;
+    private readonly System.Collections.Generic.List<Collider> bodyColliders = new System.Collections.Generic.List<Collider>(); // bacak ve kuyruk hariç // sırtüstü dönünce sırt yere otursun diye kaldırma (mesh'ten ölçülür)
     private Vector3 lastMouse;
 
     public GridWalker Walker => walker;
@@ -102,6 +113,41 @@ public class Cat : Creature
         Transform lookTarget = Glove != null && CanSee(Glove.transform.position) ? Glove.transform : null;
         if (rig != null) rig.LookTarget = lookTarget;
         if (eyes != null) eyes.LookTarget = lookTarget;
+    }
+
+    // Sırtüstüyken her kare: gövde collider'larının en alçak noktası tam yere gelsin (kıvrılma, nefes, okşanırken
+    // kıpırdanma ne olursa olsun sırt yerde). Yükseklik yumuşakça takip edilir.
+    private void LateUpdate()
+    {
+        if (!(CurrentState is BellyState) || visual == null || bodyColliders.Count == 0) return;
+
+        float lowest = float.MaxValue;
+        foreach (Collider body in bodyColliders)
+            if (body != null) lowest = Mathf.Min(lowest, LowestPoint(body));
+        if (lowest == float.MaxValue) return;
+
+        float correction = transform.position.y - lowest; // + ise gömülmüş, - ise havada
+        Vector3 position = visual.localPosition;
+        position.y += correction * (1f - Mathf.Exp(-20f * Time.deltaTime));
+        visual.localPosition = position;
+    }
+
+    private static float LowestPoint(Collider body)
+    {
+        Transform t = body.transform;
+        float scale = t.lossyScale.x;
+        switch (body)
+        {
+            case SphereCollider sphere:
+                return t.TransformPoint(sphere.center).y - sphere.radius * scale;
+            case CapsuleCollider capsule:
+                Vector3 center = t.TransformPoint(capsule.center);
+                Vector3 axis = t.TransformDirection(capsule.direction == 0 ? Vector3.right : capsule.direction == 1 ? Vector3.up : Vector3.forward);
+                float half = Mathf.Max(0f, capsule.height * 0.5f - capsule.radius) * scale;
+                return Mathf.Min((center + axis * half).y, (center - axis * half).y) - capsule.radius * scale;
+            default:
+                return body.bounds.min.y;
+        }
     }
 
     // Görüş alanı: kafadan hedefe yatay yön, kedinin baktığı yönden en fazla lookFieldOfView/2 sapabilir.
@@ -145,7 +191,8 @@ public class Cat : Creature
         {
             Glove?.PlayPress(slapLift, slapDuration);
             ChangeState(new ReactionState(this, "ButtSlap", buttSlapSeconds, CatMood.Alert, PlaceholderButtSlap()));
-            if (rig != null && Animator != null && !Animator.Has("ButtSlap")) rig.PlayButtSlap(buttSlapSeconds);
+            // Vurulan nokta jöle gibi titrer (içeri göçüp sekerek söner); kıç kalkmaz, patiler oynamaz
+            if (bodyRenderer != null) StartCoroutine(slapJiggle.Play(new[] { bodyRenderer }, hit.point, -hit.normal));
         }
     }
 
@@ -297,6 +344,7 @@ public class Cat : Creature
             owner.walker.Stop();
             owner.Animator?.Play("RollToBelly");
             owner.SetMood(CatMood.Happy);
+            if (owner.rig != null) owner.rig.BellyUp = true; // gövde karna doğru kıvrılır, kafa yerden kalkar
             // Klip yoksa: model (ya da yer tutucu) bütün olarak sırtüstü döner
             if (owner.visual != null && (owner.Animator == null || !owner.Animator.Has("RollToBelly")))
                 routine = owner.StartCoroutine(owner.PlaceholderRoll(true));
@@ -310,6 +358,7 @@ public class Cat : Creature
 
         public override void Exit()
         {
+            if (owner.rig != null) owner.rig.BellyUp = false;
             if (routine != null) owner.StopCoroutine(routine);
         }
     }
@@ -360,9 +409,13 @@ public class Cat : Creature
         Renderer leftEye = AttachToBone(FindBone(model, "Left_Eyes"), head);
         Renderer rightEye = AttachToBone(FindBone(model, "Right_Eyes"), head);
 
-        AddHeadZone(head, FindBone(model, "Head_end"));
-        AddBodyZone(FindBone(model, "Root_BottomBody"), FindBone(model, "MiddleBody"), CreatureZoneType.Rear);
-        AddBodyZone(FindBone(model, "MiddleBody"), FindBone(model, "UpperBody"), CreatureZoneType.Body);
+        // Collider'lar mesh'ten ölçülür (kemik başına kapsül/küre); olmazsa kaba yedek kutular
+        if (!BuildFittedColliders(model))
+        {
+            AddHeadZone(head, FindBone(model, "Head_end"));
+            AddBodyZone(FindBone(model, "Root_BottomBody"), FindBone(model, "MiddleBody"), CreatureZoneType.Rear);
+            AddBodyZone(FindBone(model, "MiddleBody"), FindBone(model, "UpperBody"), CreatureZoneType.Body);
+        }
 
         CreatureAnimator creatureAnimator = GetComponent<CreatureAnimator>();
         if (creatureAnimator == null) creatureAnimator = gameObject.AddComponent<CreatureAnimator>();
@@ -402,6 +455,133 @@ public class Cat : Creature
         if (part == null) return null;
         if (bone != null) part.SetParent(bone, true);
         return part.GetComponent<Renderer>();
+    }
+
+    // Mesh'ten collider: rest pozu bir kez fırınlanır, her vertex en çok bağlı olduğu kemiğe atanır.
+    // Her kemiğin vertex bulutuna kapsül (neredeyse yuvarlaksa küre) uydurulur: eksen = bulutun uzanma yönü (PCA),
+    // yarıçap = eksene uzaklıkların collider Fit Percentile dilimi (taşkın birkaç vertex şişirmesin).
+    // Collider'lar kemiklerin child'ı: animasyonu, yürüyüşü, sırtüstü dönmeyi her karede kendiliğinden takip eder.
+    private bool BuildFittedColliders(Transform model)
+    {
+        SkinnedMeshRenderer skin = null;
+        foreach (SkinnedMeshRenderer candidate in model.GetComponentsInChildren<SkinnedMeshRenderer>())
+            if (skin == null || candidate.sharedMesh.vertexCount > skin.sharedMesh.vertexCount) skin = candidate;
+        bodyRenderer = skin;
+        if (skin == null || skin.sharedMesh == null || skin.bones.Length == 0) return false;
+
+        Mesh mesh = skin.sharedMesh;
+        if (!mesh.isReadable)
+        {
+            Debug.LogWarning("Cat: kedi mesh'i okunamıyor; FBX import ayarlarında Model → Read/Write'ı aç. Kaba kutu collider'lar kullanılıyor.", this);
+            return false;
+        }
+        var baked = new Mesh();
+        skin.BakeMesh(baked, true);
+        Vector3[] vertices = baked.vertices;
+        BoneWeight[] weights = mesh.boneWeights;
+        Destroy(baked);
+        if (weights.Length != vertices.Length) return false;
+
+        // Kemik → dünyadaki vertex'leri. Breath (karın) MiddleBody'ye sayılır: karın ayrı collider olmasın.
+        Transform[] bones = skin.bones;
+        Transform middle = System.Array.Find(bones, b => b != null && b.name == "MiddleBody");
+        var groups = new System.Collections.Generic.Dictionary<Transform, System.Collections.Generic.List<Vector3>>();
+        Transform skinTransform = skin.transform;
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            Transform bone = bones[weights[i].boneIndex0];
+            if (bone == null) continue;
+            if (bone.name == "Breath" && middle != null) bone = middle;
+            if (!groups.TryGetValue(bone, out var list)) groups[bone] = list = new System.Collections.Generic.List<Vector3>();
+            list.Add(skinTransform.position + skinTransform.rotation * vertices[i]);
+        }
+
+        // Sırtın yerden yüksekliği: ters dönünce sırt tam yere otursun
+        float backTop = 0f;
+        foreach (var pair in groups)
+        {
+            string boneName = pair.Key.name;
+            if (boneName != "Root_BottomBody" && boneName != "MiddleBody" && boneName != "UpperBody") continue;
+            foreach (Vector3 p in pair.Value) backTop = Mathf.Max(backTop, p.y - transform.position.y);
+        }
+        if (backTop > 0.05f) bellyLift = backTop;
+
+        int built = 0;
+        foreach (var pair in groups)
+            if (pair.Value.Count >= 12 && FitCollider(pair.Key, pair.Value)) built++;
+        return built > 0;
+    }
+
+    private bool FitCollider(Transform bone, System.Collections.Generic.List<Vector3> points)
+    {
+        // Ağırlık merkezi ve uzanma yönü (kovaryansın en büyük öz vektörü, kuvvet yinelemesiyle)
+        Vector3 center = Vector3.zero;
+        foreach (Vector3 p in points) center += p;
+        center /= points.Count;
+
+        float xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+        foreach (Vector3 p in points)
+        {
+            Vector3 d = p - center;
+            xx += d.x * d.x; xy += d.x * d.y; xz += d.x * d.z;
+            yy += d.y * d.y; yz += d.y * d.z; zz += d.z * d.z;
+        }
+        Vector3 axis = new Vector3(1f, 0.7f, 0.3f).normalized;
+        for (int iteration = 0; iteration < 24; iteration++)
+        {
+            axis = new Vector3(xx * axis.x + xy * axis.y + xz * axis.z,
+                               xy * axis.x + yy * axis.y + yz * axis.z,
+                               xz * axis.x + yz * axis.y + zz * axis.z);
+            if (axis.sqrMagnitude < 1e-12f) { axis = Vector3.up; break; }
+            axis.Normalize();
+        }
+
+        // Eksen boyunca uzanma ve eksenden uzaklıklar
+        float min = float.MaxValue, max = float.MinValue;
+        var radial = new float[points.Count];
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector3 d = points[i] - center;
+            float along = Vector3.Dot(d, axis);
+            min = Mathf.Min(min, along);
+            max = Mathf.Max(max, along);
+            radial[i] = (d - axis * along).magnitude;
+        }
+        System.Array.Sort(radial);
+        float radius = Mathf.Max(0.02f, radial[Mathf.Clamp(Mathf.RoundToInt(radial.Length * colliderFitPercentile) - 1, 0, radial.Length - 1)]);
+        float length = max - min;
+        Vector3 middlePoint = center + axis * ((min + max) * 0.5f);
+
+        var zone = new GameObject($"{bone.name} Collider");
+        zone.transform.SetParent(bone, false);
+        zone.transform.SetPositionAndRotation(middlePoint, Quaternion.LookRotation(axis, Mathf.Abs(Vector3.Dot(axis, transform.up)) > 0.95f ? transform.forward : transform.up));
+        float scale = Mathf.Max(bone.lossyScale.x, 0.0001f);
+
+        // Neredeyse yuvarlak (kafa gibi): küre; uzunsa kapsül
+        if (length < radius * 2.6f)
+        {
+            var sphere = zone.AddComponent<SphereCollider>();
+            sphere.radius = Mathf.Max(radius, length * 0.5f) / scale;
+        }
+        else
+        {
+            var capsule = zone.AddComponent<CapsuleCollider>();
+            capsule.direction = 2; // yerel Z = eksen
+            capsule.radius = radius / scale;
+            capsule.height = Mathf.Max(length, radius * 2f) / scale;
+        }
+
+        zone.AddComponent<CreatureZone>().Setup(ZoneForBone(bone.name), this);
+        if (!bone.name.StartsWith("leg") && !bone.name.StartsWith("tail")) bodyColliders.Add(zone.GetComponent<Collider>());
+        return true;
+    }
+
+    // Kafa → kafa bölgesi; kalça ve kuyruk → kıç bölgesi (şaplak); gerisi gövde
+    private static CreatureZoneType ZoneForBone(string boneName)
+    {
+        if (boneName == "Head") return CreatureZoneType.Head;
+        if (boneName == "Root_BottomBody" || boneName.StartsWith("tail")) return CreatureZoneType.Rear;
+        return CreatureZoneType.Body;
     }
 
     // Kafa: kafa kemiğinden ucuna uzanan küre
@@ -522,17 +702,19 @@ public class Cat : Creature
     {
         Quaternion from = visual.localRotation;
         Quaternion to = toBelly ? Quaternion.Euler(0f, 0f, 180f) : Quaternion.identity;
-        Vector3 lift = toBelly ? Vector3.up * 0.6f : Vector3.zero;
+        // Collider'lar varsa sırtüstü yüksekliği her kare yere oturtma belirler (LateUpdate); bu rutin sadece döndürür
+        bool moveHeight = !toBelly || bodyColliders.Count == 0;
+        Vector3 lift = toBelly ? Vector3.up * bellyLift : Vector3.zero;
         Vector3 startPosition = visual.localPosition;
         for (float t = 0f; t < 0.45f; t += Time.deltaTime)
         {
             float k = Mathf.SmoothStep(0f, 1f, t / 0.45f);
             visual.localRotation = Quaternion.Slerp(from, to, k);
-            visual.localPosition = Vector3.Lerp(startPosition, lift, k);
+            if (moveHeight) visual.localPosition = Vector3.Lerp(startPosition, lift, k);
             yield return null;
         }
         visual.localRotation = to;
-        visual.localPosition = lift;
+        if (moveHeight) visual.localPosition = lift;
     }
 
     // Tekme: sırtüstüyken hızlı titrer, sonra döner

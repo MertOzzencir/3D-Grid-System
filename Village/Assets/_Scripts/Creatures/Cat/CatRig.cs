@@ -67,6 +67,14 @@ public class CatRig : MonoBehaviour
     [SerializeField] private float maxLookPitch = 15f;
     [SerializeField] private float lookBlendSpeed = 4f;
 
+    [Header("Sırtüstü (göbek modu)")]
+    [Tooltip("Gövdenin karna doğru kıvrılması (MiddleBody / UpperBody, derece). Ters dönünce kafa ve ön taraf yerden kalkar.")]
+    [SerializeField] private float bellyCurlMiddle = 22f;
+    [SerializeField] private float bellyCurlUpper = 18f;
+    [Tooltip("Kafanın göğse doğru eğilmesi (derece)")]
+    [SerializeField] private float bellyHeadNod = 30f;
+    [SerializeField] private float bellyBlendSpeed = 3f;
+
     [Header("Yedek tepkiler (klip yoksa)")]
     [SerializeField] private float headPatSquash = 0.22f;
     [SerializeField] private float buttRaiseAngle = 14f;
@@ -74,7 +82,11 @@ public class CatRig : MonoBehaviour
 
     private Transform catRoot, root, middle, upperBody, head, breath;
     private Vector3 middleYawAxis, upperYawAxis;
-    private float bend, bendVelocity;
+    private Vector3 middlePitchAxis, upperPitchAxis, headPitchAxis;
+    private float bend, bendVelocity, bellyWeight;
+
+    // Göbek modu: gövde karna doğru kıvrılır (sırtüstü yatan kedinin "C" duruşu)
+    public bool BellyUp { get; set; }
     private Transform[] tail;
     private Vector3[] tailYaw, tailPitch;
     private Leg[] legs;
@@ -117,8 +129,14 @@ public class CatRig : MonoBehaviour
         {
             middleSwayAxis = Local(middle, forward);
             middleYawAxis = Local(middle, up);
+            middlePitchAxis = Local(middle, right);
         }
-        if (upperBody != null) upperYawAxis = Local(upperBody, up);
+        if (upperBody != null)
+        {
+            upperYawAxis = Local(upperBody, up);
+            upperPitchAxis = Local(upperBody, right);
+        }
+        if (head != null) headPitchAxis = Local(head, right);
         if (root != null && upper != null) bodyLength = Vector3.Distance(root.position, upper.position);
         if (head != null)
         {
@@ -230,6 +248,7 @@ public class CatRig : MonoBehaviour
 
         ApplyWalk();
         ApplyTurnBend(dt, yawRate);
+        ApplyBellyCurl(dt);
         ApplyReactions(dt);
         ApplyBreath();
         ApplyTail(dt, yawRate);
@@ -282,6 +301,19 @@ public class CatRig : MonoBehaviour
 
         if (middle != null) middle.localRotation *= Quaternion.AngleAxis(bend * (1f - upperBendShare), middleYawAxis);
         if (upperBody != null) upperBody.localRotation *= Quaternion.AngleAxis(bend * upperBendShare, upperYawAxis);
+    }
+
+    // Kedinin sağ ekseni etrafında artı açı ön tarafı aşağı, yani karna doğru çevirir: gövde "C" gibi kıvrılır.
+    // Kedi ters dönmüşken bu, kafayı ve ön tarafı yerden kaldırır; sırt yerde kalır.
+    private void ApplyBellyCurl(float dt)
+    {
+        bellyWeight = Mathf.MoveTowards(bellyWeight, BellyUp ? 1f : 0f, dt * bellyBlendSpeed);
+        if (bellyWeight <= 0f) return;
+        float w = Mathf.SmoothStep(0f, 1f, bellyWeight);
+
+        if (middle != null) middle.localRotation *= Quaternion.AngleAxis(bellyCurlMiddle * w, middlePitchAxis);
+        if (upperBody != null) upperBody.localRotation *= Quaternion.AngleAxis(bellyCurlUpper * w, upperPitchAxis);
+        if (head != null) head.localRotation *= Quaternion.AngleAxis(bellyHeadNod * w, headPitchAxis);
     }
 
     private void ApplyReactions(float dt)

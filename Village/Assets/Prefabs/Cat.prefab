@@ -1,0 +1,119 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3108580396603528923
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 911068794808290049}
+  - component: {fileID: 6647607431712334816}
+  - component: {fileID: 4565040748264274294}
+  - component: {fileID: 7904187915132065202}
+  m_Layer: 0
+  m_Name: Cat
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &911068794808290049
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3108580396603528923}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.19, y: 0.53, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6647607431712334816
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3108580396603528923}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6a9831dd657aef448a2f0bff5471425e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GridWalker
+  speed: 1.2
+  turnAroundDuration: 0.5
+  turnSharpness: 12
+--- !u!114 &4565040748264274294
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3108580396603528923}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4bb727f741c4a324baf1c685e9ef1d07, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Cat
+  creatureAnimator: {fileID: 0}
+  wanderRadius: 5
+  idleSeconds: {x: 2, y: 5}
+  sitSeconds: {x: 3, y: 6}
+  sleepSeconds: {x: 4, y: 6}
+  affection: 0.5
+  overpetLimit: 6
+  overpetPerRub: 1
+  overpetDecay: 0.4
+  affectionPerRub: 0.02
+  lookFieldOfView: 120
+  headPatSeconds: 1.2
+  buttSlapSeconds: 2.2
+  bunnyKickSeconds: 0.9
+  runAwayRadius: 8
+  slapJiggle:
+    depth: 0.07
+    radius: 0.4
+    duration: 0.8
+    oscillations: 3.5
+    waveLength: 0.15
+    waveAmount: 0.35
+    swellAmount: 0.06
+    swellOscillations: 2
+    swellCenterDepth: 0.25
+  patLift: 0.15
+  patDuration: 0.28
+  slapLift: 0.25
+  slapDuration: 0.16
+  modelPrefab: {fileID: 919132149155446097, guid: 36c232d8537dcf14dbb0d95a1deecede, type: 3}
+  modelOffset: {x: 0, y: 0, z: 0.5}
+  modelRotation: {x: 0, y: 0, z: 0}
+  groundToPaws: 1
+  colliderFitPercentile: 0.85
+  bodyZoneSize: {x: 0.75, y: 0.65}
+  buildPlaceholder: 1
+  placeholderColor: {r: 0.95, g: 0.65, b: 0.35, a: 1}
+--- !u!114 &7904187915132065202
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3108580396603528923}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9bad5278102806743b876d412ca2324d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CreatureAnimator
+  animator: {fileID: 0}
+  clips:
+  - clip: {fileID: -8945691123924629249, guid: 36c232d8537dcf14dbb0d95a1deecede, type: 3}
+    loop: 1
+  - clip: {fileID: 8349542763059015795, guid: 36c232d8537dcf14dbb0d95a1deecede, type: 3}
+    loop: 1
+  crossFade: 0.2
