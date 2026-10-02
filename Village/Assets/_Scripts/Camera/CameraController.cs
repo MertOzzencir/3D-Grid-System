@@ -100,9 +100,9 @@ public class CameraController : MonoBehaviour
             if (isRotating) return;
 
             // Ekranın ortası: bakış ışınının hedefin yüksekliğindeki yatay düzlemi kestiği nokta. Hedefe doğru kayar.
-            Vector3 forward = transform.forward;
-            if (forward.y > -0.01f) return;
-            Vector3 center = transform.position + forward * ((target.y - transform.position.y) / forward.y);
+            Vector3 view = transform.forward;
+            if (view.y > -0.01f) return;
+            Vector3 center = transform.position + view * ((target.y - transform.position.y) / view.y);
             Vector3 offset = target - center;
             offset.y = 0f;
             transform.position += offset * (1f - Mathf.Exp(-followSharpness * Time.deltaTime));
