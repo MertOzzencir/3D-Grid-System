@@ -75,6 +75,8 @@ public class Cat : Creature, ISaveState
     [Header("Model")]
     [Tooltip("Kedi modeli (FBX). Atanırsa yer tutucu yerine kurulur: gözler kafaya, etkileşim bölgeleri kemiklere bağlanır.")]
     [SerializeField] private GameObject modelPrefab;
+    [Tooltip("Göz shader'ı (Village/Cat Eyes). Referansla tutulur ki build'e girsin.")]
+    [SerializeField] private Shader eyeShader;
     [Tooltip("Modelin kedi köküne (kafa ile gövde hücresinin ortası, yerde) göre yeri. Origin kafa hücresindeyse +0.5 ileri.")]
     [SerializeField] private Vector3 modelOffset = new Vector3(0f, 0f, 0.5f);
     [SerializeField] private Vector3 modelRotation = Vector3.zero;
@@ -651,7 +653,7 @@ public class Cat : Creature, ISaveState
 
         eyes = GetComponent<CatEyes>();
         if (eyes == null) eyes = gameObject.AddComponent<CatEyes>();
-        eyes.Setup(transform, head, leftEye, rightEye);
+        eyes.Setup(transform, head, leftEye, rightEye, eyeShader);
     }
 
     // En alttaki pati ucunu (rest pozunda) kedi kökünün yüksekliğine (yer) indirir

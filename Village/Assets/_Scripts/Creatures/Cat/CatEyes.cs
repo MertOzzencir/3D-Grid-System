@@ -39,7 +39,8 @@ public class CatEyes : MonoBehaviour
     public CatMood Mood { get; set; } = CatMood.Idle;
     public Transform LookTarget { get; set; }
 
-    public void Setup(Transform catTransform, Transform headBone, Renderer leftEye, Renderer rightEye)
+    // eyeShader: build'e girsin diye prefab'da referansla tutulan shader (Shader.Find build'de referanssız shader'ı bulamaz)
+    public void Setup(Transform catTransform, Transform headBone, Renderer leftEye, Renderer rightEye, Shader eyeShader = null)
     {
         catRoot = catTransform;
         head = headBone != null ? headBone : catTransform;
@@ -47,7 +48,18 @@ public class CatEyes : MonoBehaviour
         right = rightEye;
         block = new MaterialPropertyBlock();
 
-        Material material = eyeMaterial != null ? eyeMaterial : new Material(Shader.Find("Village/Cat Eyes"));
+        Material material = eyeMaterial;
+        if (material == null)
+        {
+            Shader shader = eyeShader != null ? eyeShader : Shader.Find("Village/Cat Eyes");
+            if (shader == null)
+            {
+                Debug.LogWarning("CatEyes: 'Village/Cat Eyes' shader'ı bulunamadı (Cat → Eye Shader ata); gözler modelin materyaliyle kalıyor.", this);
+                ScheduleBlink();
+                return;
+            }
+            material = new Material(shader);
+        }
         if (left != null) left.sharedMaterial = material;
         if (right != null) right.sharedMaterial = material;
         ScheduleBlink();
