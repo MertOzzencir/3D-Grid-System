@@ -30,13 +30,10 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [SerializeField] private BoatWakeFx waterFx = new BoatWakeFx();
 
     [Header("Su maskesi (su botun içinden görünmesin)")]
-    [Tooltip("Görünmez yarım küre shader'ı (Village/Depth Mask). Referansla tutulur ki build'e girsin.")]
+    [Tooltip("Görünmez maske shader'ı (Village/Depth Mask). Referansla tutulur ki build'e girsin.")]
     [SerializeField] private Shader maskShader;
-    [Tooltip("Yarım kürenin üst kapağının genişliği, gövdenin dış genişliğine oranla. İç kenardan geniş, dış kenardan dar " +
-             "olmalı (kenarın tepesine denk gelsin): küçükse köşelerde su görünür, büyükse botun yanındaki su kaybolur.")]
-    [SerializeField, Range(0.6f, 1f)] private float maskFit = 0.9f;
-    [Tooltip("Yarım kürenin üst kapaktan aşağı derinliği, gövdenin yüksekliğine oranla (altı umursanmaz)")]
-    [SerializeField, Range(0.3f, 1.5f)] private float maskDepth = 0.9f;
+    [Tooltip("Maske iç duvardan bu kadar içeride kalır (modelin birimi). Normalde dokunma.")]
+    [SerializeField] private float maskInset = 0.01f;
     [Tooltip("Scene görünümünde maskeyi (sarı) ve gövdeyi (mavi tel kafes) göster; Play'e girmeden de, prefab modunda da")]
     [SerializeField] private bool showMaskGizmo = true;
 
@@ -284,11 +281,10 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         CreateWaterMask(model);
     }
 
-    // Botun içini dolduran görünmez yarım küre (üstü düz kapak, altı kase): sudan hemen önce derinlik yazar, arkasındaki
-    // (botun içindeki) su çizilmez. Ölçüleri gövdenin sınırlarından: kapak gövdenin en üstünde (kenarın tepesi),
-    // genişliği dış ölçünün maskFit katı (kenarın tepesine denk gelir: köşeler dahil bütün ağız kapanır, kenarın altına
-    // taşmaz). Kasenin gövdenin altından taşan kısmı sorun değil (orada su kasenin önünde). Modelin child'ı: bot
-    // sallandıkça maske de sallanır.
+    // Botun içini kalıp gibi dolduran görünmez maske: sudan hemen önce derinlik yazar, arkasındaki (botun içindeki) su
+    // çizilmez. Şekli gövde mesh'inden her noktada örneklenir (TryBuildMask); iç duvarın hafif içinde kaldığı için
+    // hiçbir açıdan gövdenin dışına taşmaz. Modelin child'ı: bot sallandıkça maske de sallanır.
+    // Gövde mesh'i okunabilir olmalı (bot.fbx → Read/Write).
     private void CreateWaterMask(Transform model)
     {
         if (maskShader == null)
@@ -297,12 +293,15 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             return;
         }
 
-        if (!TryBuildMask(model, leftOar, rightOar, maskFit, maskDepth, out Vector3 top, out maskMesh, out _, out _)) return;
+        if (!TryBuildMask(model, leftOar, rightOar, MaskBottom, maskInset, out maskMesh, out _, out _))
+        {
+            Debug.LogWarning("Boat: su maskesi kurulamadı (gövde mesh'i okunabilir mi? bot.fbx → Read/Write).", this);
+            return;
+        }
 
         var mask = new GameObject("Water Mask");
         maskTransform = mask.transform;
         maskTransform.SetParent(model, false);
-        maskTransform.localPosition = top;
         mask.AddComponent<MeshFilter>().sharedMesh = maskMesh;
         var renderer = mask.AddComponent<MeshRenderer>();
         renderer.sharedMaterial = new Material(maskShader);
@@ -310,13 +309,19 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         renderer.receiveShadows = false;
     }
 
-    // Maskenin ölçüsü (modelin uzayında): gövde = küreklerin dışındaki en büyük mesh; kapak gövdenin en üstünde,
-    // genişliği dış ölçünün fit katı, derinliği gövde yüksekliğinin depthRatio katı. Hem çalışırken (kurulan model)
-    // hem editörde (modelin asset'i, gizmo için) kullanılır.
-    private static bool TryBuildMask(Transform model, Transform skipA, Transform skipB, float fit, float depthRatio,
-                                     out Vector3 top, out Mesh mesh, out MeshFilter hull, out Matrix4x4 hullToModel)
+    // Maskenin en altı (modelin uzayında): su seviyesinin epey altı (bot yalpalayınca uçlarda su aşağı iner); altı umursanmaz
+    private float MaskBottom => (-waterline - 0.3f) / Mathf.Max(modelScale, 0.0001f);
+
+    // Gövdenin içini kalıp gibi dolduran maske (modelin uzayında). Gövde = küreklerin dışındaki en büyük mesh.
+    //   Etrafı 64 açı dilimine, yüksekliği 16 katmana bölünür. Her dilim/katmanda merkeze en yakın DUVAR vertex'i
+    //   (normali yataya yakın; döşeme ve kenarın tepesi gibi yukarı bakanlar hariç) = iç duvar (döşemenin altında dış duvar).
+    //   Her dilimde kenarın tepe yüksekliği ayrıca alınır: üst halka kenarı takip eder (uçlarda kalkık, ortada alçak).
+    //   Halkalar duvardan inset kadar içeride; üstü kapak (merkezden yelpaze), altı kapalı. Boş hücreler komşuların
+    //   küçüğüyle dolar (hep içeride kalınır).
+    private static bool TryBuildMask(Transform model, Transform skipA, Transform skipB, float bottom, float inset,
+                                     out Mesh mesh, out MeshFilter hull, out Matrix4x4 hullToModel)
     {
-        top = default;
+        const int sectors = 64, levels = 16;
         mesh = null;
         hull = null;
         hullToModel = Matrix4x4.identity;
@@ -325,72 +330,146 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             if (filter.sharedMesh == null || filter.transform == skipA || filter.transform == skipB) continue;
             if (hull == null || filter.sharedMesh.vertexCount > hull.sharedMesh.vertexCount) hull = filter;
         }
-        if (hull == null) return false;
+        if (hull == null || !hull.sharedMesh.isReadable) return false;
 
-        Bounds local = hull.sharedMesh.bounds;
         hullToModel = model.worldToLocalMatrix * hull.transform.localToWorldMatrix;
+        Vector3[] source = hull.sharedMesh.vertices;
+        Vector3[] sourceNormals = hull.sharedMesh.normals;
+        bool hasNormals = sourceNormals != null && sourceNormals.Length == source.Length;
+
+        // Vertex'ler modelin uzayında; merkez = sınırların ortası
+        var points = new Vector3[source.Length];
+        var isWall = new bool[source.Length];
         Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
-        for (int corner = 0; corner < 8; corner++)
+        for (int i = 0; i < source.Length; i++)
         {
-            Vector3 p = hullToModel.MultiplyPoint3x4(new Vector3(
-                (corner & 1) == 0 ? local.min.x : local.max.x,
-                (corner & 2) == 0 ? local.min.y : local.max.y,
-                (corner & 4) == 0 ? local.min.z : local.max.z));
-            min = Vector3.Min(min, p);
-            max = Vector3.Max(max, p);
+            points[i] = hullToModel.MultiplyPoint3x4(source[i]);
+            isWall[i] = !hasNormals || Mathf.Abs(hullToModel.MultiplyVector(sourceNormals[i]).normalized.y) < 0.7f;
+            min = Vector3.Min(min, points[i]);
+            max = Vector3.Max(max, points[i]);
+        }
+        Vector2 center = new Vector2((min.x + max.x) * 0.5f, (min.z + max.z) * 0.5f);
+        bottom = Mathf.Clamp(bottom, min.y, max.y - 0.01f);
+
+        int SectorOf(Vector3 p) =>
+            Mathf.FloorToInt(Mathf.Repeat(Mathf.Atan2(p.z - center.y, p.x - center.x) / (Mathf.PI * 2f), 1f) * sectors) % sectors;
+        float RadiusOf(Vector3 p) => new Vector2(p.x - center.x, p.z - center.y).magnitude;
+
+        // Her dilimde kenarın tepesi
+        var rimTop = new float[sectors];
+        for (int s = 0; s < sectors; s++) rimTop[s] = float.NegativeInfinity;
+        foreach (Vector3 p in points)
+        {
+            int s = SectorOf(p);
+            rimTop[s] = Mathf.Max(rimTop[s], p.y);
+        }
+        FillGaps(rimTop, float.NegativeInfinity, sectors, Mathf.Min, max.y);
+
+        // Yükseklik katmanları (en üst = en yüksek kenar) ve her katmanda iç duvar uzaklığı; ayrıca her dilimin kenar
+        // tepesindeki iç kenar
+        float step = (max.y - bottom) / (levels - 1);
+        float band = step * 0.75f;
+        var radius = new float[levels, sectors];
+        var topRadius = new float[sectors];
+        for (int l = 0; l < levels; l++)
+            for (int s = 0; s < sectors; s++) radius[l, s] = float.PositiveInfinity;
+        for (int s = 0; s < sectors; s++) topRadius[s] = float.PositiveInfinity;
+
+        for (int i = 0; i < points.Length; i++)
+        {
+            if (!isWall[i]) continue;
+            Vector3 p = points[i];
+            int s = SectorOf(p);
+            float r = RadiusOf(p);
+            if (Mathf.Abs(p.y - rimTop[s]) <= band) topRadius[s] = Mathf.Min(topRadius[s], r);
+            int first = Mathf.Max(0, Mathf.CeilToInt((max.y - p.y - band) / step));
+            int last = Mathf.Min(levels - 1, Mathf.FloorToInt((max.y - p.y + band) / step));
+            for (int l = first; l <= last; l++) radius[l, s] = Mathf.Min(radius[l, s], r);
+        }
+        FillGaps(topRadius, float.PositiveInfinity, sectors, Mathf.Min, 0f);
+        for (int l = 0; l < levels; l++)
+        {
+            var row = new float[sectors];
+            for (int s = 0; s < sectors; s++) row[s] = radius[l, s];
+            FillGaps(row, float.PositiveInfinity, sectors, Mathf.Min, 0f);
+            for (int s = 0; s < sectors; s++) radius[l, s] = row[s];
         }
 
-        Vector3 center = (min + max) * 0.5f;
-        top = new Vector3(center.x, max.y, center.z);
-        mesh = HalfEllipsoid((max.x - min.x) * 0.5f * fit, (max.z - min.z) * 0.5f * fit, (max.y - min.y) * depthRatio);
-        return true;
-    }
+        // Halkalar: 0 = kenarın tepesi, sonra katmanlar (dilimin kenarından yüksekte kalanlar kenara indirilir)
+        var vertices = new System.Collections.Generic.List<Vector3>();
+        float averageTop = 0f;
+        for (int s = 0; s < sectors; s++) averageTop += rimTop[s];
+        vertices.Add(new Vector3(center.x, averageTop / sectors, center.y)); // 0: kapağın ortası
 
-    // Kapalı yarım elipsoit: y = 0'da düz kapak, aşağı doğru kase (en derin nokta -depth). Yüzlerin yönü önemsiz (Cull Off).
-    private static Mesh HalfEllipsoid(float radiusX, float radiusZ, float depth)
-    {
-        const int segments = 40, rings = 10;
-        var vertices = new System.Collections.Generic.List<Vector3> { Vector3.zero }; // 0: kapağın ortası
-        var triangles = new System.Collections.Generic.List<int>();
-
-        // Halkalar: 0 = kenar (y = 0), rings = en alt
-        for (int ring = 0; ring <= rings; ring++)
+        int ringCount = levels + 1;
+        for (int ring = 0; ring < ringCount; ring++)
         {
-            float angle = ring / (float)rings * Mathf.PI * 0.5f;
-            float scale = Mathf.Cos(angle), y = -Mathf.Sin(angle) * depth;
-            for (int i = 0; i < segments; i++)
+            for (int s = 0; s < sectors; s++)
             {
-                float around = i / (float)segments * Mathf.PI * 2f;
-                vertices.Add(new Vector3(Mathf.Cos(around) * radiusX * scale, y, Mathf.Sin(around) * radiusZ * scale));
+                float height, r;
+                if (ring == 0)
+                {
+                    height = rimTop[s];
+                    r = topRadius[s];
+                }
+                else
+                {
+                    float levelHeight = max.y - (ring - 1) * step;
+                    height = Mathf.Min(levelHeight, rimTop[s]);
+                    r = levelHeight >= rimTop[s] ? topRadius[s] : radius[ring - 1, s];
+                }
+                r = Mathf.Max(0f, r - inset);
+                float angle = (s + 0.5f) / sectors * Mathf.PI * 2f;
+                vertices.Add(new Vector3(center.x + Mathf.Cos(angle) * r, height, center.y + Mathf.Sin(angle) * r));
             }
         }
+        int bottomCenter = vertices.Count;
+        vertices.Add(new Vector3(center.x, bottom, center.y));
 
-        for (int i = 0; i < segments; i++)
+        var triangles = new System.Collections.Generic.List<int>();
+        for (int s = 0; s < sectors; s++)
         {
-            int next = (i + 1) % segments;
-            // Kapak
-            triangles.Add(0); triangles.Add(1 + next); triangles.Add(1 + i);
-            // Kase
-            for (int ring = 0; ring < rings; ring++)
+            int next = (s + 1) % sectors;
+            triangles.Add(0); triangles.Add(1 + next); triangles.Add(1 + s); // kapak
+            for (int ring = 0; ring < ringCount - 1; ring++)
             {
-                int a = 1 + ring * segments + i, b = 1 + ring * segments + next;
-                int c = a + segments, d = b + segments;
+                int a = 1 + ring * sectors + s, b = 1 + ring * sectors + next;
+                int c = a + sectors, d = b + sectors;
                 triangles.Add(a); triangles.Add(b); triangles.Add(c);
                 triangles.Add(b); triangles.Add(d); triangles.Add(c);
             }
+            int lastRing = 1 + (ringCount - 1) * sectors;
+            triangles.Add(bottomCenter); triangles.Add(lastRing + s); triangles.Add(lastRing + next); // dip
         }
 
-        var mesh = new Mesh { name = "Boat Water Mask" };
+        mesh = new Mesh { name = "Boat Water Mask" };
         mesh.SetVertices(vertices);
         mesh.SetTriangles(triangles, 0);
         mesh.RecalculateNormals(); // Gizmos.DrawMesh normal ister (çizimde kullanılmaz)
         mesh.RecalculateBounds();
-        return mesh;
+        return true;
+    }
+
+    // Ölçülemeyen dilimler (empty değerinde) en yakın ölçülmüş komşuların pick'iyle (Min: içeride kal) dolar; hiç yoksa fallback
+    private static void FillGaps(float[] values, float empty, int count, System.Func<float, float, float> pick, float fallback)
+    {
+        var source = (float[])values.Clone();
+        for (int i = 0; i < count; i++)
+        {
+            if (source[i] != empty) continue;
+            float left = empty, right = empty;
+            for (int k = 1; k < count && (left == empty || right == empty); k++)
+            {
+                if (left == empty) left = source[(i - k + count) % count];
+                if (right == empty) right = source[(i + k) % count];
+            }
+            values[i] = left == empty && right == empty ? fallback
+                      : left == empty ? right : right == empty ? left : pick(left, right);
+        }
     }
 
 #if UNITY_EDITOR
     private Mesh editorMaskMesh;
-    private Vector3 editorMaskTop;
     private MeshFilter editorHull;
     private Matrix4x4 editorHullToModel;
 
@@ -417,8 +496,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             if (editorMaskMesh == null)
             {
                 Transform asset = modelPrefab.transform;
-                TryBuildMask(asset, FindQuiet(asset, leftOarName), FindQuiet(asset, rightOarName), maskFit, maskDepth,
-                             out editorMaskTop, out editorMaskMesh, out editorHull, out editorHullToModel);
+                TryBuildMask(asset, FindQuiet(asset, leftOarName), FindQuiet(asset, rightOarName), MaskBottom, maskInset,
+                             out editorMaskMesh, out editorHull, out editorHullToModel);
                 if (editorMaskMesh == null) return;
                 editorMaskMesh.hideFlags = HideFlags.HideAndDontSave; // sahneye kaydedilmesin
             }
@@ -427,7 +506,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
                               * Matrix4x4.Translate(Vector3.up * (0.5f + waterline))
                               * Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(modelRotation), Vector3.one * modelScale);
             mask = editorMaskMesh;
-            maskMatrix = model * Matrix4x4.Translate(editorMaskTop);
+            maskMatrix = model;
             hull = editorHull;
             hullMatrix = model * editorHullToModel;
         }
