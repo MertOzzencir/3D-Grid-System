@@ -30,11 +30,11 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [Header("Su maskesi (su botun içinden görünmesin)")]
     [Tooltip("Görünmez kapak shader'ı (Village/Depth Mask). Referansla tutulur ki build'e girsin.")]
     [SerializeField] private Shader maskShader;
-    [Tooltip("Botun ağzındaki görünmez elips kapağın yarı genişliği (x) ve yarı uzunluğu (y), modelin uzayında. " +
-             "İç kenarın biraz içinde kalmalı: dışa taşarsa botun yanındaki su da kaybolur.")]
-    [SerializeField] private Vector2 maskRadii = new Vector2(0.55f, 0.85f);
-    [Tooltip("Kapağın yüksekliği (modelin uzayında y): kenarın üstünü geçmesin, su çizgisinin üstünde olsun")]
-    [SerializeField] private float maskHeight = 0.28f;
+    [Tooltip("Görünmez kapağın su seviyesinden yüksekliği (birim). Dalga + botun inip kalkması bunu geçerse botun içinde " +
+             "su görünür; çok yüksek olursa kapak iç duvarın daraldığı yere denk gelip küçülür.")]
+    [SerializeField] private float maskAboveWater = 0.1f;
+    [Tooltip("Kapak iç duvardan bu kadar içeride kalır (birim)")]
+    [SerializeField] private float maskInset = 0.02f;
     [SerializeField] private BoatWakeFx waterFx = new BoatWakeFx();
 
     [Header("Binme / inme")]
@@ -79,6 +79,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     private float lastYaw, rowWeight, rowPhase, lean;
     private bool riding;
     private float lastRideEnd = float.MinValue;
+    private Vector3[] maskOutline; // su maskesinin kenarı (modelin uzayında), gizmo için
     private Vector3Int? restoredHeadOffset; // kayıttan: arka hücreden ön hücreye
 
     public bool IsRidden => riding;
@@ -279,8 +280,10 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         CreateWaterMask(model);
     }
 
-    // Botun ağzına görünmez elips kapak: sudan hemen önce derinlik yazar, kapağın arkasındaki (botun içindeki) su
-    // çizilmez. Modelin child'ı: bot sallandıkça kapak da sallanır.
+    // Botun içine görünmez kapak: sudan hemen önce derinlik yazar, kapağın arkasındaki (botun içindeki) su çizilmez.
+    // Şekli gövdenin mesh'inden ölçülür: su çizgisinin biraz üstünde iç duvarın kesiti, biraz içeride. Böylece kapak
+    // hiçbir açıdan gövdenin dışına taşmaz (taşan yerde botun yanındaki su da kaybolurdu). Modelin child'ı: bot
+    // sallandıkça kapak da sallanır. Gövde mesh'i okunabilir olmalı (bot.fbx → Read/Write).
     private void CreateWaterMask(Transform model)
     {
         if (maskShader == null)
@@ -289,17 +292,40 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             return;
         }
 
-        const int segments = 40;
-        var vertices = new Vector3[segments + 1];
-        var triangles = new int[segments * 3];
-        vertices[0] = new Vector3(0f, maskHeight, 0f);
-        for (int i = 0; i < segments; i++)
+        // Gövde: küreklerin dışındaki en büyük mesh
+        MeshFilter hull = null;
+        foreach (MeshFilter filter in model.GetComponentsInChildren<MeshFilter>())
         {
-            float angle = i / (float)segments * Mathf.PI * 2f;
-            vertices[i + 1] = new Vector3(Mathf.Cos(angle) * maskRadii.x, maskHeight, Mathf.Sin(angle) * maskRadii.y);
+            if (filter.sharedMesh == null || filter.transform == leftOar || filter.transform == rightOar) continue;
+            if (hull == null || filter.sharedMesh.vertexCount > hull.sharedMesh.vertexCount) hull = filter;
+        }
+        if (hull == null) return;
+        if (!hull.sharedMesh.isReadable)
+        {
+            Debug.LogWarning("Boat: gövde mesh'i okunamıyor (bot.fbx → Model → Read/Write); su botun içinden görünebilir.", this);
+            return;
+        }
+
+        float scale = Mathf.Max(modelScale, 0.0001f);
+        float height = (maskAboveWater - waterline) / scale; // modelin uzayında (su seviyesi = -waterline)
+        maskOutline = HullOutline(hull, model, height, maskInset / scale);
+        if (maskOutline == null)
+        {
+            Debug.LogWarning("Boat: su maskesi için gövdenin o yükseklikte iç duvarı bulunamadı (Mask Above Water'ı değiştir).", this);
+            return;
+        }
+
+        // Merkezden yelpaze
+        int count = maskOutline.Length;
+        var vertices = new Vector3[count + 1];
+        var triangles = new int[count * 3];
+        vertices[0] = new Vector3(0f, height, 0f);
+        for (int i = 0; i < count; i++)
+        {
+            vertices[i + 1] = maskOutline[i];
             triangles[i * 3] = 0;
             triangles[i * 3 + 1] = i + 1;
-            triangles[i * 3 + 2] = (i + 1) % segments + 1;
+            triangles[i * 3 + 2] = (i + 1) % count + 1;
         }
         var mesh = new Mesh { name = "Boat Water Mask", vertices = vertices, triangles = triangles };
         mesh.RecalculateBounds();
@@ -313,22 +339,68 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         renderer.receiveShadows = false;
     }
 
+    // Gövdenin verilen yükseklikteki iç kesiti (modelin uzayında, merkez = origin): o yüksekliğe yakın vertex'ler
+    // açı dilimlerine ayrılır; dilimde merkeze en yakın vertex iç duvardır (dış duvar daha uzakta). Az vertex varsa
+    // yükseklik bandı genişletilir. Boş dilimler komşularının küçüğüyle doldurulur (taşmasın diye hep içeride kalınır).
+    private static Vector3[] HullOutline(MeshFilter hull, Transform model, float height, float inset)
+    {
+        const int sectors = 64;
+        Vector3[] vertices = hull.sharedMesh.vertices;
+        Matrix4x4 toModel = model.worldToLocalMatrix * hull.transform.localToWorldMatrix;
+        var radius = new float[sectors];
+        for (int i = 0; i < sectors; i++) radius[i] = float.MaxValue;
+
+        for (float band = 0.03f; band <= 0.25f; band *= 2f)
+        {
+            foreach (Vector3 vertex in vertices)
+            {
+                Vector3 p = toModel.MultiplyPoint3x4(vertex);
+                if (Mathf.Abs(p.y - height) > band) continue;
+                float r = new Vector2(p.x, p.z).magnitude;
+                if (r < 0.0001f) continue;
+                int sector = Mathf.FloorToInt(Mathf.Repeat(Mathf.Atan2(p.z, p.x) / (Mathf.PI * 2f), 1f) * sectors) % sectors;
+                radius[sector] = Mathf.Min(radius[sector], r);
+            }
+
+            int filled = 0;
+            foreach (float r in radius) if (r < float.MaxValue) filled++;
+            if (filled >= sectors * 3 / 4) break;
+        }
+
+        var outline = new Vector3[sectors];
+        bool any = false;
+        for (int i = 0; i < sectors; i++)
+        {
+            float r = radius[i];
+            if (r == float.MaxValue)
+            {
+                // En yakın dolu komşular (iki yönde), küçüğü
+                float left = float.MaxValue, right = float.MaxValue;
+                for (int step = 1; step < sectors && (left == float.MaxValue || right == float.MaxValue); step++)
+                {
+                    if (left == float.MaxValue) left = radius[(i - step + sectors) % sectors];
+                    if (right == float.MaxValue) right = radius[(i + step) % sectors];
+                }
+                r = Mathf.Min(left, right);
+            }
+            if (r == float.MaxValue) continue;
+            any = true;
+            float angle = (i + 0.5f) / sectors * Mathf.PI * 2f;
+            float inner = Mathf.Max(0f, r - inset);
+            outline[i] = new Vector3(Mathf.Cos(angle) * inner, height, Mathf.Sin(angle) * inner);
+        }
+        return any ? outline : null;
+    }
+
 #if UNITY_EDITOR
-    // Kapağı Scene görünümünde göster (ayarlarken): sarı elips
+    // Kapağın şekli Scene görünümünde (Play'de, bot seçiliyken): sarı çizgi
     private void OnDrawGizmosSelected()
     {
-        Transform model = visual != null && visual.childCount > 0 ? visual.GetChild(0) : null;
-        Matrix4x4 matrix = model != null ? model.localToWorldMatrix
-            : Matrix4x4.TRS(transform.position + transform.up * (0.5f + waterline), transform.rotation, Vector3.one * modelScale);
+        if (maskOutline == null || visual == null || visual.childCount == 0) return;
+        Matrix4x4 matrix = visual.GetChild(0).localToWorldMatrix;
         Gizmos.color = Color.yellow;
-        Vector3 previous = matrix.MultiplyPoint3x4(new Vector3(maskRadii.x, maskHeight, 0f));
-        for (int i = 1; i <= 40; i++)
-        {
-            float angle = i / 40f * Mathf.PI * 2f;
-            Vector3 next = matrix.MultiplyPoint3x4(new Vector3(Mathf.Cos(angle) * maskRadii.x, maskHeight, Mathf.Sin(angle) * maskRadii.y));
-            Gizmos.DrawLine(previous, next);
-            previous = next;
-        }
+        for (int i = 0; i < maskOutline.Length; i++)
+            Gizmos.DrawLine(matrix.MultiplyPoint3x4(maskOutline[i]), matrix.MultiplyPoint3x4(maskOutline[(i + 1) % maskOutline.Length]));
     }
 #endif
 
