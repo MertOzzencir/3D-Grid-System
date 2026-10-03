@@ -383,6 +383,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         var mesh = new Mesh { name = "Boat Water Mask" };
         mesh.SetVertices(vertices);
         mesh.SetTriangles(triangles, 0);
+        mesh.RecalculateNormals(); // Gizmos.DrawMesh normal ister (çizimde kullanılmaz)
         mesh.RecalculateBounds();
         return mesh;
     }
