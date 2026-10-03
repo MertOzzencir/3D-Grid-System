@@ -11,8 +11,8 @@ public static class WaterHullClip
 {
     // StylizedWater.shader'daki BOAT_* sabitleriyle aynı olmalı
     public const int MaxBoats = 4;
-    public const int Levels = 6;
-    public const int Sectors = 32;
+    public const int Levels = 8;
+    public const int Sectors = 28; // MaxBoats × Levels × Sectors ≤ 1023 (Unity global dizi sınırı)
 
     public class Entry
     {

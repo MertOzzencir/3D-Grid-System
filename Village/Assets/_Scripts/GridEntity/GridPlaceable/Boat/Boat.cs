@@ -290,11 +290,12 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             return;
         }
 
-        // Katmanlar modelin uzayında: su seviyesi (-waterline) biraz altından (dalga çukuru, bot kalkınca) yukarı
+        // Katmanlar modelin uzayında: su seviyesinin (-waterline) epey altından (bot yalpalayıp burnunu kaldırınca uçlarda
+        // su modelin uzayında aşağı iner) biraz üstüne
         float scale = Mathf.Max(modelScale, 0.0001f);
         float water = -waterline / scale;
-        float bottom = water - 0.12f / scale;
-        float step = 0.32f / scale / (WaterHullClip.Levels - 1);
+        float bottom = water - 0.3f / scale;
+        float step = 0.5f / scale / (WaterHullClip.Levels - 1);
         Matrix4x4 toModel = model.worldToLocalMatrix * hull.transform.localToWorldMatrix;
         float[] profile = WaterHullClip.MeasureProfile(hull.sharedMesh, toModel, bottom, step);
         hullClip = WaterHullClip.Register(model, profile, bottom, step);
