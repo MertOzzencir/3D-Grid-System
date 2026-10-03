@@ -1,19 +1,9 @@
 fileFormatVersion: 2
-guid: 2f708dc613c5e05458e0c55674124c69
+guid: 25d98deac116ba5468b242957830a5e3
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
-  externalObjects:
-  - first:
-      type: UnityEngine:Material
-      assembly: UnityEngine.CoreModule
-      name: Bot
-    second: {fileID: 2100000, guid: 333ba9ca81277e24282b9654ebd030fb, type: 2}
-  - first:
-      type: UnityEngine:Material
-      assembly: UnityEngine.CoreModule
-      name: Kurek
-    second: {fileID: 2100000, guid: 5b48f41632df5474b917ae216321aa35, type: 2}
+  externalObjects: {}
   materials:
     materialImportMode: 2
     materialName: 0

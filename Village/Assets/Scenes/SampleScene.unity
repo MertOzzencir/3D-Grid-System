@@ -923,6 +923,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: '::'
   speed: 25
   acceleration: 120
+  followSharpness: 6
   rotationAngle: 90
   rotationSpeed: 400
   fallbackOrbitDistance: 10

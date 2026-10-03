@@ -34,11 +34,9 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [SerializeField] private Shader maskShader;
     [Tooltip("Blender'da modellenen maske (FBX): botun içini kenarın tepesine kadar dolduran kapalı bir mesh. Botla aynı " +
              "origin'de (0,0,0), transform'lar uygulanmış, botla aynı export ayarlarıyla ayrı bir FBX. Botun modelinin " +
-             "içine aynı yere konur, görünmez olur. Boşsa maske gövdeden otomatik ölçülür.")]
+             "içine aynı yere konur, görünmez olur.")]
     [SerializeField] private GameObject maskModel;
-    [Tooltip("Maske iç duvardan bu kadar içeride kalır (modelin birimi). Normalde dokunma.")]
-    [SerializeField] private float maskInset = 0.01f;
-    [Tooltip("Scene görünümünde maskeyi (sarı) ve gövdeyi (mavi tel kafes) göster; Play'e girmeden de, prefab modunda da")]
+    [Tooltip("Scene görünümünde maskeyi (sarı) göster; Play'e girmeden de, prefab modunda da")]
     [SerializeField] private bool showMaskGizmo = true;
 
     [Header("Binme / inme")]
@@ -83,7 +81,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     private float lastYaw, rowWeight, rowPhase, lean;
     private bool riding;
     private float lastRideEnd = float.MinValue;
-    private Mesh maskMesh; // gizmo için
     private Transform maskTransform;
     private Vector3Int? restoredHeadOffset; // kayıttan: arka hücreden ön hücreye
 
@@ -285,236 +282,38 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         CreateWaterMask(model);
     }
 
-    // Botun içini dolduran görünmez maske: sudan hemen önce derinlik yazar, arkasındaki (botun içindeki) su çizilmez.
-    // Varsa Blender'da modellenen maske (maskModel) kullanılır: botun modelinin içine aynı yere konur, bütün
-    // renderer'larına maske malzemesi verilir. Yoksa şekli gövde mesh'inden örneklenir (TryBuildMask; bot.fbx Read/Write).
+    // Botun içini dolduran görünmez maske (Blender'da modellenen, maskModel): sudan hemen önce derinlik yazar, arkasındaki
+    // (botun içindeki) su çizilmez. Botun modelinin içine aynı yere konur, bütün renderer'larına maske malzemesi verilir.
     // Modelin child'ı: bot sallandıkça maske de sallanır.
     private void CreateWaterMask(Transform model)
     {
-        if (maskShader == null)
+        if (maskModel == null || maskShader == null)
         {
-            Debug.LogWarning("Boat: Mask Shader (Village/Depth Mask) atanmamış; su botun içinden görünebilir.", this);
+            Debug.LogWarning("Boat: Mask Model ya da Mask Shader atanmamış; su botun içinden görünebilir.", this);
             return;
         }
 
         var material = new Material(maskShader);
-        if (maskModel != null)
+        maskTransform = Instantiate(maskModel, model).transform;
+        maskTransform.name = "Water Mask";
+        maskTransform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+        maskTransform.localScale = Vector3.one;
+        foreach (Collider collider in maskTransform.GetComponentsInChildren<Collider>(true)) Destroy(collider);
+        foreach (Renderer maskRenderer in maskTransform.GetComponentsInChildren<Renderer>(true))
         {
-            maskTransform = Instantiate(maskModel, model).transform;
-            maskTransform.name = "Water Mask";
-            maskTransform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
-            maskTransform.localScale = Vector3.one;
-            foreach (Collider collider in maskTransform.GetComponentsInChildren<Collider>(true)) Destroy(collider);
-            foreach (Renderer maskRenderer in maskTransform.GetComponentsInChildren<Renderer>(true))
-            {
-                var materials = new Material[maskRenderer.sharedMaterials.Length];
-                for (int i = 0; i < materials.Length; i++) materials[i] = material;
-                maskRenderer.sharedMaterials = materials;
-                maskRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                maskRenderer.receiveShadows = false;
-            }
-            return;
-        }
-
-        if (!TryBuildMask(model, leftOar, rightOar, MaskBottom, maskInset, out maskMesh, out _, out _))
-        {
-            Debug.LogWarning("Boat: su maskesi kurulamadı (gövde mesh'i okunabilir mi? bot.fbx → Read/Write).", this);
-            return;
-        }
-
-        var mask = new GameObject("Water Mask");
-        maskTransform = mask.transform;
-        maskTransform.SetParent(model, false);
-        mask.AddComponent<MeshFilter>().sharedMesh = maskMesh;
-        var renderer = mask.AddComponent<MeshRenderer>();
-        renderer.sharedMaterial = material;
-        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        renderer.receiveShadows = false;
-    }
-
-    private const int MaskAutoSectors = 64;
-
-    // Maskenin en altı (modelin uzayında): su seviyesinin epey altı (bot yalpalayınca uçlarda su aşağı iner); altı umursanmaz
-    private float MaskBottom => (-waterline - 0.3f) / Mathf.Max(modelScale, 0.0001f);
-
-    // Gövdenin içini kalıp gibi dolduran maske (modelin uzayında). Gövde = küreklerin dışındaki en büyük mesh.
-    //   Etrafı 64 açı dilimine, yüksekliği 16 katmana bölünür. Her dilim/katmanda merkeze en yakın DUVAR vertex'i
-    //   (normali yataya yakın; döşeme ve kenarın tepesi gibi yukarı bakanlar hariç) = iç duvar (döşemenin altında dış duvar).
-    //   Her dilimde kenarın tepe yüksekliği ayrıca alınır: üst halka kenarı takip eder (uçlarda kalkık, ortada alçak).
-    //   Halkalar duvardan inset kadar içeride; üstü kapak (merkezden yelpaze), altı kapalı. Boş hücreler komşuların
-    //   küçüğüyle dolar (hep içeride kalınır).
-    private static bool TryBuildMask(Transform model, Transform skipA, Transform skipB, float bottom, float inset,
-                                     out Mesh mesh, out MeshFilter hull, out Matrix4x4 hullToModel)
-    {
-        const int sectors = MaskAutoSectors, levels = 16;
-        mesh = null;
-        hull = null;
-        hullToModel = Matrix4x4.identity;
-        foreach (MeshFilter filter in model.GetComponentsInChildren<MeshFilter>(true))
-        {
-            if (filter.sharedMesh == null || filter.transform == skipA || filter.transform == skipB) continue;
-            if (hull == null || filter.sharedMesh.vertexCount > hull.sharedMesh.vertexCount) hull = filter;
-        }
-        if (hull == null || !hull.sharedMesh.isReadable) return false;
-
-        hullToModel = model.worldToLocalMatrix * hull.transform.localToWorldMatrix;
-        Vector3[] source = hull.sharedMesh.vertices;
-        Vector3[] sourceNormals = hull.sharedMesh.normals;
-        bool hasNormals = sourceNormals != null && sourceNormals.Length == source.Length;
-
-        // Vertex'ler modelin uzayında; merkez = sınırların ortası
-        var points = new Vector3[source.Length];
-        var isWall = new bool[source.Length];
-        Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
-        for (int i = 0; i < source.Length; i++)
-        {
-            points[i] = hullToModel.MultiplyPoint3x4(source[i]);
-            isWall[i] = !hasNormals || Mathf.Abs(hullToModel.MultiplyVector(sourceNormals[i]).normalized.y) < 0.7f;
-            min = Vector3.Min(min, points[i]);
-            max = Vector3.Max(max, points[i]);
-        }
-        Vector2 center = new Vector2((min.x + max.x) * 0.5f, (min.z + max.z) * 0.5f);
-        bottom = Mathf.Clamp(bottom, min.y, max.y - 0.01f);
-
-        int SectorOf(Vector3 p) =>
-            Mathf.FloorToInt(Mathf.Repeat(Mathf.Atan2(p.z - center.y, p.x - center.x) / (Mathf.PI * 2f), 1f) * sectors) % sectors;
-        float RadiusOf(Vector3 p) => new Vector2(p.x - center.x, p.z - center.y).magnitude;
-
-        // Her dilimde kenarın tepesi
-        var rimTop = new float[sectors];
-        for (int s = 0; s < sectors; s++) rimTop[s] = float.NegativeInfinity;
-        foreach (Vector3 p in points)
-        {
-            int s = SectorOf(p);
-            rimTop[s] = Mathf.Max(rimTop[s], p.y);
-        }
-        FillGaps(rimTop, float.NegativeInfinity, sectors, Mathf.Min, max.y);
-
-        // Yükseklik katmanları (en üst = en yüksek kenar) ve her katmanda iç duvar uzaklığı; ayrıca her dilimin kenar
-        // tepesindeki iç kenar
-        float step = (max.y - bottom) / (levels - 1);
-        float band = step * 0.75f;
-        var radius = new float[levels, sectors];
-        var topRadius = new float[sectors];
-        for (int l = 0; l < levels; l++)
-            for (int s = 0; s < sectors; s++) radius[l, s] = float.PositiveInfinity;
-        for (int s = 0; s < sectors; s++) topRadius[s] = float.PositiveInfinity;
-
-        for (int i = 0; i < points.Length; i++)
-        {
-            if (!isWall[i]) continue;
-            Vector3 p = points[i];
-            int s = SectorOf(p);
-            float r = RadiusOf(p);
-            if (Mathf.Abs(p.y - rimTop[s]) <= band) topRadius[s] = Mathf.Min(topRadius[s], r);
-            int first = Mathf.Max(0, Mathf.CeilToInt((max.y - p.y - band) / step));
-            int last = Mathf.Min(levels - 1, Mathf.FloorToInt((max.y - p.y + band) / step));
-            for (int l = first; l <= last; l++) radius[l, s] = Mathf.Min(radius[l, s], r);
-        }
-        FillGaps(topRadius, float.PositiveInfinity, sectors, Mathf.Min, 0f);
-        for (int l = 0; l < levels; l++)
-        {
-            var row = new float[sectors];
-            for (int s = 0; s < sectors; s++) row[s] = radius[l, s];
-            FillGaps(row, float.PositiveInfinity, sectors, Mathf.Min, 0f);
-            for (int s = 0; s < sectors; s++) radius[l, s] = row[s];
-        }
-
-        // Halkalar: 0 = kenarın tepesi, sonra katmanlar (dilimin kenarından yüksekte kalanlar kenara indirilir)
-        var vertices = new System.Collections.Generic.List<Vector3>();
-        float averageTop = 0f;
-        for (int s = 0; s < sectors; s++) averageTop += rimTop[s];
-        vertices.Add(new Vector3(center.x, averageTop / sectors, center.y)); // 0: kapağın ortası
-
-        int ringCount = levels + 1;
-        for (int ring = 0; ring < ringCount; ring++)
-        {
-            for (int s = 0; s < sectors; s++)
-            {
-                float height, r;
-                if (ring == 0)
-                {
-                    height = rimTop[s];
-                    r = topRadius[s];
-                }
-                else
-                {
-                    float levelHeight = max.y - (ring - 1) * step;
-                    height = Mathf.Min(levelHeight, rimTop[s]);
-                    r = levelHeight >= rimTop[s] ? topRadius[s] : radius[ring - 1, s];
-                }
-                r = Mathf.Max(0f, r - inset);
-                float angle = (s + 0.5f) / sectors * Mathf.PI * 2f;
-                vertices.Add(new Vector3(center.x + Mathf.Cos(angle) * r, height, center.y + Mathf.Sin(angle) * r));
-            }
-        }
-        int bottomCenter = vertices.Count;
-        vertices.Add(new Vector3(center.x, bottom, center.y));
-
-        var triangles = new System.Collections.Generic.List<int>();
-        for (int s = 0; s < sectors; s++)
-        {
-            int next = (s + 1) % sectors;
-            triangles.Add(0); triangles.Add(1 + next); triangles.Add(1 + s); // kapak
-            for (int ring = 0; ring < ringCount - 1; ring++)
-            {
-                int a = 1 + ring * sectors + s, b = 1 + ring * sectors + next;
-                int c = a + sectors, d = b + sectors;
-                triangles.Add(a); triangles.Add(b); triangles.Add(c);
-                triangles.Add(b); triangles.Add(d); triangles.Add(c);
-            }
-            int lastRing = 1 + (ringCount - 1) * sectors;
-            triangles.Add(bottomCenter); triangles.Add(lastRing + s); triangles.Add(lastRing + next); // dip
-        }
-
-        mesh = new Mesh { name = "Boat Water Mask" };
-        mesh.SetVertices(vertices);
-        mesh.SetTriangles(triangles, 0);
-        mesh.RecalculateNormals(); // Gizmos.DrawMesh normal ister (çizimde kullanılmaz)
-        mesh.RecalculateBounds();
-        return true;
-    }
-
-    // Ölçülemeyen dilimler (empty değerinde) en yakın ölçülmüş komşuların pick'iyle (Min: içeride kal) dolar; hiç yoksa fallback
-    private static void FillGaps(float[] values, float empty, int count, System.Func<float, float, float> pick, float fallback)
-    {
-        var source = (float[])values.Clone();
-        for (int i = 0; i < count; i++)
-        {
-            if (source[i] != empty) continue;
-            float left = empty, right = empty;
-            for (int k = 1; k < count && (left == empty || right == empty); k++)
-            {
-                if (left == empty) left = source[(i - k + count) % count];
-                if (right == empty) right = source[(i + k) % count];
-            }
-            values[i] = left == empty && right == empty ? fallback
-                      : left == empty ? right : right == empty ? left : pick(left, right);
+            var materials = new Material[maskRenderer.sharedMaterials.Length];
+            for (int i = 0; i < materials.Length; i++) materials[i] = material;
+            maskRenderer.sharedMaterials = materials;
+            maskRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            maskRenderer.receiveShadows = false;
         }
     }
 
 #if UNITY_EDITOR
-    private Mesh editorMaskMesh;
-    private MeshFilter editorHull;
-    private Matrix4x4 editorHullToModel;
-
-    private void OnValidate() => editorMaskMesh = null; // ayar değişince gizmo yeniden kurulur
-
-    // Modelin uzayından dünyaya: Play'de kurulan model, editörde çalışırken kurulacak hiyerarşinin aynısı
-    // (kök → Visual (su çizgisi) → model (dönüş, ölçek))
-    private Matrix4x4 ModelMatrix()
-    {
-        if (Application.isPlaying && visual != null && visual.childCount > 0) return visual.GetChild(0).localToWorldMatrix;
-        return transform.localToWorldMatrix
-               * Matrix4x4.Translate(Vector3.up * (0.5f + waterline))
-               * Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(modelRotation), Vector3.one * modelScale);
-    }
-
-    // Maske Scene görünümünde (Play'e girmeden de, prefab modunda da): sarı yarı saydam + tel kafes; gövde mavi tel kafes
+    // Maske Scene görünümünde (Play'e girmeden de, prefab modunda da): sarı yarı saydam + tel kafes
     private void OnDrawGizmos()
     {
         if (!showMaskGizmo) return;
-        Matrix4x4 model = ModelMatrix();
 
         if (Application.isPlaying)
         {
@@ -523,39 +322,22 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
                 DrawMaskMesh(filter.sharedMesh, filter.transform.localToWorldMatrix);
             return;
         }
-        if (modelPrefab == null) return;
+        if (maskModel == null) return;
 
-        // Gövde (mavi) ve otomatik maske bir kez ölçülür
-        if (editorMaskMesh == null)
-        {
-            Transform asset = modelPrefab.transform;
-            TryBuildMask(asset, FindQuiet(asset, leftOarName), FindQuiet(asset, rightOarName), MaskBottom, maskInset,
-                         out editorMaskMesh, out editorHull, out editorHullToModel);
-            if (editorMaskMesh != null) editorMaskMesh.hideFlags = HideFlags.HideAndDontSave; // sahneye kaydedilmesin
-        }
-        if (editorHull != null && editorHull.sharedMesh != null)
-        {
-            Gizmos.matrix = model * editorHullToModel;
-            Gizmos.color = new Color(0.3f, 0.7f, 1f, 0.35f);
-            Gizmos.DrawWireMesh(editorHull.sharedMesh);
-        }
-
-        if (maskModel != null)
-        {
-            // Blender'daki maske: asset'teki yeriyle (kökü botun modeliyle aynı yerde)
-            Matrix4x4 toRoot = maskModel.transform.worldToLocalMatrix;
-            foreach (MeshFilter filter in maskModel.GetComponentsInChildren<MeshFilter>(true))
-                DrawMaskMesh(filter.sharedMesh, model * toRoot * filter.transform.localToWorldMatrix);
-        }
-        else DrawMaskMesh(editorMaskMesh, model);
-        Gizmos.matrix = Matrix4x4.identity;
+        // Çalışırken kurulacak hiyerarşinin aynısı: kök → Visual (su çizgisi) → model (dönüş, ölçek) → maske
+        Matrix4x4 model = transform.localToWorldMatrix
+                          * Matrix4x4.Translate(Vector3.up * (0.5f + waterline))
+                          * Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(modelRotation), Vector3.one * modelScale);
+        Matrix4x4 toRoot = maskModel.transform.worldToLocalMatrix;
+        foreach (MeshFilter filter in maskModel.GetComponentsInChildren<MeshFilter>(true))
+            DrawMaskMesh(filter.sharedMesh, model * toRoot * filter.transform.localToWorldMatrix);
     }
 
     private static void DrawMaskMesh(Mesh mesh, Matrix4x4 matrix)
     {
         if (mesh == null) return;
         Gizmos.matrix = matrix;
-        if (mesh.HasVertexAttribute(UnityEngine.Rendering.VertexAttribute.Normal)) // okunamayan mesh'te de çalışır
+        if (mesh.HasVertexAttribute(UnityEngine.Rendering.VertexAttribute.Normal)) // DrawMesh normal ister
         {
             Gizmos.color = new Color(1f, 0.9f, 0f, 0.25f);
             Gizmos.DrawMesh(mesh);
@@ -563,13 +345,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         Gizmos.color = new Color(1f, 0.9f, 0f, 0.9f);
         Gizmos.DrawWireMesh(mesh);
         Gizmos.matrix = Matrix4x4.identity;
-    }
-
-    private static Transform FindQuiet(Transform parent, string objectName)
-    {
-        foreach (Transform t in parent.GetComponentsInChildren<Transform>(true))
-            if (t.name == objectName) return t;
-        return null;
     }
 #endif
 
