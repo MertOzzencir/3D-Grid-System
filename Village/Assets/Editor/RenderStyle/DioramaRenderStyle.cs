@@ -5,7 +5,8 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
-// Render stili "minyatür diorama" (tilt-shift'siz): sıcak güneş + mavi-mor gölgeler, renk ayarı, AO, bloom, vinyet, sis.
+// Render stili "minyatür diorama" (tilt-shift'siz): sıcak güneş + mavi-mor gölgeler, renk ayarı, AO, bloom, vinyet, sis,
+// kenar ışığı (RimLight) ve havada uçuşanlar (AmbientParticles; yoksa sahneye eklenir).
 // Village → Render Stili: Diorama uygula. Açık sahnenin ışığını / sisini / kamerasını, sahnedeki global Volume'un
 // profilini ve URP renderer'larının SSAO ayarını değiştirir. Tek adımda Ctrl+Z ile geri alınır.
 // Değerler başlangıç noktası: beğenilmeyen sonra Inspector'dan değiştirilir.
@@ -31,6 +32,7 @@ public static class DioramaRenderStyle
         ApplyCamera(report);
         ApplyVolume(report);
         ApplyAmbientOcclusion(report);
+        ApplyExtras(report);
 
         Undo.CollapseUndoOperations(group);
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
@@ -44,11 +46,15 @@ public static class DioramaRenderStyle
         if (renderSettings != null) Undo.RecordObject(renderSettings, "Render Stili");
 
         Light sun = RenderSettings.sun;
-        if (sun == null)
+        if (sun == null || sun.GetComponent<RimLight>() != null)
+        {
+            sun = null;
             foreach (Light light in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
-                if (light.type == LightType.Directional) { sun = light; break; }
+                if (light.type == LightType.Directional && light.GetComponent<RimLight>() == null) { sun = light; break; }
+        }
         if (sun != null)
         {
+            RenderSettings.sun = sun; // kenar ışığı ana ışık sanılmasın
             Undo.RecordObject(sun, "Render Stili");
             sun.color = SunColor;
             sun.intensity = 2.2f;
@@ -168,6 +174,37 @@ public static class DioramaRenderStyle
         report.AppendLine(changed > 0
             ? $"- SSAO: yoğunluk 0.6, yarıçap 0.35 ({changed} renderer)"
             : "- SSAO eklentisi bulunamadı");
+    }
+
+    // Kenar ışığı ve uçuşanlar: sahnede yoksa eklenir, varsa ayarı korunur
+    private static void ApplyExtras(System.Text.StringBuilder report)
+    {
+        if (Object.FindFirstObjectByType<RimLight>() == null)
+        {
+            var rim = new GameObject("Rim Light");
+            Undo.RegisterCreatedObjectUndo(rim, "Render Stili");
+            Light light = rim.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.color = new Color(1f, 0.85f, 0.69f);
+            light.intensity = 0.8f;
+            light.shadows = LightShadows.None;
+            rim.AddComponent<RimLight>();
+            report.AppendLine("- Kenar ışığı eklendi (Rim Light: sıcak, gölgesiz, şiddet 0.8, kameranın karşısından)");
+        }
+        else report.AppendLine("- Kenar ışığı zaten var, dokunulmadı");
+
+        if (Object.FindFirstObjectByType<AmbientParticles>() == null)
+        {
+            var particles = new GameObject("Ambient Particles");
+            Undo.RegisterCreatedObjectUndo(particles, "Render Stili");
+            AmbientParticles component = particles.AddComponent<AmbientParticles>();
+            var serialized = new SerializedObject(component);
+            serialized.FindProperty("glowShader").objectReferenceValue =
+                AssetDatabase.LoadAssetAtPath<Shader>("Assets/Shaders/GlowParticle.shader");
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            report.AppendLine("- Uçuşanlar eklendi (Ambient Particles: gündüz polen; Night Amount'u 1 yapınca ateş böcekleri)");
+        }
+        else report.AppendLine("- Uçuşanlar zaten var, dokunulmadı");
     }
 
     // Lighting penceresindeki ayarların nesnesi (Undo için); Unity bunu dışarı açmıyor
