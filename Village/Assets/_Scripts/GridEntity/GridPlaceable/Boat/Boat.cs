@@ -36,6 +36,13 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [SerializeField] private float maskInset = 0.01f;
     [Tooltip("Scene görünümünde maskeyi (sarı) ve gövdeyi (mavi tel kafes) göster; Play'e girmeden de, prefab modunda da")]
     [SerializeField] private bool showMaskGizmo = true;
+    [Tooltip("Maskeyi elle şekillendirme noktaları (modelin uzayında, prefab'ta saklanır). Üst halka kenarın tepesini, " +
+             "alt halka su seviyesinin altını izler; maske bu noktalardan yumuşak eğriyle kurulur. Boşsa maske gövdeden " +
+             "otomatik ölçülür. Aşağıdaki 'Noktaları gövdeden ölç' ile başlat, Scene'de noktaya tıklayıp taşı.")]
+    [SerializeField] private Vector3[] maskTopRing = new Vector3[0];
+    [SerializeField] private Vector3[] maskBottomRing = new Vector3[0];
+    [Tooltip("Bir noktayı taşıyınca sağ-sol aynası da taşınsın")]
+    [SerializeField] private bool maskMirror = true;
 
     [Header("Binme / inme")]
     [Tooltip("Eldiven kıyıdayken (mouse suda) botun bir hücresine yataydan bu kadar yakınsa biner")]
@@ -293,7 +300,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             return;
         }
 
-        if (!TryBuildMask(model, leftOar, rightOar, MaskBottom, maskInset, out maskMesh, out _, out _))
+        if (MaskRingsValid) maskMesh = RingMask(maskTopRing, maskBottomRing);
+        else if (!TryBuildMask(model, leftOar, rightOar, MaskBottom, maskInset, out maskMesh, out _, out _))
         {
             Debug.LogWarning("Boat: su maskesi kurulamadı (gövde mesh'i okunabilir mi? bot.fbx → Read/Write).", this);
             return;
@@ -309,6 +317,67 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         renderer.receiveShadows = false;
     }
 
+    private const int MaskAutoSectors = 64;
+    private const int MaskRingPoints = 12; // elle ayarlanan halka başına nokta (çift, 4'e bölünür: ayna için)
+
+    private bool MaskRingsValid => maskTopRing != null && maskTopRing.Length >= 3 &&
+                                   maskBottomRing != null && maskBottomRing.Length == maskTopRing.Length;
+
+    // Elle ayarlanan iki halkadan maske (modelin uzayında): halkalar Catmull-Rom ile yumuşatılır; üstü kapak (üst
+    // halkanın ortasından yelpaze), arası duvar, altı kapalı.
+    private static Mesh RingMask(Vector3[] top, Vector3[] bottom)
+    {
+        const int subdivisions = 6;
+        Vector3[] upper = SmoothRing(top, subdivisions), lower = SmoothRing(bottom, subdivisions);
+        int count = upper.Length;
+
+        var vertices = new System.Collections.Generic.List<Vector3>();
+        Vector3 topCenter = Vector3.zero, bottomCenter = Vector3.zero;
+        foreach (Vector3 p in top) topCenter += p;
+        foreach (Vector3 p in bottom) bottomCenter += p;
+        vertices.Add(topCenter / top.Length);      // 0
+        vertices.AddRange(upper);                  // 1 .. count
+        vertices.AddRange(lower);                  // count+1 .. 2count
+        vertices.Add(bottomCenter / bottom.Length); // 2count+1
+
+        var triangles = new System.Collections.Generic.List<int>();
+        int bottomIndex = 2 * count + 1;
+        for (int i = 0; i < count; i++)
+        {
+            int next = (i + 1) % count;
+            int a = 1 + i, b = 1 + next, c = 1 + count + i, d = 1 + count + next;
+            triangles.Add(0); triangles.Add(b); triangles.Add(a);                // kapak
+            triangles.Add(a); triangles.Add(b); triangles.Add(c);                // duvar
+            triangles.Add(b); triangles.Add(d); triangles.Add(c);
+            triangles.Add(bottomIndex); triangles.Add(c); triangles.Add(d);      // dip
+        }
+
+        var mesh = new Mesh { name = "Boat Water Mask" };
+        mesh.SetVertices(vertices);
+        mesh.SetTriangles(triangles, 0);
+        mesh.RecalculateNormals(); // Gizmos.DrawMesh normal ister (çizimde kullanılmaz)
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    // Kapalı halkayı noktalardan geçen yumuşak eğriye çevirir (Catmull-Rom)
+    private static Vector3[] SmoothRing(Vector3[] points, int subdivisions)
+    {
+        int n = points.Length;
+        var result = new Vector3[n * subdivisions];
+        for (int i = 0; i < n; i++)
+        {
+            Vector3 p0 = points[(i - 1 + n) % n], p1 = points[i], p2 = points[(i + 1) % n], p3 = points[(i + 2) % n];
+            for (int k = 0; k < subdivisions; k++)
+            {
+                float t = k / (float)subdivisions, t2 = t * t, t3 = t2 * t;
+                result[i * subdivisions + k] = 0.5f * (2f * p1 + (p2 - p0) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
+                                                       (3f * p1 - p0 - 3f * p2 + p3) * t3);
+            }
+        }
+        return result;
+    }
+
     // Maskenin en altı (modelin uzayında): su seviyesinin epey altı (bot yalpalayınca uçlarda su aşağı iner); altı umursanmaz
     private float MaskBottom => (-waterline - 0.3f) / Mathf.Max(modelScale, 0.0001f);
 
@@ -321,7 +390,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     private static bool TryBuildMask(Transform model, Transform skipA, Transform skipB, float bottom, float inset,
                                      out Mesh mesh, out MeshFilter hull, out Matrix4x4 hullToModel)
     {
-        const int sectors = 64, levels = 16;
+        const int sectors = MaskAutoSectors, levels = 16;
         mesh = null;
         hull = null;
         hullToModel = Matrix4x4.identity;
@@ -473,22 +542,118 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     private MeshFilter editorHull;
     private Matrix4x4 editorHullToModel;
 
-    private void OnValidate() => editorMaskMesh = null; // ayar değişince gizmo yeniden ölçülür
+    private void OnValidate() => editorMaskMesh = null; // ayar değişince gizmo yeniden kurulur
+
+    // --- Elle ayar (BoatEditor kullanır) ---
+    public Vector3[] EditorTopRing => maskTopRing;
+    public Vector3[] EditorBottomRing => maskBottomRing;
+    public bool EditorMirror => maskMirror;
+    public void EditorInvalidatePreview() => editorMaskMesh = null;
+
+    // Modelin uzayından dünyaya: Play'de kurulan model, editörde çalışırken kurulacak hiyerarşinin aynısı
+    // (kök → Visual (su çizgisi) → model (dönüş, ölçek))
+    public Matrix4x4 EditorModelMatrix()
+    {
+        if (Application.isPlaying && visual != null && visual.childCount > 0) return visual.GetChild(0).localToWorldMatrix;
+        return transform.localToWorldMatrix
+               * Matrix4x4.Translate(Vector3.up * (0.5f + waterline))
+               * Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(modelRotation), Vector3.one * modelScale);
+    }
+
+    // Noktaları otomatik ölçülen maskeden doldurur: üst halka kenarın tepesi, alt halka su seviyesinin biraz altı
+    public void EditorMeasureRings()
+    {
+        if (modelPrefab == null) return;
+        Transform asset = modelPrefab.transform;
+        if (!TryBuildMask(asset, FindQuiet(asset, leftOarName), FindQuiet(asset, rightOarName), MaskBottom, maskInset,
+                          out Mesh auto, out _, out _))
+        {
+            Debug.LogWarning("Boat: gövde ölçülemedi (bot.fbx → Read/Write açık mı?)", this);
+            return;
+        }
+
+        // Otomatik maskenin düzeni: 0 = kapak ortası, sonra halkalar (her biri MaskAutoSectors), en son dip ortası
+        Vector3[] vertices = auto.vertices;
+        int rings = (vertices.Length - 2) / MaskAutoSectors;
+        float target = (-waterline - 0.1f) / Mathf.Max(modelScale, 0.0001f);
+        int bottomRing = 1;
+        float best = float.MaxValue;
+        for (int ring = 1; ring < rings; ring++)
+        {
+            float average = 0f;
+            for (int s = 0; s < MaskAutoSectors; s++) average += vertices[1 + ring * MaskAutoSectors + s].y;
+            float difference = Mathf.Abs(average / MaskAutoSectors - target);
+            if (difference >= best) continue;
+            best = difference;
+            bottomRing = ring;
+        }
+
+        maskTopRing = SampleRing(vertices, 0);
+        maskBottomRing = SampleRing(vertices, bottomRing);
+        if (maskMirror)
+        {
+            Symmetrize(maskTopRing);
+            Symmetrize(maskBottomRing);
+        }
+        DestroyImmediate(auto);
+        editorMaskMesh = null;
+    }
+
+    public void EditorClearRings()
+    {
+        maskTopRing = new Vector3[0];
+        maskBottomRing = new Vector3[0];
+        editorMaskMesh = null;
+    }
+
+    // Noktalar eşit açılarla (açı 0 = +X, kenar boyunca)
+    private static Vector3[] SampleRing(Vector3[] vertices, int ring)
+    {
+        var points = new Vector3[MaskRingPoints];
+        for (int i = 0; i < MaskRingPoints; i++)
+        {
+            int sector = Mathf.RoundToInt(i / (float)MaskRingPoints * MaskAutoSectors) % MaskAutoSectors;
+            points[i] = vertices[1 + ring * MaskAutoSectors + sector];
+        }
+        return points;
+    }
+
+    // Ayna (x → -x): i'nin karşılığı n/2 - i. Çiftlerin ortalaması alınır; eksendekiler x = 0.
+    public static int MirrorIndex(int i, int n) => ((n / 2 - i) % n + n) % n;
+
+    private static void Symmetrize(Vector3[] ring)
+    {
+        int n = ring.Length;
+        for (int i = 0; i < n; i++)
+        {
+            int j = MirrorIndex(i, n);
+            if (j < i) continue;
+            if (j == i)
+            {
+                ring[i].x = 0f;
+                continue;
+            }
+            float x = (ring[i].x - ring[j].x) * 0.5f;
+            float y = (ring[i].y + ring[j].y) * 0.5f;
+            float z = (ring[i].z + ring[j].z) * 0.5f;
+            ring[i] = new Vector3(x, y, z);
+            ring[j] = new Vector3(-x, y, z);
+        }
+    }
 
     // Maske Scene görünümünde: sarı yarı saydam + tel kafes; gövde mavi tel kafes (maskenin gövdeye nasıl oturduğu).
-    // Play'de kurulan gerçek maske; editörde (prefab modunda da) modelin asset'inden aynı hesapla.
+    // Play'de kurulan gerçek maske; editörde (prefab modunda da) noktalardan ya da otomatik ölçümden.
     private void OnDrawGizmos()
     {
         if (!showMaskGizmo) return;
 
         Mesh mask;
-        Matrix4x4 maskMatrix, hullMatrix = Matrix4x4.identity;
+        Matrix4x4 model = EditorModelMatrix(), hullMatrix = Matrix4x4.identity;
         MeshFilter hull = null;
         if (Application.isPlaying)
         {
-            if (maskMesh == null || maskTransform == null) return;
+            if (maskMesh == null) return;
             mask = maskMesh;
-            maskMatrix = maskTransform.localToWorldMatrix;
         }
         else
         {
@@ -497,21 +662,22 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             {
                 Transform asset = modelPrefab.transform;
                 TryBuildMask(asset, FindQuiet(asset, leftOarName), FindQuiet(asset, rightOarName), MaskBottom, maskInset,
-                             out editorMaskMesh, out editorHull, out editorHullToModel);
+                             out Mesh auto, out editorHull, out editorHullToModel);
+                if (MaskRingsValid)
+                {
+                    if (auto != null) DestroyImmediate(auto);
+                    editorMaskMesh = RingMask(maskTopRing, maskBottomRing);
+                }
+                else editorMaskMesh = auto;
                 if (editorMaskMesh == null) return;
                 editorMaskMesh.hideFlags = HideFlags.HideAndDontSave; // sahneye kaydedilmesin
             }
-            // Çalışırken kurulan hiyerarşinin aynısı: kök → Visual (su çizgisi) → model (dönüş, ölçek)
-            Matrix4x4 model = transform.localToWorldMatrix
-                              * Matrix4x4.Translate(Vector3.up * (0.5f + waterline))
-                              * Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(modelRotation), Vector3.one * modelScale);
             mask = editorMaskMesh;
-            maskMatrix = model;
             hull = editorHull;
             hullMatrix = model * editorHullToModel;
         }
 
-        Gizmos.matrix = maskMatrix;
+        Gizmos.matrix = model;
         Gizmos.color = new Color(1f, 0.9f, 0f, 0.25f);
         Gizmos.DrawMesh(mask);
         Gizmos.color = new Color(1f, 0.9f, 0f, 0.9f);
