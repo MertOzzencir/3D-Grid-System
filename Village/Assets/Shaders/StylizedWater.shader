@@ -18,6 +18,7 @@ Shader "Village/Stylized Water"
         _HorizonColor ("Uzak Renk (A = güç)", Color) = (0.03, 0.42, 0.62, 0.4)
         _HorizonPower ("Uzak Renk Geçişi", Range(0.5, 8)) = 3
         _RefractionStrength ("Kırılma", Range(0, 0.1)) = 0.035
+        _RefractionEdge ("Kırılma Kenar Eşiği (birim): kayan nokta bundan daha sığsa kaydırma yok", Range(0.01, 1)) = 0.15
 
         [Header(Renk Bolgeleri)]
         _PatchLightColor ("Açık Bölge Rengi (A = güç)", Color) = (0.2, 0.85, 0.82, 0.45)
@@ -112,6 +113,7 @@ Shader "Village/Stylized Water"
                 half4 _HorizonColor;
                 half _HorizonPower;
                 half _RefractionStrength;
+                float _RefractionEdge;
 
                 half4 _PatchLightColor;
                 half4 _PatchDarkColor;
@@ -334,13 +336,17 @@ Shader "Village/Stylized Water"
                 // Tepecik eğimi "piksel → nokta" yönünde yukarı çıkar; normal eğimin tersine yatar
                 float3 normalWS = normalize(float3(-waveGradient.x - slope.x, 1.0, -waveGradient.y - slope.y));
 
-                // 2) Kırılma + hafif şeffaflık: kayan nokta suyun önündeki bir objeye düştüyse kaydırma yok
+                // 2) Kırılma + hafif şeffaflık. Kayan nokta başka bir objeye düştüyse kaydırma yok: suyun önündeki bir
+                // objeye (derinlik < 0) ya da kaymasız noktadan belirgin daha sığa, yani yakındaki başka bir objeye
+                // (örn. botun su altındaki gövdesi). Yoksa obje kırılmayla yana kayıp kenarından taşar (botun yanında
+                // koyu lekeler). Açık suda kırılma aynen kalır.
+                float directDepth = WaterDepth(screenUV, input.positionWS.y);
                 float2 refractedUV = screenUV + normalWS.xz * _RefractionStrength;
                 float depth = WaterDepth(refractedUV, input.positionWS.y);
-                if (depth < 0)
+                if (depth < 0 || depth < directDepth - _RefractionEdge)
                 {
                     refractedUV = screenUV;
-                    depth = WaterDepth(screenUV, input.positionWS.y);
+                    depth = directDepth;
                 }
                 depth = max(depth, 0);
                 half3 sceneColor = SampleSceneColor(refractedUV);
