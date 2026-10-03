@@ -6,8 +6,8 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 // Render stili "minyatür diorama" (tilt-shift'siz): sıcak güneş + mavi-mor gölgeler, renk ayarı, AO, bloom, vinyet, sis,
-// kenar ışığı (RimLight), havada uçuşanlar (AmbientParticles), yerleştirme cilası (PlacementFx), rüzgâr (WindSettings)
-// ve gün saati (DayCycle); yoksa sahneye eklenir, varsa ayarına dokunulmaz.
+// kenar ışığı (RimLight), havada uçuşanlar (AmbientParticles), rüzgâr (WindSettings) ve gün saati (DayCycle); yoksa
+// sahneye eklenir, varsa ayarına dokunulmaz.
 // Village → Render Stili: Diorama uygula. Açık sahnenin ışığını / sisini / kamerasını, sahnedeki global Volume'un
 // profilini ve URP renderer'larının SSAO ayarını değiştirir. Tek adımda Ctrl+Z ile geri alınır.
 // Değerler başlangıç noktası: beğenilmeyen sonra Inspector'dan değiştirilir.
@@ -218,8 +218,6 @@ public static class DioramaRenderStyle
         }
         else report.AppendLine("- Uçuşanlar zaten var, dokunulmadı");
 
-        AddIfMissing<PlacementFx>("Placement Fx", "dustShader", "Assets/Shaders/WaterFoam.shader",
-                                  "Yerleştirme cilası (toz + yaylanma)", report);
         AddIfMissing<WindSettings>("Wind", null, null, "Rüzgâr (ağaç tepeleri)", report);
         AddIfMissing<DayCycle>("Day Cycle", null, null, "Gün saati (20 dakikada bir gün, kayda girer)", report);
     }

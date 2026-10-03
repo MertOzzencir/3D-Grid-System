@@ -93,22 +93,14 @@ public class SaveManager : MonoBehaviour
             return;
         }
 
-        // Base'ler önce: placeable'lar onların üstünde durur. Yüklerken yerleştirme efektleri susar.
-        GridManager.Instance.SuppressPlacedEvents = true;
-        try
-        {
-            if (saveBases)
-                foreach (EntitySave save in file.bases)
-                    Spawn<GridBase>(save, GridManager.Instance.PlaceBase);
+        // Base'ler önce: placeable'lar onların üstünde durur
+        if (saveBases)
+            foreach (EntitySave save in file.bases)
+                Spawn<GridBase>(save, GridManager.Instance.PlaceBase);
 
-            if (savePlaceables)
-                foreach (EntitySave save in file.placeables)
-                    Spawn<GridPlaceable>(save, GridManager.Instance.PlaceablePlaceOn);
-        }
-        finally
-        {
-            GridManager.Instance.SuppressPlacedEvents = false;
-        }
+        if (savePlaceables)
+            foreach (EntitySave save in file.placeables)
+                Spawn<GridPlaceable>(save, GridManager.Instance.PlaceablePlaceOn);
 
         if (file.dayTime >= 0f && DayCycle.Instance != null) DayCycle.Instance.Time01 = file.dayTime;
 
