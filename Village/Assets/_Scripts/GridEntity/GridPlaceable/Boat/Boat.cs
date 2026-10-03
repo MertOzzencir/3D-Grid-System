@@ -26,6 +26,15 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [Header("Su efektleri")]
     [Tooltip("Köpük izi ve sıçrama shader'ı (Village/Water Foam). Referansla tutulur ki build'e girsin.")]
     [SerializeField] private Shader effectShader;
+
+    [Header("Su maskesi (su botun içinden görünmesin)")]
+    [Tooltip("Görünmez kapak shader'ı (Village/Depth Mask). Referansla tutulur ki build'e girsin.")]
+    [SerializeField] private Shader maskShader;
+    [Tooltip("Botun ağzındaki görünmez elips kapağın yarı genişliği (x) ve yarı uzunluğu (y), modelin uzayında. " +
+             "İç kenarın biraz içinde kalmalı: dışa taşarsa botun yanındaki su da kaybolur.")]
+    [SerializeField] private Vector2 maskRadii = new Vector2(0.55f, 0.85f);
+    [Tooltip("Kapağın yüksekliği (modelin uzayında y): kenarın üstünü geçmesin, su çizgisinin üstünde olsun")]
+    [SerializeField] private float maskHeight = 0.28f;
     [SerializeField] private BoatWakeFx waterFx = new BoatWakeFx();
 
     [Header("Binme / inme")]
@@ -267,7 +276,61 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
 
         // Su seviyesi kökün 0.5 üstünde (kök hücrenin tabanında, su en alt kat hücresinin ortasında)
         waterFx.Setup(transform, effectShader, 0.5f);
+        CreateWaterMask(model);
     }
+
+    // Botun ağzına görünmez elips kapak: sudan hemen önce derinlik yazar, kapağın arkasındaki (botun içindeki) su
+    // çizilmez. Modelin child'ı: bot sallandıkça kapak da sallanır.
+    private void CreateWaterMask(Transform model)
+    {
+        if (maskShader == null)
+        {
+            Debug.LogWarning("Boat: Mask Shader (Village/Depth Mask) atanmamış; su botun içinden görünebilir.", this);
+            return;
+        }
+
+        const int segments = 40;
+        var vertices = new Vector3[segments + 1];
+        var triangles = new int[segments * 3];
+        vertices[0] = new Vector3(0f, maskHeight, 0f);
+        for (int i = 0; i < segments; i++)
+        {
+            float angle = i / (float)segments * Mathf.PI * 2f;
+            vertices[i + 1] = new Vector3(Mathf.Cos(angle) * maskRadii.x, maskHeight, Mathf.Sin(angle) * maskRadii.y);
+            triangles[i * 3] = 0;
+            triangles[i * 3 + 1] = i + 1;
+            triangles[i * 3 + 2] = (i + 1) % segments + 1;
+        }
+        var mesh = new Mesh { name = "Boat Water Mask", vertices = vertices, triangles = triangles };
+        mesh.RecalculateBounds();
+
+        var mask = new GameObject("Water Mask");
+        mask.transform.SetParent(model, false);
+        mask.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var renderer = mask.AddComponent<MeshRenderer>();
+        renderer.sharedMaterial = new Material(maskShader);
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+    }
+
+#if UNITY_EDITOR
+    // Kapağı Scene görünümünde göster (ayarlarken): sarı elips
+    private void OnDrawGizmosSelected()
+    {
+        Transform model = visual != null && visual.childCount > 0 ? visual.GetChild(0) : null;
+        Matrix4x4 matrix = model != null ? model.localToWorldMatrix
+            : Matrix4x4.TRS(transform.position + transform.up * (0.5f + waterline), transform.rotation, Vector3.one * modelScale);
+        Gizmos.color = Color.yellow;
+        Vector3 previous = matrix.MultiplyPoint3x4(new Vector3(maskRadii.x, maskHeight, 0f));
+        for (int i = 1; i <= 40; i++)
+        {
+            float angle = i / 40f * Mathf.PI * 2f;
+            Vector3 next = matrix.MultiplyPoint3x4(new Vector3(Mathf.Cos(angle) * maskRadii.x, maskHeight, Mathf.Sin(angle) * maskRadii.y));
+            Gizmos.DrawLine(previous, next);
+            previous = next;
+        }
+    }
+#endif
 
     private static Transform Find(Transform parent, string objectName)
     {
