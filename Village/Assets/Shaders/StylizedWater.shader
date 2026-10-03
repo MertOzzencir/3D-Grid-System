@@ -158,6 +158,35 @@ Shader "Village/Stylized Water"
                 float _WaveSpeed;
             CBUFFER_END
 
+            // Botların içi (WaterHullClip.cs gönderir, global): su noktası bir botun gövde profilinin içindeyse çizilmez.
+            // Sabitler WaterHullClip.MaxBoats / Levels / Sectors ile aynı olmalı.
+            #define BOAT_MAX 4
+            #define BOAT_LEVELS 6
+            #define BOAT_SECTORS 32
+            float4x4 _BoatWorldToLocal[BOAT_MAX];
+            float _BoatHullRadii[BOAT_MAX * BOAT_LEVELS * BOAT_SECTORS];
+            float4 _BoatHullHeights[BOAT_MAX]; // x: en alt katman yüksekliği, y: katman aralığı (botun uzayında)
+            float _BoatCount;
+
+            // Katman: noktanın altındaki (gövde yukarı doğru genişlediği için küçük olan, güvenli taraf).
+            // Dilim: noktanınki ve komşusunun küçüğü (yine güvenli taraf).
+            bool InsideBoat(float3 positionWS)
+            {
+                for (int b = 0; b < BOAT_MAX; b++)
+                {
+                    if (b >= (int)_BoatCount) break;
+                    float3 p = mul(_BoatWorldToLocal[b], float4(positionWS, 1.0)).xyz;
+                    float level = clamp(floor((p.y - _BoatHullHeights[b].x) / max(_BoatHullHeights[b].y, 1e-4)), 0.0, BOAT_LEVELS - 1.0);
+                    float a = frac(atan2(p.z, p.x) / (2.0 * PI)) * BOAT_SECTORS;
+                    int s0 = min((int)floor(a), BOAT_SECTORS - 1);
+                    int s1 = (s0 + 1) % BOAT_SECTORS;
+                    int baseIndex = (b * BOAT_LEVELS + (int)level) * BOAT_SECTORS;
+                    float radius = min(_BoatHullRadii[baseIndex + s0], _BoatHullRadii[baseIndex + s1]);
+                    if (length(p.xz) < radius) return true;
+                }
+                return false;
+            }
+
             struct Attributes
             {
                 float4 positionOS : POSITION;
@@ -270,6 +299,8 @@ Shader "Village/Stylized Water"
 
             half4 frag(Varyings input) : SV_Target
             {
+                if (_BoatCount > 0.5 && InsideBoat(input.positionWS)) discard;
+
                 float2 screenUV = GetNormalizedScreenSpaceUV(input.positionCS);
                 float2 xz = input.positionWS.xz;
                 float t = _Time.y;

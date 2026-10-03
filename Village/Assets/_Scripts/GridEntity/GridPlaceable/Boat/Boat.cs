@@ -27,14 +27,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [Tooltip("Köpük izi ve sıçrama shader'ı (Village/Water Foam). Referansla tutulur ki build'e girsin.")]
     [SerializeField] private Shader effectShader;
 
-    [Header("Su maskesi (su botun içinden görünmesin)")]
-    [Tooltip("Görünmez kapak shader'ı (Village/Depth Mask). Referansla tutulur ki build'e girsin.")]
-    [SerializeField] private Shader maskShader;
-    [Tooltip("Görünmez kapağın su seviyesinden yüksekliği (birim). Dalga + botun inip kalkması bunu geçerse botun içinde " +
-             "su görünür; çok yüksek olursa kapak iç duvarın daraldığı yere denk gelip küçülür.")]
-    [SerializeField] private float maskAboveWater = 0.1f;
-    [Tooltip("Kapak iç duvardan bu kadar içeride kalır (birim)")]
-    [SerializeField] private float maskInset = 0.02f;
     [SerializeField] private BoatWakeFx waterFx = new BoatWakeFx();
 
     [Header("Binme / inme")]
@@ -79,7 +71,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     private float lastYaw, rowWeight, rowPhase, lean;
     private bool riding;
     private float lastRideEnd = float.MinValue;
-    private Vector3[] maskOutline; // su maskesinin kenarı (modelin uzayında), gizmo için
+    private WaterHullClip.Entry hullClip; // su bu botun içinde çizilmesin
     private Vector3Int? restoredHeadOffset; // kayıttan: arka hücreden ön hücreye
 
     public bool IsRidden => riding;
@@ -277,22 +269,14 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
 
         // Su seviyesi kökün 0.5 üstünde (kök hücrenin tabanında, su en alt kat hücresinin ortasında)
         waterFx.Setup(transform, effectShader, 0.5f);
-        CreateWaterMask(model);
+        RegisterWaterClip(model);
     }
 
-    // Botun içine görünmez kapak: sudan hemen önce derinlik yazar, kapağın arkasındaki (botun içindeki) su çizilmez.
-    // Şekli gövdenin mesh'inden ölçülür: su çizgisinin biraz üstünde iç duvarın kesiti, biraz içeride. Böylece kapak
-    // hiçbir açıdan gövdenin dışına taşmaz (taşan yerde botun yanındaki su da kaybolurdu). Modelin child'ı: bot
-    // sallandıkça kapak da sallanır. Gövde mesh'i okunabilir olmalı (bot.fbx → Read/Write).
-    private void CreateWaterMask(Transform model)
+    // Su bu botun içinde çizilmesin: gövdenin profili mesh'ten bir kez ölçülür (su seviyesinin biraz altından kenara
+    // kadar katmanlar), her kare botun konumuyla su shader'ına gider (WaterHullClip). Ayar gerekmez.
+    // Gövde mesh'i okunabilir olmalı (bot.fbx → Read/Write).
+    private void RegisterWaterClip(Transform model)
     {
-        if (maskShader == null)
-        {
-            Debug.LogWarning("Boat: Mask Shader (Village/Depth Mask) atanmamış; su botun içinden görünebilir.", this);
-            return;
-        }
-
-        // Gövde: küreklerin dışındaki en büyük mesh
         MeshFilter hull = null;
         foreach (MeshFilter filter in model.GetComponentsInChildren<MeshFilter>())
         {
@@ -306,103 +290,19 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             return;
         }
 
+        // Katmanlar modelin uzayında: su seviyesi (-waterline) biraz altından (dalga çukuru, bot kalkınca) yukarı
         float scale = Mathf.Max(modelScale, 0.0001f);
-        float height = (maskAboveWater - waterline) / scale; // modelin uzayında (su seviyesi = -waterline)
-        maskOutline = HullOutline(hull, model, height, maskInset / scale);
-        if (maskOutline == null)
-        {
-            Debug.LogWarning("Boat: su maskesi için gövdenin o yükseklikte iç duvarı bulunamadı (Mask Above Water'ı değiştir).", this);
-            return;
-        }
-
-        // Merkezden yelpaze
-        int count = maskOutline.Length;
-        var vertices = new Vector3[count + 1];
-        var triangles = new int[count * 3];
-        vertices[0] = new Vector3(0f, height, 0f);
-        for (int i = 0; i < count; i++)
-        {
-            vertices[i + 1] = maskOutline[i];
-            triangles[i * 3] = 0;
-            triangles[i * 3 + 1] = i + 1;
-            triangles[i * 3 + 2] = (i + 1) % count + 1;
-        }
-        var mesh = new Mesh { name = "Boat Water Mask", vertices = vertices, triangles = triangles };
-        mesh.RecalculateBounds();
-
-        var mask = new GameObject("Water Mask");
-        mask.transform.SetParent(model, false);
-        mask.AddComponent<MeshFilter>().sharedMesh = mesh;
-        var renderer = mask.AddComponent<MeshRenderer>();
-        renderer.sharedMaterial = new Material(maskShader);
-        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        renderer.receiveShadows = false;
-    }
-
-    // Gövdenin verilen yükseklikteki iç kesiti (modelin uzayında, merkez = origin): o yüksekliğe yakın vertex'ler
-    // açı dilimlerine ayrılır; dilimde merkeze en yakın vertex iç duvardır (dış duvar daha uzakta). Az vertex varsa
-    // yükseklik bandı genişletilir. Boş dilimler komşularının küçüğüyle doldurulur (taşmasın diye hep içeride kalınır).
-    private static Vector3[] HullOutline(MeshFilter hull, Transform model, float height, float inset)
-    {
-        const int sectors = 64;
-        Vector3[] vertices = hull.sharedMesh.vertices;
+        float water = -waterline / scale;
+        float bottom = water - 0.12f / scale;
+        float step = 0.32f / scale / (WaterHullClip.Levels - 1);
         Matrix4x4 toModel = model.worldToLocalMatrix * hull.transform.localToWorldMatrix;
-        var radius = new float[sectors];
-        for (int i = 0; i < sectors; i++) radius[i] = float.MaxValue;
-
-        for (float band = 0.03f; band <= 0.25f; band *= 2f)
-        {
-            foreach (Vector3 vertex in vertices)
-            {
-                Vector3 p = toModel.MultiplyPoint3x4(vertex);
-                if (Mathf.Abs(p.y - height) > band) continue;
-                float r = new Vector2(p.x, p.z).magnitude;
-                if (r < 0.0001f) continue;
-                int sector = Mathf.FloorToInt(Mathf.Repeat(Mathf.Atan2(p.z, p.x) / (Mathf.PI * 2f), 1f) * sectors) % sectors;
-                radius[sector] = Mathf.Min(radius[sector], r);
-            }
-
-            int filled = 0;
-            foreach (float r in radius) if (r < float.MaxValue) filled++;
-            if (filled >= sectors * 3 / 4) break;
-        }
-
-        var outline = new Vector3[sectors];
-        bool any = false;
-        for (int i = 0; i < sectors; i++)
-        {
-            float r = radius[i];
-            if (r == float.MaxValue)
-            {
-                // En yakın dolu komşular (iki yönde), küçüğü
-                float left = float.MaxValue, right = float.MaxValue;
-                for (int step = 1; step < sectors && (left == float.MaxValue || right == float.MaxValue); step++)
-                {
-                    if (left == float.MaxValue) left = radius[(i - step + sectors) % sectors];
-                    if (right == float.MaxValue) right = radius[(i + step) % sectors];
-                }
-                r = Mathf.Min(left, right);
-            }
-            if (r == float.MaxValue) continue;
-            any = true;
-            float angle = (i + 0.5f) / sectors * Mathf.PI * 2f;
-            float inner = Mathf.Max(0f, r - inset);
-            outline[i] = new Vector3(Mathf.Cos(angle) * inner, height, Mathf.Sin(angle) * inner);
-        }
-        return any ? outline : null;
+        float[] profile = WaterHullClip.MeasureProfile(hull.sharedMesh, toModel, bottom, step);
+        hullClip = WaterHullClip.Register(model, profile, bottom, step);
     }
 
-#if UNITY_EDITOR
-    // Kapağın şekli Scene görünümünde (Play'de, bot seçiliyken): sarı çizgi
-    private void OnDrawGizmosSelected()
-    {
-        if (maskOutline == null || visual == null || visual.childCount == 0) return;
-        Matrix4x4 matrix = visual.GetChild(0).localToWorldMatrix;
-        Gizmos.color = Color.yellow;
-        for (int i = 0; i < maskOutline.Length; i++)
-            Gizmos.DrawLine(matrix.MultiplyPoint3x4(maskOutline[i]), matrix.MultiplyPoint3x4(maskOutline[(i + 1) % maskOutline.Length]));
-    }
-#endif
+    private void LateUpdate() => WaterHullClip.Upload(); // bot sallandıktan sonra (Update'te), çizimden önce
+
+    private void OnDestroy() => WaterHullClip.Unregister(hullClip);
 
     private static Transform Find(Transform parent, string objectName)
     {
