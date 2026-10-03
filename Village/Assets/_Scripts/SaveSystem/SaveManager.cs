@@ -7,7 +7,7 @@ using UnityEngine;
 // Kaydet: F5 ve oyun kapanırken. Yükle: oyun başlarken (Start: grid ve diğer yöneticiler hazır).
 public class SaveManager : MonoBehaviour
 {
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2; // 2: gün saati (dayTime)
 
     [SerializeField] private SaveRegistrySO registry;
     [Tooltip("Kayıt dosyasının adı (slot). Her sahne kendi dosyasını kullanır.")]
@@ -51,6 +51,8 @@ public class SaveManager : MonoBehaviour
             foreach (var pair in InventoryManager.Instance.sources)
                 file.inventory.Add(new ItemSave(pair.Key.SaveId, pair.Value));
 
+        if (DayCycle.Instance != null) file.dayTime = DayCycle.Instance.Time01;
+
         SaveStorage.Write(slotName, JsonUtility.ToJson(file, true));
         Debug.Log($"Kaydedildi: {SaveStorage.PathFor(slotName)} ({file.bases.Count} base, {file.placeables.Count} placeable)", this);
     }
@@ -91,14 +93,24 @@ public class SaveManager : MonoBehaviour
             return;
         }
 
-        // Base'ler önce: placeable'lar onların üstünde durur
-        if (saveBases)
-            foreach (EntitySave save in file.bases)
-                Spawn<GridBase>(save, GridManager.Instance.PlaceBase);
+        // Base'ler önce: placeable'lar onların üstünde durur. Yüklerken yerleştirme efektleri susar.
+        GridManager.Instance.SuppressPlacedEvents = true;
+        try
+        {
+            if (saveBases)
+                foreach (EntitySave save in file.bases)
+                    Spawn<GridBase>(save, GridManager.Instance.PlaceBase);
 
-        if (savePlaceables)
-            foreach (EntitySave save in file.placeables)
-                Spawn<GridPlaceable>(save, GridManager.Instance.PlaceablePlaceOn);
+            if (savePlaceables)
+                foreach (EntitySave save in file.placeables)
+                    Spawn<GridPlaceable>(save, GridManager.Instance.PlaceablePlaceOn);
+        }
+        finally
+        {
+            GridManager.Instance.SuppressPlacedEvents = false;
+        }
+
+        if (file.dayTime >= 0f && DayCycle.Instance != null) DayCycle.Instance.Time01 = file.dayTime;
 
         if (saveInventory && InventoryManager.Instance != null)
             LoadInventory(file.inventory);

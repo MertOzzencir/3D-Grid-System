@@ -13,8 +13,8 @@ VARIANTS = [
     # vertex: (include, fonksiyon) → pozisyon (ve normal) deforme edilir
     # fragment: (include, fonksiyon) ya da None → fonksiyon(input.positionCS) fragment'ın başında çağrılır (örn. clip)
     dict(name="Village/Tree Chop Lit", output="TreeChopLit.shader",
-         description="balta vuruşunda gövde göçüğü (ChopDent.hlsl)",
-         vertex=("ChopDent.hlsl", "ApplyChopDent"), fragment=None),
+         description="balta vuruşunda gövde göçüğü (ChopDent.hlsl) + rüzgârda salınım (Wind.hlsl), ikisi TreeVertex.hlsl'de",
+         vertex=("TreeVertex.hlsl", "ApplyTreeVertex"), fragment=None),
     dict(name="Village/Wood Wobble Lit", output="WoodWobbleLit.shader",
          description="birleşmede jöle gibi sallanma (Wobble.hlsl) + noktalı saydamlık (Fade.hlsl)",
          vertex=("Wobble.hlsl", "ApplyWobble"), fragment=("Fade.hlsl", "ApplyFade")),

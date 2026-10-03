@@ -6,7 +6,8 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 // Render stili "minyatür diorama" (tilt-shift'siz): sıcak güneş + mavi-mor gölgeler, renk ayarı, AO, bloom, vinyet, sis,
-// kenar ışığı (RimLight) ve havada uçuşanlar (AmbientParticles; yoksa sahneye eklenir).
+// kenar ışığı (RimLight), havada uçuşanlar (AmbientParticles), yerleştirme cilası (PlacementFx), rüzgâr (WindSettings)
+// ve gün saati (DayCycle); yoksa sahneye eklenir, varsa ayarına dokunulmaz.
 // Village → Render Stili: Diorama uygula. Açık sahnenin ışığını / sisini / kamerasını, sahnedeki global Volume'un
 // profilini ve URP renderer'larının SSAO ayarını değiştirir. Tek adımda Ctrl+Z ile geri alınır.
 // Değerler başlangıç noktası: beğenilmeyen sonra Inspector'dan değiştirilir.
@@ -216,6 +217,31 @@ public static class DioramaRenderStyle
             report.AppendLine("- Uçuşanlar eklendi (Ambient Particles: gündüz polen; Night Amount'u 1 yapınca ateş böcekleri)");
         }
         else report.AppendLine("- Uçuşanlar zaten var, dokunulmadı");
+
+        AddIfMissing<PlacementFx>("Placement Fx", "dustShader", "Assets/Shaders/WaterFoam.shader",
+                                  "Yerleştirme cilası (toz + yaylanma)", report);
+        AddIfMissing<WindSettings>("Wind", null, null, "Rüzgâr (ağaç tepeleri)", report);
+        AddIfMissing<DayCycle>("Day Cycle", null, null, "Gün saati (20 dakikada bir gün, kayda girer)", report);
+    }
+
+    private static void AddIfMissing<T>(string objectName, string shaderField, string shaderPath, string label,
+                                        System.Text.StringBuilder report) where T : MonoBehaviour
+    {
+        if (Object.FindFirstObjectByType<T>() != null)
+        {
+            report.AppendLine($"- {label} zaten var, dokunulmadı");
+            return;
+        }
+        var holder = new GameObject(objectName);
+        Undo.RegisterCreatedObjectUndo(holder, "Render Stili");
+        T component = holder.AddComponent<T>();
+        if (shaderField != null)
+        {
+            var serialized = new SerializedObject(component);
+            serialized.FindProperty(shaderField).objectReferenceValue = AssetDatabase.LoadAssetAtPath<Shader>(shaderPath);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+        report.AppendLine($"- {label} eklendi ({objectName})");
     }
 
     // Lighting penceresindeki ayarların nesnesi (Undo için); Unity bunu dışarı açmıyor

@@ -23,6 +23,12 @@ public class GridManager : MonoBehaviour
     // Base eklenip silinince (örn. ada eteği yeniden kurulsun diye)
     public event Action BasesChanged;
 
+    // Bir obje grid'e konunca (build menüsü, sürükleyip bırakma, ağaçtan düşen odun...): yerleştirme cilası dinler.
+    // Kayıttan yüklerken susturulur (SaveManager), dünya açılırken her şey zıplamasın.
+    // Yürüyenlerin (canlı, bot) adım adım yer değiştirmesi (TryMovePlaceable) bu olayı tetiklemez.
+    public event Action<GridEntity> EntityPlaced;
+    public bool SuppressPlacedEvents { get; set; }
+
     public bool CanPlaceBase(GridBase entity, Vector3 position) => CanPlaceGeneric(entity, position, d => d.Base);
 
     public bool PlaceBase(GridBase entity, Vector3 position)
@@ -148,6 +154,7 @@ public class GridManager : MonoBehaviour
         Vector3Int originWorldPos = ManagerPosition + origin;
         entity.transform.SetPositionAndRotation(originWorldPos, entity.GridRotation);
         entity.OnPlaced(originWorldPos);
+        if (!SuppressPlacedEvents) EntityPlaced?.Invoke(entity);
         return true;
     }
     public bool RemoveGeneric<T>(T entity, Func<GridData, object> slotGetter, Action<GridData> slotClearer, bool destroyObject = true) where T : GridEntity

@@ -160,6 +160,10 @@ Shader "Village/Stylized Water"
                 float _WaveSpeed;
             CBUFFER_END
 
+            // Gece (DayCycle.cs gönderir, global): suyun rengi gece tonuna çarpılır. Ayarlanmamışsa 0 = etkisiz.
+            float _NightDarken;
+            float4 _NightTint;
+
             struct Attributes
             {
                 float4 positionOS : POSITION;
@@ -383,6 +387,7 @@ Shader "Village/Stylized Water"
 
                 color = lerp(color, lerp(_FoamColor.rgb, _ShoreWaveColor.rgb, saturate(shoreWave - contactLine)), foam);
 
+                color = lerp(color, color * _NightTint.rgb, saturate(_NightDarken));
                 color = MixFog(color, input.fogFactor);
                 return half4(color, 1);
             }

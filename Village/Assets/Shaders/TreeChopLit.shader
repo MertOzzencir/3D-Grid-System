@@ -1,6 +1,6 @@
-// URP Lit kopyası + balta vuruşunda gövde göçüğü (ChopDent.hlsl).
+// URP Lit kopyası + balta vuruşunda gövde göçüğü (ChopDent.hlsl) + rüzgârda salınım (Wind.hlsl), ikisi TreeVertex.hlsl'de.
 // Lit'ten tek fark: ForwardLit, ShadowCaster, GBuffer, DepthOnly, DepthNormals pass'lerinde
-// vertex, URP'nin kendi vertex fonksiyonuna gitmeden önce ApplyChopDent ile deforme edilir.
+// vertex, URP'nin kendi vertex fonksiyonuna gitmeden önce ApplyTreeVertex ile deforme edilir.
 // Elle düzenlenmez: Editor~/make_lit_variants.py ile üretilir, URP güncellenince yeniden üret.
 Shader "Village/Tree Chop Lit"
 {
@@ -180,10 +180,10 @@ Shader "Village/Tree Chop Lit"
 
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
-            #include "ChopDent.hlsl"
+            #include "TreeVertex.hlsl"
             Varyings VillageLitPassVertex(Attributes input)
             {
-                ApplyChopDent(input.positionOS.xyz, input.normalOS);
+                ApplyTreeVertex(input.positionOS.xyz, input.normalOS);
                 return LitPassVertex(input);
             }
             ENDHLSL
@@ -236,10 +236,10 @@ Shader "Village/Tree Chop Lit"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
-            #include "ChopDent.hlsl"
+            #include "TreeVertex.hlsl"
             Varyings VillageShadowPassVertex(Attributes input)
             {
-                ApplyChopDent(input.positionOS.xyz, input.normalOS);
+                ApplyTreeVertex(input.positionOS.xyz, input.normalOS);
                 return ShadowPassVertex(input);
             }
             ENDHLSL
@@ -330,10 +330,10 @@ Shader "Village/Tree Chop Lit"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitGBufferPass.hlsl"
-            #include "ChopDent.hlsl"
+            #include "TreeVertex.hlsl"
             Varyings VillageLitGBufferPassVertex(Attributes input)
             {
-                ApplyChopDent(input.positionOS.xyz, input.normalOS);
+                ApplyTreeVertex(input.positionOS.xyz, input.normalOS);
                 return LitGBufferPassVertex(input);
             }
             ENDHLSL
@@ -379,10 +379,10 @@ Shader "Village/Tree Chop Lit"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl"
-            #include "ChopDent.hlsl"
+            #include "TreeVertex.hlsl"
             Varyings VillageDepthOnlyVertex(Attributes input)
             {
-                ApplyChopDent(input.position.xyz);
+                ApplyTreeVertex(input.position.xyz);
                 return DepthOnlyVertex(input);
             }
             ENDHLSL
@@ -435,10 +435,10 @@ Shader "Village/Tree Chop Lit"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitDepthNormalsPass.hlsl"
-            #include "ChopDent.hlsl"
+            #include "TreeVertex.hlsl"
             Varyings VillageDepthNormalsVertex(Attributes input)
             {
-                ApplyChopDent(input.positionOS.xyz, input.normal);
+                ApplyTreeVertex(input.positionOS.xyz, input.normal);
                 return DepthNormalsVertex(input);
             }
             ENDHLSL
