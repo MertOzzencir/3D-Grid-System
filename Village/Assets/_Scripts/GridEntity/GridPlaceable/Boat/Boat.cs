@@ -37,6 +37,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [SerializeField, Range(0.6f, 1f)] private float maskFit = 0.9f;
     [Tooltip("Yarım kürenin üst kapaktan aşağı derinliği, gövdenin yüksekliğine oranla (altı umursanmaz)")]
     [SerializeField, Range(0.3f, 1.5f)] private float maskDepth = 0.9f;
+    [Tooltip("Scene görünümünde maskeyi (sarı) ve gövdeyi (mavi tel kafes) göster; Play'e girmeden de, prefab modunda da")]
+    [SerializeField] private bool showMaskGizmo = true;
 
     [Header("Binme / inme")]
     [Tooltip("Eldiven kıyıdayken (mouse suda) botun bir hücresine yataydan bu kadar yakınsa biner")]
@@ -295,20 +297,42 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             return;
         }
 
-        // Gövde: küreklerin dışındaki en büyük mesh; sınırları modelin uzayında
-        MeshFilter hull = null;
-        foreach (MeshFilter filter in model.GetComponentsInChildren<MeshFilter>())
+        if (!TryBuildMask(model, leftOar, rightOar, maskFit, maskDepth, out Vector3 top, out maskMesh, out _, out _)) return;
+
+        var mask = new GameObject("Water Mask");
+        maskTransform = mask.transform;
+        maskTransform.SetParent(model, false);
+        maskTransform.localPosition = top;
+        mask.AddComponent<MeshFilter>().sharedMesh = maskMesh;
+        var renderer = mask.AddComponent<MeshRenderer>();
+        renderer.sharedMaterial = new Material(maskShader);
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+    }
+
+    // Maskenin ölçüsü (modelin uzayında): gövde = küreklerin dışındaki en büyük mesh; kapak gövdenin en üstünde,
+    // genişliği dış ölçünün fit katı, derinliği gövde yüksekliğinin depthRatio katı. Hem çalışırken (kurulan model)
+    // hem editörde (modelin asset'i, gizmo için) kullanılır.
+    private static bool TryBuildMask(Transform model, Transform skipA, Transform skipB, float fit, float depthRatio,
+                                     out Vector3 top, out Mesh mesh, out MeshFilter hull, out Matrix4x4 hullToModel)
+    {
+        top = default;
+        mesh = null;
+        hull = null;
+        hullToModel = Matrix4x4.identity;
+        foreach (MeshFilter filter in model.GetComponentsInChildren<MeshFilter>(true))
         {
-            if (filter.sharedMesh == null || filter.transform == leftOar || filter.transform == rightOar) continue;
+            if (filter.sharedMesh == null || filter.transform == skipA || filter.transform == skipB) continue;
             if (hull == null || filter.sharedMesh.vertexCount > hull.sharedMesh.vertexCount) hull = filter;
         }
-        if (hull == null) return;
+        if (hull == null) return false;
+
         Bounds local = hull.sharedMesh.bounds;
-        Matrix4x4 toModel = model.worldToLocalMatrix * hull.transform.localToWorldMatrix;
+        hullToModel = model.worldToLocalMatrix * hull.transform.localToWorldMatrix;
         Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
         for (int corner = 0; corner < 8; corner++)
         {
-            Vector3 p = toModel.MultiplyPoint3x4(new Vector3(
+            Vector3 p = hullToModel.MultiplyPoint3x4(new Vector3(
                 (corner & 1) == 0 ? local.min.x : local.max.x,
                 (corner & 2) == 0 ? local.min.y : local.max.y,
                 (corner & 4) == 0 ? local.min.z : local.max.z));
@@ -317,20 +341,9 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         }
 
         Vector3 center = (min + max) * 0.5f;
-        float radiusX = (max.x - min.x) * 0.5f * maskFit;
-        float radiusZ = (max.z - min.z) * 0.5f * maskFit;
-        float depth = (max.y - min.y) * maskDepth;
-        maskMesh = HalfEllipsoid(radiusX, radiusZ, depth);
-
-        var mask = new GameObject("Water Mask");
-        maskTransform = mask.transform;
-        maskTransform.SetParent(model, false);
-        maskTransform.localPosition = new Vector3(center.x, max.y, center.z);
-        mask.AddComponent<MeshFilter>().sharedMesh = maskMesh;
-        var renderer = mask.AddComponent<MeshRenderer>();
-        renderer.sharedMaterial = new Material(maskShader);
-        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        renderer.receiveShadows = false;
+        top = new Vector3(center.x, max.y, center.z);
+        mesh = HalfEllipsoid((max.x - min.x) * 0.5f * fit, (max.z - min.z) * 0.5f * fit, (max.y - min.y) * depthRatio);
+        return true;
     }
 
     // Kapalı yarım elipsoit: y = 0'da düz kapak, aşağı doğru kase (en derin nokta -depth). Yüzlerin yönü önemsiz (Cull Off).
@@ -375,14 +388,69 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     }
 
 #if UNITY_EDITOR
-    // Maskenin şekli Scene görünümünde (Play'de, bot seçiliyken): sarı tel kafes
-    private void OnDrawGizmosSelected()
+    private Mesh editorMaskMesh;
+    private Vector3 editorMaskTop;
+    private MeshFilter editorHull;
+    private Matrix4x4 editorHullToModel;
+
+    private void OnValidate() => editorMaskMesh = null; // ayar değişince gizmo yeniden ölçülür
+
+    // Maske Scene görünümünde: sarı yarı saydam + tel kafes; gövde mavi tel kafes (maskenin gövdeye nasıl oturduğu).
+    // Play'de kurulan gerçek maske; editörde (prefab modunda da) modelin asset'inden aynı hesapla.
+    private void OnDrawGizmos()
     {
-        if (maskMesh == null || maskTransform == null) return;
-        Gizmos.color = Color.yellow;
-        Gizmos.matrix = maskTransform.localToWorldMatrix;
-        Gizmos.DrawWireMesh(maskMesh);
+        if (!showMaskGizmo) return;
+
+        Mesh mask;
+        Matrix4x4 maskMatrix, hullMatrix = Matrix4x4.identity;
+        MeshFilter hull = null;
+        if (Application.isPlaying)
+        {
+            if (maskMesh == null || maskTransform == null) return;
+            mask = maskMesh;
+            maskMatrix = maskTransform.localToWorldMatrix;
+        }
+        else
+        {
+            if (modelPrefab == null) return;
+            if (editorMaskMesh == null)
+            {
+                Transform asset = modelPrefab.transform;
+                TryBuildMask(asset, FindQuiet(asset, leftOarName), FindQuiet(asset, rightOarName), maskFit, maskDepth,
+                             out editorMaskTop, out editorMaskMesh, out editorHull, out editorHullToModel);
+                if (editorMaskMesh == null) return;
+                editorMaskMesh.hideFlags = HideFlags.HideAndDontSave; // sahneye kaydedilmesin
+            }
+            // Çalışırken kurulan hiyerarşinin aynısı: kök → Visual (su çizgisi) → model (dönüş, ölçek)
+            Matrix4x4 model = transform.localToWorldMatrix
+                              * Matrix4x4.Translate(Vector3.up * (0.5f + waterline))
+                              * Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(modelRotation), Vector3.one * modelScale);
+            mask = editorMaskMesh;
+            maskMatrix = model * Matrix4x4.Translate(editorMaskTop);
+            hull = editorHull;
+            hullMatrix = model * editorHullToModel;
+        }
+
+        Gizmos.matrix = maskMatrix;
+        Gizmos.color = new Color(1f, 0.9f, 0f, 0.25f);
+        Gizmos.DrawMesh(mask);
+        Gizmos.color = new Color(1f, 0.9f, 0f, 0.9f);
+        Gizmos.DrawWireMesh(mask);
+
+        if (hull != null && hull.sharedMesh != null)
+        {
+            Gizmos.matrix = hullMatrix;
+            Gizmos.color = new Color(0.3f, 0.7f, 1f, 0.35f);
+            Gizmos.DrawWireMesh(hull.sharedMesh);
+        }
         Gizmos.matrix = Matrix4x4.identity;
+    }
+
+    private static Transform FindQuiet(Transform parent, string objectName)
+    {
+        foreach (Transform t in parent.GetComponentsInChildren<Transform>(true))
+            if (t.name == objectName) return t;
+        return null;
     }
 #endif
 
