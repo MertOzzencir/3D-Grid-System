@@ -38,9 +38,24 @@ public class BoatEditor : Editor
     {
         var boat = (Boat)target;
         Vector3[] top = boat.EditorTopRing, bottom = boat.EditorBottomRing;
-        if (top == null || top.Length < 3 || bottom == null || bottom.Length != top.Length) return;
-
         Matrix4x4 model = boat.EditorModelMatrix();
+        if (top == null || top.Length < 3 || bottom == null || bottom.Length != top.Length)
+        {
+            // Henüz nokta yok: Scene'de de başlatılabilsin
+            Handles.BeginGUI();
+            GUILayout.BeginArea(new Rect(10, 10, 260, 60));
+            GUILayout.Label("Su maskesi: henüz elle ayar noktası yok");
+            if (GUILayout.Button("Noktaları gövdeden ölç"))
+            {
+                Undo.RecordObject(boat, "Maske noktalarını ölç");
+                boat.EditorMeasureRings();
+                EditorUtility.SetDirty(boat);
+            }
+            GUILayout.EndArea();
+            Handles.EndGUI();
+            return;
+        }
+
         HandleRing(boat, top, 0, model, Color.yellow);
         HandleRing(boat, bottom, 1, model, new Color(1f, 0.5f, 0f));
     }

@@ -689,7 +689,26 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             Gizmos.color = new Color(0.3f, 0.7f, 1f, 0.35f);
             Gizmos.DrawWireMesh(hull.sharedMesh);
         }
+
+        // Elle ayar noktaları (seçili olmasa da görünsün; taşımak için botu seç)
+        if (MaskRingsValid)
+        {
+            DrawRingGizmo(model, maskTopRing, Color.yellow);
+            DrawRingGizmo(model, maskBottomRing, new Color(1f, 0.5f, 0f));
+        }
         Gizmos.matrix = Matrix4x4.identity;
+    }
+
+    private static void DrawRingGizmo(Matrix4x4 model, Vector3[] ring, Color color)
+    {
+        Gizmos.matrix = Matrix4x4.identity;
+        Gizmos.color = color;
+        for (int i = 0; i < ring.Length; i++)
+        {
+            Vector3 point = model.MultiplyPoint3x4(ring[i]);
+            Gizmos.DrawSphere(point, 0.035f * model.lossyScale.x);
+            Gizmos.DrawLine(point, model.MultiplyPoint3x4(ring[(i + 1) % ring.Length]));
+        }
     }
 
     private static Transform FindQuiet(Transform parent, string objectName)
