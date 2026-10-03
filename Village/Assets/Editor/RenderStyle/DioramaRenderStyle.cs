@@ -24,6 +24,13 @@ public static class DioramaRenderStyle
     [MenuItem("Village/Render Stili: Diorama uygula")]
     private static void Apply()
     {
+        // Play'de sahneye yapılan değişiklikler Play'den çıkınca geri gider (sadece asset'ler kalırdı)
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            EditorUtility.DisplayDialog("Render Stili", "Önce Play'den çık: Play modunda sahneye yapılan değişiklikler kaybolur.", "Tamam");
+            return;
+        }
+
         Undo.SetCurrentGroupName("Render Stili: Diorama");
         int group = Undo.GetCurrentGroup();
         var report = new System.Text.StringBuilder("Render stili uygulandı (Ctrl+Z geri alır):\n");
@@ -36,6 +43,8 @@ public static class DioramaRenderStyle
 
         Undo.CollapseUndoOperations(group);
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+        AssetDatabase.SaveAssets(); // profil ve renderer diske yazılsın
+        report.AppendLine("Sahneyi kaydetmeyi unutma (Ctrl+S).");
         Debug.Log(report.ToString());
     }
 
@@ -168,6 +177,8 @@ public static class DioramaRenderStyle
                 intensity.floatValue = 0.6f;
                 radius.floatValue = 0.35f;
                 serialized.ApplyModifiedProperties(); // Undo kaydı burada
+                EditorUtility.SetDirty(feature);
+                EditorUtility.SetDirty(data);
                 changed++;
             }
         }
