@@ -71,6 +71,7 @@ MonoBehaviour:
   rightOarName: KUREK-RIGHT
   seatOffset: {x: 0, y: -0.2, z: 0}
   effectShader: {fileID: 4800000, guid: ec496355df9a4cc89f9c7868ca47608b, type: 3}
+  maskShader: {fileID: 4800000, guid: ca5a4f90e2bc44d299c83a5c655152b8, type: 3}
   waterFx:
     wakeStern: 0.9
     wakeTime: 1.4
