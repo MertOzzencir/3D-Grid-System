@@ -45,12 +45,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [Tooltip("İndikten sonra tekrar binmek için en az bekleme (saniye)")]
     [SerializeField] private float boardCooldown = 0.8f;
 
-    [Header("Hız")]
-    [Tooltip("Botun hızı (birim/sn); GridWalker'daki hızın yerine geçer")]
-    [SerializeField] private float moveSpeed = 3f;
-    [Tooltip("Yerinde geri dönme süresi (saniye)")]
-    [SerializeField] private float turnAroundSeconds = 0.3f;
-
     [Header("Kürek")]
     [Tooltip("Bir kürek çekişinde alınan yol (birim)")]
     [SerializeField] private float strokeLength = 1.2f;
@@ -91,9 +85,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     private void Awake()
     {
         walker = GetComponent<GridWalker>();
-        walker.WalkMedium = GridWalker.Medium.Water; // bot hep suda gider
-        walker.Speed = moveSpeed;
-        walker.TurnAroundDuration = turnAroundSeconds;
+        walker.WalkMedium = GridWalker.Medium.Water; // bot hep suda gider (hız/dönüş ayarları GridWalker'da)
         if (modelPrefab != null) BuildModel();
     }
 
