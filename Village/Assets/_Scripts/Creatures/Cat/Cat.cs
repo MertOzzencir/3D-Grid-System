@@ -72,6 +72,17 @@ public class Cat : Creature, ISaveState
     [Tooltip("Eldivenin ağızdaki duruşuna ek dönüş (derece). Varsayılan: parmaklar kedinin sağına ve aşağı sarkar, avuç kedinin yüzüne bakar.")]
     [SerializeField] private Vector3 mouthGloveRotation = Vector3.zero;
 
+    [Header("Dokunma (el üstündeyken, tuşa basmadan)")]
+    [Tooltip("Elin değdiği yerin içeri göçmesi (birim)")]
+    [SerializeField] private float touchDepth = 0.035f;
+    [Tooltip("Göçmenin yayıldığı yarıçap (birim)")]
+    [SerializeField] private float touchRadius = 0.2f;
+    [Tooltip("El gezinirken yüzeyin gidiş yönüne sürüklenmesi (hız başına), en fazla touchDragMax")]
+    [SerializeField] private float touchDrag = 0.02f;
+    [SerializeField] private float touchDragMax = 0.025f;
+    [Tooltip("Basma / bırakma ve takip yumuşaklığı")]
+    [SerializeField] private float touchSharpness = 12f;
+
     [Header("Şaplak")]
     [Tooltip("Kıça şaplakta vurulan nokta jöle gibi titrer. Kedinin materyali 'Village/Creature Jiggle Lit' olmalı.")]
     [SerializeField] private CreatureJiggle slapJiggle = new CreatureJiggle();
@@ -115,6 +126,14 @@ public class Cat : Creature, ISaveState
     private Vector3 lastMouse;
     private bool handInSight;
     private Transform mouth; // eldivenin ağızda tutulduğu nokta (kafa kemiğinin child'ı)
+
+    // Dokunma çukuru (global shader değerleri, tek el): şu an onu süren kedi
+    private static Cat touchOwner;
+    private static readonly int TouchPointId = Shader.PropertyToID("_TouchPoint");
+    private static readonly int TouchDirId = Shader.PropertyToID("_TouchDir");
+    private static readonly int TouchDragId = Shader.PropertyToID("_TouchDrag");
+    private float touchAmount;
+    private Vector3 touchPoint, touchNormal = Vector3.up, touchDragOffset, lastGlovePoint;
     private Vector3Int? restoredHeadOffset; // kayıttan: gövde hücresinden kafa hücresine
     private float lastPounceTime = float.MinValue;
 
@@ -210,6 +229,8 @@ public class Cat : Creature, ISaveState
     // kıpırdanma ne olursa olsun sırt yerde). Yükseklik yumuşakça takip edilir.
     private void LateUpdate()
     {
+        UpdateTouch();
+
         // Yakalanmış eldiven ağza oturur (CatRig kemikleri pozladıktan sonra, GloveFingers'tan önce)
         if (CurrentState is CaughtState && Glove != null)
         {
@@ -228,6 +249,46 @@ public class Cat : Creature, ISaveState
         Vector3 position = visual.localPosition;
         position.y += correction * (1f - Mathf.Exp(-20f * Time.deltaTime));
         visual.localPosition = position;
+    }
+
+    // El kedinin üstündeyken (tuşa basmadan; yakalanmış / bottaki el hariç) değdiği yer hafifçe göçer, el gezinirken
+    // yüzey gidiş yönüne sürüklenir (Jiggle.hlsl, global). Basma ve bırakma yumuşak; el kalkınca çukur dolar.
+    // Glove LateUpdate'i (0) bu kareki yüzeyi bulduktan sonra çalışır (Cat: 60).
+    private void UpdateTouch()
+    {
+        GloveCursor g = Glove;
+        bool touching = g != null && !g.IsCaptured && !g.IsRiding && g.SurfaceCollider != null &&
+                        g.SurfaceCollider.transform.IsChildOf(transform) &&
+                        !Input.GetMouseButton(0) && !Input.GetMouseButton(1);
+        if (touching) touchOwner = this;
+        if (touchOwner != this) return;
+
+        float k = 1f - Mathf.Exp(-touchSharpness * Time.deltaTime);
+        if (touching)
+        {
+            Vector3 point = g.SurfacePoint;
+            if (touchAmount <= 0.001f) { touchPoint = point; lastGlovePoint = point; } // yeni dokunuş: atlamasın
+            touchPoint = Vector3.Lerp(touchPoint, point, k);
+            touchNormal = Vector3.Slerp(touchNormal, g.SurfaceNormal, k).normalized;
+
+            // Sürüklenme: elin yüzey boyunca hızı yönünde, sınırlı
+            Vector3 moved = Vector3.ProjectOnPlane(point - lastGlovePoint, touchNormal) / Mathf.Max(Time.deltaTime, 0.0001f);
+            lastGlovePoint = point;
+            touchDragOffset = Vector3.Lerp(touchDragOffset, Vector3.ClampMagnitude(moved * touchDrag, touchDragMax), k);
+        }
+        else touchDragOffset = Vector3.Lerp(touchDragOffset, Vector3.zero, k);
+        touchAmount = Mathf.Lerp(touchAmount, touching ? 1f : 0f, k);
+
+        if (!touching && touchAmount < 0.01f)
+        {
+            touchAmount = 0f;
+            touchOwner = null;
+            Shader.SetGlobalVector(TouchPointId, Vector4.zero); // etkisiz
+            return;
+        }
+        Shader.SetGlobalVector(TouchPointId, new Vector4(touchPoint.x, touchPoint.y, touchPoint.z, touchRadius));
+        Shader.SetGlobalVector(TouchDirId, -touchNormal * (touchDepth * touchAmount));
+        Shader.SetGlobalVector(TouchDragId, touchDragOffset * touchAmount);
     }
 
     private static float LowestPoint(Collider body)

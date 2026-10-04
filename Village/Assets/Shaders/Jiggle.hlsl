@@ -13,6 +13,25 @@ float4 _JiggleDir;    // xyz: içeri itme yönü × derinlik (dünya), w: başla
 float4 _JiggleShape;  // x: süre, y: titreşim sayısı, z: dalga boyu, w: dalga miktarı (derinliğe oranla)
 float4 _JiggleSwell;  // x: şişme miktarı (dünya birimi), y: şişip inme sayısı, z: şişme merkezinin yüzeyden derinliği
 
+// Dokunma: el canlının üstündeyken (tuşa basmadan) değdiği yerin çevresi hafifçe içeri göçer, kenarında kil gibi hafif
+// kabarır; el gezinirken yüzey gidiş yönüne biraz sürüklenir (okşama). Global (tek el var), Cat.cs her kare gönderir;
+// ayarlanmamışsa (yarıçap 0) etkisiz.
+float4 _TouchPoint; // xyz: elin değdiği nokta (dünya), w: etki yarıçapı
+float4 _TouchDir;   // xyz: içeri itme yönü × derinlik (dünya)
+float4 _TouchDrag;  // xyz: yüzeyin elle sürüklenmesi (dünya)
+
+float3 TouchOffsetWS(float3 positionWS)
+{
+    if (_TouchPoint.w <= 0.0) return 0;
+    float d = distance(positionWS, _TouchPoint.xyz) / _TouchPoint.w;
+    if (d >= 1.0) return 0;
+
+    float dent = 1.0 - smoothstep(0.0, 1.0, d);
+    dent *= dent;
+    float rim = smoothstep(0.45, 0.75, d) * (1.0 - smoothstep(0.75, 1.0, d)); // çukurun kenarındaki kabarma
+    return _TouchDir.xyz * (dent - rim * 0.3) + _TouchDrag.xyz * (1.0 - smoothstep(0.0, 1.0, d));
+}
+
 float3 JiggleOffsetWS(float3 positionWS)
 {
     float duration = max(_JiggleShape.x, 0.0001);
@@ -47,7 +66,7 @@ float3 JiggleOffsetWS(float3 positionWS)
 void ApplyJiggle(inout float3 positionOS)
 {
     float3 positionWS = TransformObjectToWorld(positionOS);
-    float3 offsetWS = JiggleOffsetWS(positionWS);
+    float3 offsetWS = JiggleOffsetWS(positionWS) + TouchOffsetWS(positionWS);
     // Normalize etmeden (ölçek dahil) object space'e
     positionOS += mul((float3x3)GetWorldToObjectMatrix(), offsetWS);
 }
