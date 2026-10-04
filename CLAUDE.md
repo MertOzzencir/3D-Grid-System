@@ -2,6 +2,7 @@
 
 Unity 6000.3.11f1 (URP 17.3) projesi `Village/` klasöründe. Oyun kodu `Village/Assets/_Scripts`, editör kodu `Village/Assets/Editor`, giriş `Village/Assets/Input`.
 Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe. Commit mesajları (GitHub'da görünenler) İngilizce.
+Oyun tasarımı (sistemler, ana döngü, kararlar, açık sorular) `DESIGN.md`'de: tasarım konuşmadan önce oku, karar çıkınca güncelle, konuşulanı tekrarlatma.
 
 ## Çalışma şekli
 - Büyük değişikliklerden önce tasarım konuşulur; kullanıcı "kodu değiştirme" dediyse sadece anlat. Karar soruları somut örnekli, seçenekli sorulur.
