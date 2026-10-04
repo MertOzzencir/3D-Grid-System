@@ -46,6 +46,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a9831dd657aef448a2f0bff5471425e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridWalker
+  medium: 0
   speed: 1.2
   turnAroundDuration: 0.5
   turnSharpness: 12
@@ -63,12 +64,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Cat
   data: {fileID: 11400000, guid: d9631ee0ebbd5f444a0970473ab99a44, type: 2}
   rotation: 0
-  creatureAnimator: {fileID: 7904187915132065202}
+  creatureAnimator: {fileID: 0}
   wanderRadius: 5
   idleSeconds: {x: 2, y: 5}
   sitSeconds: {x: 3, y: 6}
   sleepSeconds: {x: 4, y: 6}
-  affection: 0.5
+  affection: 1
   overpetLimit: 6
   overpetPerRub: 1
   overpetDecay: 0.4
@@ -88,6 +89,15 @@ MonoBehaviour:
   leapSecondsPerCell: 0.08
   landSeconds: 0.4
   pounceCooldown: 1
+  catchRadius: 0.7
+  caughtSeconds: 3.5
+  mouthOffset: {x: 0, y: -0.08, z: 0.22}
+  mouthGloveRotation: {x: 0, y: 0, z: 0}
+  touchDepth: 0.1
+  touchRadius: 0.7
+  touchDrag: 2
+  touchDragMax: 0.025
+  touchSharpness: 8
   slapJiggle:
     depth: 0.1
     radius: 1
