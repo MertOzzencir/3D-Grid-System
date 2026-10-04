@@ -7,7 +7,7 @@ Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe. Commit mesajları (
 - Büyük değişikliklerden önce tasarım konuşulur; kullanıcı "kodu değiştirme" dediyse sadece anlat. Karar soruları somut örnekli, seçenekli sorulur.
 - Açıklamalar sistem düzeyinde (class/metod isimleriyle) tercih edilir.
 - Değişiklik sonrası derleme kontrol edilir (Unity dışında: csproj'ları kopyalayıp yolları düzelten bir script + `dotnet build`; yeni .cs dosyaları listeye eklenmeli). Shader'lar Unity dışında derlenemez, bu söylenir. Unity'de test kullanıcıdadır; test edilmeyen şey "test edildi" denmez.
-- Commit doğrudan `main`'e; push sadece kullanıcı "pushla/yolla" deyince. Kullanıcının commit'lenmemiş asset'leri (prefab, SO, sahne, model) onun onayı olmadan koda karıştırılmaz.
+- Commit doğrudan `main`'e; push sadece kullanıcı "pushla/yolla" deyince. **Her push'tan önce bu dosya güncellenir** (push'a giden her şey burada yazılı olmalı: yeni sistemler, eklenip kaldırılanlar, kararlar, kurulum adımları). Kullanıcının commit'lenmemiş asset'leri (prefab, SO, sahne, model) onun onayı olmadan koda karıştırılmaz.
 - Kullanıcı fizik / Rigidbody istemiyor; elle animasyon yerine prosedürel çözüm tercih edilir (klipler gelirse onlar oynar, yoksa prosedürel yedek).
 
 ## Unity tuzakları (yaşandı)
