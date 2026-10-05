@@ -136,9 +136,11 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - **Çekme halatı:** tarla botun hemen arkasında dursa dönüşlerde köşede botun altına girerdi (iz kıvrılınca); bu yüzden tarla bir halatla çekilir, düzde arada boşluk var (3×3'te 2 hücre, 5×5'te 3). Kısaltılabilir ama köşe çakışması geri gelir.
 - **Geri gitme yok** (karar): sadece ileri ve yanlara, U çizerek dönülür. Sıkışınca **limana dön**: bot bütün tarlasıyla ilk konduğu yere ışınlanır (şimdilik H tuşu; ileride UI / dünyada iskele).
 - **Tarla parçası:** dünyada `GridPlaceable` (odun gibi sürüklenir, build menüsünden spawnlanabilir). Botun tarlasına bırakılınca (`IToolTarget`, odunun odunla birleşmesi gibi) dünya grid'inden çıkıp `FarmGrid`'e oturur. Şekil + döndürme `GridFootprint` / `GridMaskRotator` ile (R). Eldivenin tarlada base gibi yürümesi için "yürünebilir zemin" tanımı genişletilecek (şu an sadece `GridBase`).
+- **Binme:** mouse botun ya da tarlasının üstüne gelince uzaklık sınırı olmadan biner (eldiven adada kıyıda bekler, oradan zıplar).
+- **Sert dönüş:** yana basınca bot kıçının etrafında yerinde 90° döner, tarla yerinde kalır (yılan dönüşü köşede takılıyordu).
 - **Düzenleme:** bot dururken (dünya butonu ya da UI ile açılan mod).
 - **Kayıt:** botun `ISaveState`'i: tarla boyutu, parçalar (tür, yerel konum, dönüş), ekinler, büyüme durumu.
-- **Adımlar:** 1) bot + tarla treni (hareket, dünya grid'i, görsel güverte) 2) `FarmGrid` + tarla parçası (dünyadan tarlaya oturma) 3) düzenleme modu 4) ekim 5) büyüme düğmesi 6) hasat yolu + kombo 7) kayıt.
+- **Adımlar:** 1) ✅ bot + tarla treni (hareket, dünya grid'i, görsel güverte, çekme halatı, sert dönüş yerinde, limana dön) 2) `FarmGrid` + tarla parçası (dünyadan tarlaya oturma) 3) düzenleme modu 4) ekim 5) büyüme düğmesi 6) hasat yolu + kombo 7) kayıt.
 
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.
