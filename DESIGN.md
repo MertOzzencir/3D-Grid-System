@@ -138,9 +138,10 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - **Tarla parçası:** dünyada `GridPlaceable` (odun gibi sürüklenir, build menüsünden spawnlanabilir). Botun tarlasına bırakılınca (`IToolTarget`, odunun odunla birleşmesi gibi) dünya grid'inden çıkıp `FarmGrid`'e oturur. Şekil + döndürme `GridFootprint` / `GridMaskRotator` ile (R). Eldivenin tarlada base gibi yürümesi için "yürünebilir zemin" tanımı genişletilecek (şu an sadece `GridBase`).
 - **Binme:** mouse botun ya da tarlasının üstüne gelince uzaklık sınırı olmadan biner (eldiven adada kıyıda bekler, oradan zıplar).
 - **Sert dönüş:** yana basınca bot kıçının etrafında yerinde 90° döner, tarla yerinde kalır (yılan dönüşü köşede takılıyordu).
+- **Şu anki durum (2026-10-05):** 1. ve 2. adım bitti. Parçalar şimdilik her an (bot giderken de) tutulup tarlaya konabiliyor; "sadece bot dururken düzenle" kuralı henüz yok. Eldiven tarlanın üstünde yürüyemiyor (bot geçirgen), ekim adımında açılacak. **Sıradaki: 3) düzenleme kuralı / 4) ekim.** Çok hücreli parça görseli: şimdilik 1×1 modelin her hücreye kopyası (`tileModel`); ileride istenirse otomatik kenar (ortası kenarsız toprak + dış kenara şerit).
 - **Düzenleme:** bot dururken (dünya butonu ya da UI ile açılan mod).
 - **Kayıt:** botun `ISaveState`'i: tarla boyutu, parçalar (tür, yerel konum, dönüş), ekinler, büyüme durumu.
-- **Adımlar:** 1) ✅ bot + tarla treni (hareket, dünya grid'i, görsel güverte, çekme halatı, sert dönüş yerinde, limana dön) 2) ✅ (kod) `FarmGrid` + tarla parçası (dünyadan tarlaya oturma, tarlada kaydırma, kayıt) 3) düzenleme modu 4) ekim 5) büyüme düğmesi 6) hasat yolu + kombo 7) kayıt.
+- **Adımlar:** 1) ✅ bot + tarla treni (hareket, dünya grid'i, görsel güverte, çekme halatı, sert dönüş yerinde, limana dön) 2) ✅ `FarmGrid` + tarla parçası (dünyadan tarlaya oturma, tarlada kaydırma, kayıt; Unity'de test edildi, 1×1 parça modeli var) 3) düzenleme modu 4) ekim 5) büyüme düğmesi 6) hasat yolu + kombo 7) kayıt.
 
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.
