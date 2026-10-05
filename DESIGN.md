@@ -41,6 +41,13 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
   - köprülü / sulu: iki kez geçilebilir (bir yatay, bir dikey)
   - dönen karo: her hasattan sonra yön değiştirir
 - İleride ekinlere bir iki küçük kural eklenebilir (örn. 2 karelik kabak art arda geçilmeli), ama çekirdekte ekinler kuralsız.
+- **Hasat koşulları (tekrarı önler, düzene saygılı):** oyuncunun kurduğu düzen bozulmaz; her hasatta bulmacanın **sorusu** değişir. Tarlaya rastgele 1-2 koşul gelir, yerine getirilirse ekstra ödül (nadir malzeme, ekstra kombo, albüm çıkartması). Zorunlu değil, ceza değil; oyuncuyu o an farklı yollar denemeye teşvik eder. Koşul havuzu (adalarla açılır, ilk adada sadece "başla"):
+  - **başla:** yol bu blokta başlasın
+  - **bitir:** yol bu blokta bitsin (parlak "altın ürün" olarak gösterilebilir)
+  - **sıra:** önce A, sonra B bloğundan geç (ileride tarif istekleriyle bağlanır)
+  - **ziyaretçi:** yol uyuyan kedinin / konan kuşun karesinden geçsin
+  - **tam tur:** bütün tarla tek yolda (temel kombo)
+- **Ziyaretçiler engel değil hediye:** kedi bir karede uyur → yol oradan geçerken okşanır (sevgi); kuş konar → geçince ürküp tüy / tohum düşürür. İstenmezse eldivenle dokunup kovulur. Hiçbiri düzeni bozmaz, yolu kapatmaz.
 - Bazı dizilimlerde tek yol matematiksel olarak yoktur (satranç boyaması: siyah / beyaz sayısı 1'den fazla farklıysa). Yerleştirirken "tek yolda bitebilir mi" ipucu göstergesi düşünülebilir (ceza değil).
 
 ### Balık tutma
@@ -89,10 +96,10 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 9. Ceza yok, kombo var (tekrar girmek sadece komboyu bitirir).
 10. Yol kurallarını tarla bloğunun türü belirler (her ada yeni blok türü), ekin sadece ürünü belirler. Örnek: çitli blok üç tarafı kapalı → yolun başı ya da sonu.
 11. Tarla parçaları sadece yatayda birleşir, hepsi 1 birim yüksek.
+12. Tekrarı önleme: her hasatta rastgele **hasat koşulları** (başla / bitir / sıra / ziyaretçi), isteğe bağlı ekstra ödül; oyuncunun düzeni asla bozulmaz. Ziyaretçiler (kedi, kuş) engel değil, yol üstünde hediye; istenirse kovulur.
 
 ## Açık sorular
 - Yemek pişirmenin mekaniği (işlevsel, farklı).
-- **Tekrar riski (en büyük):** çözülen tarla her hasatta aynı yolu çizmeye döner. Fikir: her hasat döngüsünde cezasız küçük sürpriz (kuş konar, su birikintisi, **kedi bir karede uyur**) → yol her seferinde biraz değişir.
 - Ekim: tek tek ekmek angarya. Fikir: hasat edilen kare otomatik yeniden ekilir (kombo anı tek kalsın) ya da ekim de yol hareketiyle.
 - Gemideki tarla alanının sınırı (çizim yormasın), geminin büyütülmesi.
 - Yol nereden başlar: serbest mi, geminin iskele kenarından mı (ilk adalarda serbest, sonra sabit giriş olabilir)?
