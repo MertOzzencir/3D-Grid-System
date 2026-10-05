@@ -49,7 +49,7 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - **Ekim ve büyüme döngüsü:** bütün tarla aynı anda ekilir ve aynı anda olgunlaşır, türden bağımsız. Oyuncu o turda istediği ekinleri karelere eker, tarladaki **düğmeye** basar: tarla kapanır, belli bir süre geçer, tarla açılır ve ekilen her şey olgunlaşmıştır. Bulmaca hep tam tarla üzerinde oynanır (farklı büyüme süreleri bulmacayı anlamsızlaştırırdı); ritim oyuncunun elinde.
 - **Ekinlerin farkı sadece ne oldukları:** NPC domates istiyorsa domates ekilir. Ekinin yol kuralına etkisi yok (çekirdekte).
 - **Gemideki tarla alanı:** hep **tek sayılı kare**: 3×3 → 5×5 → 7×7 (her adada iki büyür). Bot hep tarlanın önünde ve ortasında; çift sayıda orta hücre olmazdı.
-- **Tohumlar ücretsiz, seçime dayalı (öneri, onay bekliyor):** tohum harcanan şey değil bilgi; bir ekin türü açılınca sınırsız ekilir. Türleri NPC'ler açar (blueprint ve tarla parçasının yanında). Kıtlığı tarla alanı yaratır (3×3 = 9 kare: "bu tur ne ekeyim?"). Para / dükkân yok. İleride: hasat koşullarının ödülü sınırlı **özel tohumlar** (nadir ekin / varyant).
+- **Tohumlar dünyada obje (karar):** tohum adada duran bir placeable (yığın, üstünde sayı). Sağ tıkla tutulur, sol tıkla tarlaya ekilir; sol tık basılı sürüklenince geçilen her boş kareye eker. **Hızlı toplama:** tohum tutarken üstünden geçilen aynı tür tohumlar ele uçup yığına katılır. Tohumların nereden geleceği (NPC, hasat, dükkân) açık. (Eski öneri "tohumlar ücretsiz bilgi" yerine bu seçildi.)
 - **Gemi upgrade'leri** (küçük bir upgrade sistemi): tarla büyüme süresini kısaltma, geminin hızı, "son ekimi hatırla" düğmesi (tek tuşla aynı düzeni tekrar ek).
 - Bazı dizilimlerde tek yol matematiksel olarak yoktur (satranç boyaması: siyah / beyaz sayısı 1'den fazla farklıysa). Yerleştirirken "tek yolda bitebilir mi" ipucu göstergesi düşünülebilir (ceza değil).
 
@@ -105,10 +105,12 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 15. Gemideki tarla alanı tek sayılı kare: 3×3 → 5×5 → 7×7; bot önde ortada.
 16. Bot + tarla tren gibi: tarla botun izinden gecikmeli gider (aşağıda "Teknik tasarım").
 17. Tarla parçaları dünyada placeable (build menüsünden spawnlanır, sürüklenir); botun tarlasına bırakılınca oraya oturur.
+18. Tarla her yerden düzenlenir (bot giderken zaten binilmiş, giriş kilitli; ek kural yok).
+19. Tohumlar dünyada placeable yığın: sağ tıkla tut, sol tıkla ek (basılı sürükleyerek de); tutarken üstünden geçilen aynı tür tohumlar toplanır.
 
 ## Açık sorular
 - Yemek pişirmenin mekaniği (işlevsel, farklı).
-- Ekim nasıl yapılır (her kareye tek tek mi, sürükleyerek mi)? "Son ekimi hatırla" ileride gemi upgrade'i.
+- Tohumlar nereden gelir (NPC, hasat, dükkân)? "Son ekimi hatırla" ileride gemi upgrade'i.
 - Gemi upgrade'leri neyle alınır (henüz para birimi yok)?
 - Büyüme süresi ne kadar (gerçek dakika mı, gün döngüsüne bağlı mı)?
 - Yol nereden başlar: serbest mi, geminin iskele kenarından mı (ilk adalarda serbest, sonra sabit giriş olabilir)?
@@ -138,10 +140,10 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - **Tarla parçası:** dünyada `GridPlaceable` (odun gibi sürüklenir, build menüsünden spawnlanabilir). Botun tarlasına bırakılınca (`IToolTarget`, odunun odunla birleşmesi gibi) dünya grid'inden çıkıp `FarmGrid`'e oturur. Şekil + döndürme `GridFootprint` / `GridMaskRotator` ile (R). Eldivenin tarlada base gibi yürümesi için "yürünebilir zemin" tanımı genişletilecek (şu an sadece `GridBase`).
 - **Binme:** mouse botun ya da tarlasının üstüne gelince uzaklık sınırı olmadan biner (eldiven adada kıyıda bekler, oradan zıplar).
 - **Sert dönüş:** yana basınca bot kıçının etrafında yerinde 90° döner, tarla yerinde kalır (yılan dönüşü köşede takılıyordu).
-- **Şu anki durum (2026-10-05):** 1. ve 2. adım bitti. Parçalar şimdilik her an (bot giderken de) tutulup tarlaya konabiliyor; "sadece bot dururken düzenle" kuralı henüz yok. Eldiven tarlanın üstünde yürüyemiyor (bot geçirgen), ekim adımında açılacak. **Sıradaki: 3) düzenleme kuralı / 4) ekim.** Çok hücreli parça görseli: şimdilik 1×1 modelin her hücreye kopyası (`tileModel`); ileride istenirse otomatik kenar (ortası kenarsız toprak + dış kenara şerit).
-- **Düzenleme:** bot dururken (dünya butonu ya da UI ile açılan mod).
+- **Şu anki durum (2026-10-05):** 1., 2. adım bitti ve test edildi. 3. adım: karar "her yerden düzenlenir" (kod gerekmedi). 4. adım (ekim) kodlandı, Unity'de test bekliyor: eldiven tarlada yürür, tohum placeable (toplama + sürükleyerek ekme), ekin parçanın hücresinde fide olarak durur. **Sıradaki: 5) büyüme düğmesi.** Çok hücreli parça görseli: şimdilik 1×1 modelin her hücreye kopyası (`tileModel`); ileride istenirse otomatik kenar (ortası kenarsız toprak + dış kenara şerit).
+- **Düzenleme:** her yerden, ayrı mod yok (bot sadece binilince gider, binince giriş kilitli).
 - **Kayıt:** botun `ISaveState`'i: tarla boyutu, parçalar (tür, yerel konum, dönüş), ekinler, büyüme durumu.
-- **Adımlar:** 1) ✅ bot + tarla treni (hareket, dünya grid'i, görsel güverte, çekme halatı, sert dönüş yerinde, limana dön) 2) ✅ `FarmGrid` + tarla parçası (dünyadan tarlaya oturma, tarlada kaydırma, kayıt; Unity'de test edildi, 1×1 parça modeli var) 3) düzenleme modu 4) ekim 5) büyüme düğmesi 6) hasat yolu + kombo 7) kayıt.
+- **Adımlar:** 1) ✅ bot + tarla treni (hareket, dünya grid'i, görsel güverte, çekme halatı, sert dönüş yerinde, limana dön) 2) ✅ `FarmGrid` + tarla parçası (dünyadan tarlaya oturma, tarlada kaydırma, kayıt; Unity'de test edildi, 1×1 parça modeli var) 3) ✅ düzenleme (her yerden, kod yok) 4) ekim (kodlandı) 5) büyüme düğmesi 6) hasat yolu + kombo 7) kayıt.
 
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.

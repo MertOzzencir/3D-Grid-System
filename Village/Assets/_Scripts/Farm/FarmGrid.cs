@@ -5,8 +5,10 @@ using UnityEngine;
 // placeable'ı olarak görür; içeride hangi hücrede hangi parça var, bunu bu sınıf tutar (tarlanın yerel koordinatı:
 // x, z 0..size-1). Kök = güvertenin üst yüzünün ortası (Boat kurar ve her kare yerini yazar); parçalar onun child'ı.
 // Tarla parçası (FarmPiece) tarlanın üstüne getirilince IToolTarget olarak yerini gösterir; bırakılınca oturur.
-// Ekinler sonra her hücrenin ikinci slotu olacak.
-public class FarmGrid : MonoBehaviour, IToolTarget
+// Ekin: hücredeki parçanın o hücresinde durur (FarmPiece tutar, parça kaydırılınca ekin de gider). Tohum (Seed)
+// tarlanın üstüne getirilince hücrenin üstünde süzülür; sol tık (basılı tutup sürükleyerek de) ekilebilir hücrelere eker.
+// Eldiven tarlanın üstünde base gibi yürür (IGloveWalkable; bot geçirgen kalır).
+public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
 {
     // Şu an mouse'un altında, elde tutulan parçaya yer gösteren tarla (FarmPiece bırakılırken sorar)
     public static FarmGrid Hovered { get; private set; }
@@ -30,6 +32,11 @@ public class FarmGrid : MonoBehaviour, IToolTarget
     }
 
     private int Radius => size / 2;
+
+    // Tohumun ekilecek hücrenin üstünde süzüldüğü yükseklik (pivot'tan)
+    private const float SeedHoverHeight = 0.6f;
+
+    private bool InBounds(Vector2Int c) => cells != null && c.x >= 0 && c.y >= 0 && c.x < size && c.y < size;
 
     // Hücrenin (pivot) güverte üstündeki yerel konumu; parçanın pivot'u hücrenin ortasında, tabanı güvertede (+0.5)
     private Vector3 CellLocal(Vector2Int cell) => new Vector3(cell.x - Radius, 0.5f, cell.y - Radius);
@@ -63,6 +70,20 @@ public class FarmGrid : MonoBehaviour, IToolTarget
         return true;
     }
 
+    // Hücredeki parça ve parçanın o hücresi (döndürmesiz yerel offset); parça yoksa false
+    private bool TryGetPlot(Vector2Int cell, out FarmPiece piece, out Vector2Int tile)
+    {
+        tile = default;
+        piece = InBounds(cell) ? cells[cell.x, cell.y] : null;
+        return piece != null && piece.TryGetTileAt(transform.TransformPoint(CellLocal(cell)), out tile);
+    }
+
+    // Ekilebilir: hücrede tarla parçası var ve o hücre boş
+    public bool CanPlant(Vector2Int cell) => TryGetPlot(cell, out FarmPiece piece, out Vector2Int tile) && !piece.HasCrop(tile);
+
+    public bool TryPlant(CropSO crop, Vector2Int cell) =>
+        TryGetPlot(cell, out FarmPiece piece, out Vector2Int tile) && piece.Plant(crop, tile);
+
     public void Detach(FarmPiece piece)
     {
         for (int x = 0; x < size; x++)
@@ -81,21 +102,38 @@ public class FarmGrid : MonoBehaviour, IToolTarget
         return attached;
     }
 
-    // --- IToolTarget: elde parça varken mouse tarlanın üstünde ---
+    // Mouse'un güverte üstündeki noktası → tarlanın yerel hücresi
+    private bool TryGetMouseCell(out Vector2Int cell)
+    {
+        cell = default;
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        var plane = new Plane(transform.up, transform.position);
+        if (!plane.Raycast(ray, out float enter)) return false;
+        Vector3 local = transform.InverseTransformPoint(ray.GetPoint(enter));
+        cell = new Vector2Int(Mathf.RoundToInt(local.x + Radius), Mathf.RoundToInt(local.z + Radius));
+        return true;
+    }
+
+    // --- IToolTarget: elde parça ya da tohum varken mouse tarlanın üstünde ---
 
     public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept)
     {
         accept = false;
         pendingValid = false;
-        if (!(interacted is FarmPiece piece) || cells == null) return Vector3.zero;
+        if (cells == null || !TryGetMouseCell(out Vector2Int cell)) return Vector3.zero;
 
-        // Mouse'un güverte üstündeki noktası → tarlanın yerel hücresi (parçanın pivot hücresi)
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        var plane = new Plane(transform.up, transform.position);
-        if (!plane.Raycast(ray, out float enter)) return Vector3.zero;
-        Vector3 local = transform.InverseTransformPoint(ray.GetPoint(enter));
-        var cell = new Vector2Int(Mathf.RoundToInt(local.x + Radius), Mathf.RoundToInt(local.z + Radius));
+        // Tohum: tarlanın her hücresinde üstte süzülür (ekilemeyen hücrede de, tarladan düşmesin); ekilebilirse pendingValid
+        if (interacted is Seed seed)
+        {
+            if (!InBounds(cell)) return Vector3.zero;
+            pendingCell = cell;
+            pendingValid = CanPlant(cell);
+            pendingRotation = transform.rotation * seed.GridRotation;
+            accept = true;
+            return transform.TransformPoint(CellLocal(cell)) + transform.up * SeedHoverHeight;
+        }
 
+        if (!(interacted is FarmPiece piece)) return Vector3.zero;
         Hovered = this;
         if (!Fits(piece, cell)) return Vector3.zero;
 
@@ -108,9 +146,17 @@ public class FarmGrid : MonoBehaviour, IToolTarget
 
     public Quaternion GetToolTargetRotation() => pendingRotation;
 
-    // Sol tık: oturt (elde tutma biter)
+    // Sol tık. Parça: oturt (elde tutma biter). Tohum: gösterilen hücreye ek (tohum bitene kadar elde kalır).
     public bool OnToolUsed(IInteractable tool)
     {
+        if (tool is Seed seed)
+        {
+            if (!pendingValid || !TryPlant(seed.Crop, pendingCell)) return false;
+            pendingValid = false; // aynı karede ikinci kez ekilmesin
+            seed.OnPlanted();
+            return true;
+        }
+
         if (!(tool is FarmPiece piece) || !TryAttachHovered(piece)) return false;
         InteractableController.Instance?.Release(piece);
         return true;

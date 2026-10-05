@@ -264,7 +264,7 @@ public class GloveCursor : MonoBehaviour
     // (yumuşatılmamış hedef) ölçülür; el yumuşak takip etse de adımlar gerçek yola göre atılır.
     private void UpdateBaseMotion()
     {
-        OnBase = SurfaceCollider != null && SurfaceCollider.GetComponentInParent<GridBase>() != null;
+        OnBase = SurfaceCollider != null && (SurfaceCollider.GetComponentInParent<GridBase>() != null || IsWalkable(SurfaceCollider));
 
         float dt = Mathf.Max(Time.deltaTime, 0.0001f);
         float scale = transform.lossyScale.x;
@@ -620,7 +620,8 @@ public class GloveCursor : MonoBehaviour
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
         foreach (RaycastHit hit in hits)
         {
-            IGlovePassThrough through = hit.collider.GetComponentInParent<IGlovePassThrough>();
+            // Yürünebilir (örn. botun tarlası) geçirgen bir objenin child'ı olsa da zemin sayılır
+            IGlovePassThrough through = IsWalkable(hit.collider) ? null : hit.collider.GetComponentInParent<IGlovePassThrough>();
             if (through != null)
             {
                 if (passThrough == null)
@@ -636,6 +637,8 @@ public class GloveCursor : MonoBehaviour
         result = default;
         return false;
     }
+
+    private static bool IsWalkable(Collider collider) => collider.GetComponentInParent<IGloveWalkable>() != null;
 
     // Noktaya yataydan en yakın kara sütunu (en üstteki base) bulunur; nokta o karonun içine (kenardan shoreInset
     // içeride) çekilip yukarıdan base'in collider'ına ray atılır. Base'in collider'ı olduğu için el normal base
