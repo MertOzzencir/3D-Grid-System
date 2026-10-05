@@ -103,6 +103,10 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     private Vector3Int farmCenter, farmForward = Vector3Int.forward;
     private Transform deck;
     private bool snapDeck = true;
+    // Güvertenin yumuşatılmış dünya pozu: takip bunun üstünden yapılır. Transform'dan okunsaydı güverte botun child'ı
+    // olduğu için bot dönünce o kare botla birlikte dönmüş halinden başlardı (anlık sağa dönüp düzelme).
+    private Vector3 deckPosition;
+    private Quaternion deckRotation = Quaternion.identity;
     private Vector3Int homeHead, homeBody; // liman: ilk konduğu yer
     private bool hasHome;
 
@@ -610,15 +614,20 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         Vector3 target = GridWalker.FeetPosition(farmCenter) + Vector3.up * (0.5f + deckHeight - deckThickness * 0.5f);
         target.y += Mathf.Sin(Time.time * bobSpeed * Mathf.PI * 2f + 1.7f) * bobAmount;
         Vector3 forward = new Vector3(farmForward.x, 0f, farmForward.z);
-        Quaternion rotation = forward.sqrMagnitude > 0.01f ? Quaternion.LookRotation(forward, Vector3.up) : deck.rotation;
+        Quaternion rotation = forward.sqrMagnitude > 0.01f ? Quaternion.LookRotation(forward, Vector3.up) : deckRotation;
         if (snapDeck)
         {
-            deck.SetPositionAndRotation(target, rotation);
+            deckPosition = target;
+            deckRotation = rotation;
             snapDeck = false;
-            return;
         }
-        float k = 1f - Mathf.Exp(-deckFollow * dt);
-        deck.SetPositionAndRotation(Vector3.Lerp(deck.position, target, k), Quaternion.Slerp(deck.rotation, rotation, k));
+        else
+        {
+            float k = 1f - Mathf.Exp(-deckFollow * dt);
+            deckPosition = Vector3.Lerp(deckPosition, target, k);
+            deckRotation = Quaternion.Slerp(deckRotation, rotation, k);
+        }
+        deck.SetPositionAndRotation(deckPosition, deckRotation);
         UpdateRope();
     }
 
