@@ -120,6 +120,7 @@ public class GloveCursor : MonoBehaviour
     public bool IsAtShore { get; private set; }
     // Mouse'un altındaki geçirgen obje (örn. bot): eldiven ona basmaz ama bot "üstüne gelindi" diye biner
     public IGlovePassThrough HoveredPassThrough { get; private set; }
+    public Collider HoveredPassThroughCollider { get; private set; }
 
     // Base karosunun üstünde ve elde bir şey yok: yürüme / bekleme modu
     public bool OnBase { get; private set; }
@@ -177,6 +178,7 @@ public class GloveCursor : MonoBehaviour
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
         HoveredPassThrough = null; // sadece yüzey takibinde (FindSurface) dolar: tutarken / binmişken eski değer kalmasın
+        HoveredPassThroughCollider = null;
 
         if (rideSeat != null)
         {
@@ -568,8 +570,9 @@ public class GloveCursor : MonoBehaviour
     private void FindSurface(Ray ray)
     {
         IsAtShore = false;
-        bool solid = TryRaycastSolid(ray, out RaycastHit hit, out IGlovePassThrough passThrough);
+        bool solid = TryRaycastSolid(ray, out RaycastHit hit, out IGlovePassThrough passThrough, out Collider passCollider);
         HoveredPassThrough = passThrough;
+        HoveredPassThroughCollider = passCollider;
         if (solid)
         {
             HasSurface = true;
@@ -606,12 +609,13 @@ public class GloveCursor : MonoBehaviour
     }
 
     // Eldivenin basabileceği ilk collider: IGlovePassThrough olanlar (örn. bot) atlanır, onların üstü su sayılır
-    private bool TryRaycastSolid(Ray ray, out RaycastHit result) => TryRaycastSolid(ray, out result, out _);
+    private bool TryRaycastSolid(Ray ray, out RaycastHit result) => TryRaycastSolid(ray, out result, out _, out _);
 
     // passThrough: mouse'un altındaki (zeminden önce) ilk geçirgen obje (örn. bot), yoksa null
-    private bool TryRaycastSolid(Ray ray, out RaycastHit result, out IGlovePassThrough passThrough)
+    private bool TryRaycastSolid(Ray ray, out RaycastHit result, out IGlovePassThrough passThrough, out Collider passThroughCollider)
     {
         passThrough = null;
+        passThroughCollider = null;
         RaycastHit[] hits = Physics.RaycastAll(ray, maxDistance, surfaceMask, QueryTriggerInteraction.Ignore);
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
         foreach (RaycastHit hit in hits)
@@ -619,7 +623,11 @@ public class GloveCursor : MonoBehaviour
             IGlovePassThrough through = hit.collider.GetComponentInParent<IGlovePassThrough>();
             if (through != null)
             {
-                passThrough ??= through;
+                if (passThrough == null)
+                {
+                    passThrough = through;
+                    passThroughCollider = hit.collider;
+                }
                 continue;
             }
             result = hit;

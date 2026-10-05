@@ -2,7 +2,8 @@ using UnityEngine;
 
 // Su üstünde giden 2×1 bot (yürüyen placeable, kedi gibi): sadece suya konur (CanOccupy), su hücrelerinde
 // GridWalker ile gider (Medium = Water); grid'deki yerini GridWalker her adımda günceller.
-// Binme: mouse botun ya da tarlasının üstüne gelince (uzaklık sınırı yok) eldiven kıyıdan zıplayıp koltuğa (Seat) oturur. Binmişken WASD botu kameranın
+// Binme: mouse botun gövdesinin üstüne gelince (uzaklık sınırı yok; tarla değil, oradaki parçalar tutulur) eldiven
+// kıyıdan zıplayıp koltuğa (Seat) oturur. Binmişken WASD botu kameranın
 // açısına göre hücre hücre sürer (W ileri, S geri, A/D sola/sağa; yol bulma yok), kamera botu takip eder.
 // WASD ile gidilecek hücre kara (base) ise eldiven oraya iner, mouse imleci de oraya taşınır. Binerken oyuncu girişi
 // kilitli (şimdilik sadece gezme).
@@ -102,7 +103,9 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     private readonly System.Collections.Generic.List<Vector3Int> trail = new System.Collections.Generic.List<Vector3Int>();
     private Vector3Int farmCenter, farmForward = Vector3Int.forward;
     private Transform deck;
+    private FarmGrid farmGrid;
     private bool snapDeck = true;
+    private System.Collections.Generic.List<FarmPieceSave> restoredPieces;
     // Güvertenin yumuşatılmış dünya pozu: takip bunun üstünden yapılır. Transform'dan okunsaydı güverte botun child'ı
     // olduğu için bot dönünce o kare botla birlikte dönmüş halinden başlardı (anlık sağa dönüp düzelme).
     private Vector3 deckPosition;
@@ -268,17 +271,33 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         public bool hasHome;
         public Vector3Int homeHead, homeBody; // liman
         public int farmSize;                  // 0 = prefab'taki
+        public System.Collections.Generic.List<FarmPieceSave> pieces = new System.Collections.Generic.List<FarmPieceSave>();
+    }
+
+    [System.Serializable]
+    private class FarmPieceSave
+    {
+        public string id;    // SO SaveId
+        public int x, z;     // tarlanın yerel hücresi (pivot)
+        public GridMaskRotator.Rotation rotation;
     }
 
     // Tarla kayıttan hep botun düz arkasına kurulur (köşede kaydedildiyse de)
-    public string CaptureState() => JsonUtility.ToJson(new SaveState
+    public string CaptureState()
     {
-        front = walker.IsPlaced ? walker.HeadCell - walker.BodyCell : Vector3Int.forward,
-        hasHome = hasHome,
-        homeHead = homeHead,
-        homeBody = homeBody,
-        farmSize = farmSize,
-    });
+        var state = new SaveState
+        {
+            front = walker.IsPlaced ? walker.HeadCell - walker.BodyCell : Vector3Int.forward,
+            hasHome = hasHome,
+            homeHead = homeHead,
+            homeBody = homeBody,
+            farmSize = farmSize,
+        };
+        if (farmGrid != null)
+            foreach (FarmPiece piece in farmGrid.Pieces)
+                state.pieces.Add(new FarmPieceSave { id = piece.GetData().SaveId, x = piece.FarmCell.x, z = piece.FarmCell.y, rotation = piece.Rotation });
+        return JsonUtility.ToJson(state);
+    }
 
     public void RestoreState(string state)
     {
@@ -292,6 +311,26 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
             homeHead = saved.homeHead;
             homeBody = saved.homeBody;
         }
+        restoredPieces = saved.pieces;
+        if (farmGrid != null) RestorePieces();
+    }
+
+    // Kayıttaki tarla parçaları: id'den prefab (SaveRegistry), tarladaki yerine
+    private void RestorePieces()
+    {
+        if (restoredPieces == null || SaveManager.Registry == null) return;
+        foreach (FarmPieceSave save in restoredPieces)
+        {
+            if (!(SaveManager.Registry.GetEntity(save.id)?.GetPrefabBase() is FarmPiece prefab))
+            {
+                Debug.LogWarning($"Boat: tarla parçası '{save.id}' bulunamadı (SaveRegistry), atlandı.", this);
+                continue;
+            }
+            FarmPiece piece = Instantiate(prefab);
+            piece.Rotation = save.rotation;
+            if (!farmGrid.Attach(piece, new Vector2Int(save.x, save.z))) Destroy(piece.gameObject);
+        }
+        restoredPieces = null;
     }
 
     // --- Binme, sürme, inme ---
@@ -320,6 +359,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         // olduğu için o sırada kıyıda bekliyordu; oradan zıplar.
         GloveCursor g = Glove;
         if (g == null || g.IsRiding || g.IsCaptured || !ReferenceEquals(g.HoveredPassThrough, this)) return;
+        if (deck != null && g.HoveredPassThroughCollider != null && g.HoveredPassThroughCollider.transform.IsChildOf(deck)) return; // tarla
         if (Time.time - lastRideEnd < boardCooldown) return;
 
         riding = true;
@@ -573,11 +613,21 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     private void CreateDeck(Transform model)
     {
         if (!HasFarm) return;
+        // Kök: güvertenin üst yüzünün ortası (ölçeksiz; parçalar child olur). Görsel sal ve collider altında.
+        deck = new GameObject("Farm").transform;
+        deck.SetParent(transform, false);
+        farmGrid = deck.gameObject.AddComponent<FarmGrid>();
+        farmGrid.Setup(farmSize);
+        var deckCollider = deck.gameObject.AddComponent<BoxCollider>(); // parça bırakılacak yer (tarla hedefi)
+        deckCollider.size = new Vector3(farmSize, deckThickness, farmSize);
+        deckCollider.center = new Vector3(0f, -deckThickness * 0.5f, 0f);
+
         GameObject plank = GameObject.CreatePrimitive(PrimitiveType.Cube);
         plank.name = "Farm Deck";
-        deck = plank.transform;
-        deck.SetParent(transform, false);
-        deck.localScale = new Vector3(farmSize, deckThickness, farmSize);
+        Destroy(plank.GetComponent<Collider>());
+        plank.transform.SetParent(deck, false);
+        plank.transform.localPosition = new Vector3(0f, -deckThickness * 0.5f, 0f);
+        plank.transform.localScale = new Vector3(farmSize, deckThickness, farmSize);
 
         Renderer hull = null;
         foreach (Renderer candidate in model.GetComponentsInChildren<Renderer>())
@@ -611,7 +661,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     private void UpdateDeck(float dt)
     {
         if (deck == null || !walker.IsPlaced) return;
-        Vector3 target = GridWalker.FeetPosition(farmCenter) + Vector3.up * (0.5f + deckHeight - deckThickness * 0.5f);
+        Vector3 target = GridWalker.FeetPosition(farmCenter) + Vector3.up * (0.5f + deckHeight); // üst yüz
         target.y += Mathf.Sin(Time.time * bobSpeed * Mathf.PI * 2f + 1.7f) * bobAmount;
         Vector3 forward = new Vector3(farmForward.x, 0f, farmForward.z);
         Quaternion rotation = forward.sqrMagnitude > 0.01f ? Quaternion.LookRotation(forward, Vector3.up) : deckRotation;

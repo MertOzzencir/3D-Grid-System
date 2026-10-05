@@ -140,7 +140,7 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - **Sert dönüş:** yana basınca bot kıçının etrafında yerinde 90° döner, tarla yerinde kalır (yılan dönüşü köşede takılıyordu).
 - **Düzenleme:** bot dururken (dünya butonu ya da UI ile açılan mod).
 - **Kayıt:** botun `ISaveState`'i: tarla boyutu, parçalar (tür, yerel konum, dönüş), ekinler, büyüme durumu.
-- **Adımlar:** 1) ✅ bot + tarla treni (hareket, dünya grid'i, görsel güverte, çekme halatı, sert dönüş yerinde, limana dön) 2) `FarmGrid` + tarla parçası (dünyadan tarlaya oturma) 3) düzenleme modu 4) ekim 5) büyüme düğmesi 6) hasat yolu + kombo 7) kayıt.
+- **Adımlar:** 1) ✅ bot + tarla treni (hareket, dünya grid'i, görsel güverte, çekme halatı, sert dönüş yerinde, limana dön) 2) ✅ (kod) `FarmGrid` + tarla parçası (dünyadan tarlaya oturma, tarlada kaydırma, kayıt) 3) düzenleme modu 4) ekim 5) büyüme düğmesi 6) hasat yolu + kombo 7) kayıt.
 
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.

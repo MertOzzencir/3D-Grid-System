@@ -10,6 +10,10 @@ public class SaveManager : MonoBehaviour
     private const int CurrentVersion = 2; // 2: gün saati (dayTime)
 
     [SerializeField] private SaveRegistrySO registry;
+
+    // Kendi içindekileri kaydeden objeler (örn. botun tarlasındaki parçalar) id'den prefab bulsun diye
+    public static SaveRegistrySO Registry { get; private set; }
+    private void Awake() => Registry = registry;
     [Tooltip("Kayıt dosyasının adı (slot). Her sahne kendi dosyasını kullanır.")]
     [SerializeField] private string slotName = "save";
 

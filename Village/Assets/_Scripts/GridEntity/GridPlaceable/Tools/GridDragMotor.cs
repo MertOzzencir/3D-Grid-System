@@ -128,6 +128,13 @@ public class GridDragMotor
         placeRoutine = owner.StartCoroutine(SmoothPlaceAt(dropPos));
     }
 
+    // Taşımayı grid'e bırakmadan bitir (parça başka bir yere, örn. botun tarlasına oturtuldu)
+    public void Abort()
+    {
+        ClearTarget();
+        StopPlaceRoutine();
+    }
+
     private IEnumerator SmoothPlaceAt(Vector3 targetPos)
     {
         while (Vector3.Distance(Transform.position, targetPos) > 0.05f)
