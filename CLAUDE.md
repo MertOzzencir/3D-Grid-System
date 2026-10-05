@@ -117,7 +117,7 @@ Oyun tasarımı (sistemler, ana döngü, kararlar, açık sorular) `DESIGN.md`'d
 
 ## Bot (`_Scripts/GridEntity/GridPlaceable/Boat`)
 - `Boat`: 2×1 yürüyen placeable, sadece suya konur (`CanOccupy` override), `GridWalker` su modunda (`Awake`'te koddan sadece `Medium = Water`; hız/dönüş ayarları `GridWalker`'da). Kayıt: ön hücrenin yönü (`ISaveState`). Kurulum: `Prefabs/Boat` + `SOData/PlaceableData/Boat`, placeable menüsünde + SaveRegistry'de; build mode'da mouse suyun üstündeyken konur.
-- Binme: eldiven kıyıdayken (`GloveCursor.IsAtShore`: mouse suda ya da botun üstünde) botun bir hücresine `boardDistance` yakınsa biner (koltuk = `Seat`, `seatOffset`). Binmişken giriş kilitli (şimdilik sadece gezme; ileride balık tutma için alet mantığı).
+- Binme: mouse botun ya da tarlasının üstüne gelince biner, **uzaklık sınırı yok** (`GloveCursor.HoveredPassThrough`: zeminden önceki ilk geçirgen obje; eldiven o sırada kıyıda bekler, oradan zıplar, uzaktan zıplama biraz daha uzun sürer). Koltuk = `Seat`, `seatOffset`. Binmişken giriş kilitli (şimdilik sadece gezme; ileride balık tutma için alet mantığı).
 - Sürme: WASD kameraya göre hücre hücre (`GridWalker.StepTo`, yol bulma yok; tuş basılıyken sıradaki adım önceden girer, bırakınca durur; arkaya basınca yerinde döner; çaprazda gidilen yöne devam). Kamera botu takip eder ve ortalar (`CameraController.Follow`).
 - İnme: WASD ile gidilecek hücre kara (base) ise eldiven o karonun üstüne iner, mouse imleci oraya taşınır (`GloveCursor.EndRideAt`). Mouse'la inme yok (klavyeyle sürerken yanlışlıkla inmesin).
 - Bot `IGlovePassThrough`: eldiven onun üstüne basmaz; gövdeyi saran BoxCollider (tıklama/silme için) kodla eklenir.

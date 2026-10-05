@@ -112,11 +112,14 @@ public class GloveCursor : MonoBehaviour
     private Vector3 rideStartPosition;
     private Quaternion rideStartRotation;
     public bool IsRiding => rideSeat != null;
+    private float currentHopDuration = 0.3f;
     public bool MouseOverLand { get; private set; }
     public Vector3 MouseLandPoint { get; private set; }
     public Vector3 MouseWaterPoint { get; private set; }
     // Mouse suda (ya da botun üstünde), el en yakın kıyıda bekliyor
     public bool IsAtShore { get; private set; }
+    // Mouse'un altındaki geçirgen obje (örn. bot): eldiven ona basmaz ama bot "üstüne gelindi" diye biner
+    public IGlovePassThrough HoveredPassThrough { get; private set; }
 
     // Base karosunun üstünde ve elde bir şey yok: yürüme / bekleme modu
     public bool OnBase { get; private set; }
@@ -173,6 +176,7 @@ public class GloveCursor : MonoBehaviour
         }
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+        HoveredPassThrough = null; // sadece yüzey takibinde (FindSurface) dolar: tutarken / binmişken eski değer kalmasın
 
         if (rideSeat != null)
         {
@@ -336,6 +340,10 @@ public class GloveCursor : MonoBehaviour
     {
         rideSeat = seat;
         rideProgress = 0f;
+        // Uzaktan binince zıplama biraz daha uzun (ışınlanmış gibi durmasın)
+        currentHopDuration = Mathf.Clamp(rideHopDuration + Vector3.Distance(transform.position, seat.position) * 0.04f,
+                                         rideHopDuration, rideHopDuration * 3f);
+        HoveredPassThrough = null;
         rideStartPosition = transform.position;
         rideStartRotation = transform.rotation;
         OnBase = false;
@@ -387,7 +395,7 @@ public class GloveCursor : MonoBehaviour
         Vector3 rootPosition = palmPosition - rootRotation * Vector3.Scale(palmLocalPosition, transform.lossyScale);
 
         // Binerken yay çizerek koltuğa, sonra katı bağlı (bot sallandıkça eldiven de sallanır)
-        rideProgress = Mathf.MoveTowards(rideProgress, 1f, Time.deltaTime / Mathf.Max(rideHopDuration, 0.0001f));
+        rideProgress = Mathf.MoveTowards(rideProgress, 1f, Time.deltaTime / Mathf.Max(currentHopDuration, 0.0001f));
         float t = Mathf.SmoothStep(0f, 1f, rideProgress);
         Vector3 position = Vector3.Lerp(rideStartPosition, rootPosition, t) + Vector3.up * (Mathf.Sin(t * Mathf.PI) * rideHopHeight);
         transform.SetPositionAndRotation(position, Quaternion.Slerp(rideStartRotation, rootRotation, t));
@@ -560,7 +568,9 @@ public class GloveCursor : MonoBehaviour
     private void FindSurface(Ray ray)
     {
         IsAtShore = false;
-        if (TryRaycastSolid(ray, out RaycastHit hit))
+        bool solid = TryRaycastSolid(ray, out RaycastHit hit, out IGlovePassThrough passThrough);
+        HoveredPassThrough = passThrough;
+        if (solid)
         {
             HasSurface = true;
             SurfacePoint = hit.point;
@@ -596,13 +606,22 @@ public class GloveCursor : MonoBehaviour
     }
 
     // Eldivenin basabileceği ilk collider: IGlovePassThrough olanlar (örn. bot) atlanır, onların üstü su sayılır
-    private bool TryRaycastSolid(Ray ray, out RaycastHit result)
+    private bool TryRaycastSolid(Ray ray, out RaycastHit result) => TryRaycastSolid(ray, out result, out _);
+
+    // passThrough: mouse'un altındaki (zeminden önce) ilk geçirgen obje (örn. bot), yoksa null
+    private bool TryRaycastSolid(Ray ray, out RaycastHit result, out IGlovePassThrough passThrough)
     {
+        passThrough = null;
         RaycastHit[] hits = Physics.RaycastAll(ray, maxDistance, surfaceMask, QueryTriggerInteraction.Ignore);
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
         foreach (RaycastHit hit in hits)
         {
-            if (hit.collider.GetComponentInParent<IGlovePassThrough>() != null) continue;
+            IGlovePassThrough through = hit.collider.GetComponentInParent<IGlovePassThrough>();
+            if (through != null)
+            {
+                passThrough ??= through;
+                continue;
+            }
             result = hit;
             return true;
         }

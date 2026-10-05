@@ -2,7 +2,7 @@ using UnityEngine;
 
 // Su üstünde giden 2×1 bot (yürüyen placeable, kedi gibi): sadece suya konur (CanOccupy), su hücrelerinde
 // GridWalker ile gider (Medium = Water); grid'deki yerini GridWalker her adımda günceller.
-// Binme: eldiven kıyıdayken (mouse suda) botun yanındaysa biner, koltuğa (Seat) oturur. Binmişken WASD botu kameranın
+// Binme: mouse botun ya da tarlasının üstüne gelince (uzaklık sınırı yok) eldiven kıyıdan zıplayıp koltuğa (Seat) oturur. Binmişken WASD botu kameranın
 // açısına göre hücre hücre sürer (W ileri, S geri, A/D sola/sağa; yol bulma yok), kamera botu takip eder.
 // WASD ile gidilecek hücre kara (base) ise eldiven oraya iner, mouse imleci de oraya taşınır. Binerken oyuncu girişi
 // kilitli (şimdilik sadece gezme).
@@ -60,8 +60,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     [SerializeField] private float ropeWidth = 0.04f;
 
     [Header("Binme / inme")]
-    [Tooltip("Eldiven kıyıdayken (mouse suda) botun bir hücresine yataydan bu kadar yakınsa biner")]
-    [SerializeField] private float boardDistance = 1.3f;
     [Tooltip("İndikten sonra tekrar binmek için en az bekleme (saniye)")]
     [SerializeField] private float boardCooldown = 0.8f;
 
@@ -311,9 +309,11 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
 
     private void TryBoard()
     {
+        // Mouse botun (ya da tarlasının) üstüne gelince, bot ne kadar uzakta olursa olsun biner. Eldiven geçirgen
+        // olduğu için o sırada kıyıda bekliyordu; oradan zıplar.
         GloveCursor g = Glove;
-        if (g == null || g.IsRiding || g.IsCaptured || !g.IsAtShore) return;
-        if (Time.time - lastRideEnd < boardCooldown || DistanceToBoat(g.SurfacePoint) > boardDistance) return;
+        if (g == null || g.IsRiding || g.IsCaptured || !ReferenceEquals(g.HoveredPassThrough, this)) return;
+        if (Time.time - lastRideEnd < boardCooldown) return;
 
         riding = true;
         walker.Stop();
@@ -387,15 +387,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     }
 
     private void OnDisable() => EndRide(); // binilmişken silinirse eldiven ve giriş takılı kalmasın
-
-    // Noktanın botun iki hücresinden en yakınına yatay uzaklığı
-    private float DistanceToBoat(Vector3 point)
-    {
-        Vector2 p = new Vector2(point.x, point.z);
-        float head = Vector2.Distance(p, new Vector2(walker.HeadCell.x, walker.HeadCell.z));
-        float body = Vector2.Distance(p, new Vector2(walker.BodyCell.x, walker.BodyCell.z));
-        return Mathf.Min(head, body);
-    }
 
     // --- Görsel ---
 
