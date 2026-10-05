@@ -49,6 +49,8 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - **Ekim ve büyüme döngüsü:** bütün tarla aynı anda ekilir ve aynı anda olgunlaşır, türden bağımsız. Oyuncu o turda istediği ekinleri karelere eker, tarladaki **düğmeye** basar: tarla kapanır, belli bir süre geçer, tarla açılır ve ekilen her şey olgunlaşmıştır. Bulmaca hep tam tarla üzerinde oynanır (farklı büyüme süreleri bulmacayı anlamsızlaştırırdı); ritim oyuncunun elinde.
 - **Ekinlerin farkı sadece ne oldukları:** NPC domates istiyorsa domates ekilir. Ekinin yol kuralına etkisi yok (çekirdekte).
 - **Gemideki tarla alanı:** başlangıçta 3×3, her yeni adada bir kenar büyür (3×3 → 4×4 → 5×5...).
+- **Tohumlar ücretsiz, seçime dayalı (öneri, onay bekliyor):** tohum harcanan şey değil bilgi; bir ekin türü açılınca sınırsız ekilir. Türleri NPC'ler açar (blueprint ve tarla parçasının yanında). Kıtlığı tarla alanı yaratır (3×3 = 9 kare: "bu tur ne ekeyim?"). Para / dükkân yok. İleride: hasat koşullarının ödülü sınırlı **özel tohumlar** (nadir ekin / varyant).
+- **Gemi upgrade'leri** (küçük bir upgrade sistemi): tarla büyüme süresini kısaltma, geminin hızı, "son ekimi hatırla" düğmesi (tek tuşla aynı düzeni tekrar ek).
 - Bazı dizilimlerde tek yol matematiksel olarak yoktur (satranç boyaması: siyah / beyaz sayısı 1'den fazla farklıysa). Yerleştirirken "tek yolda bitebilir mi" ipucu göstergesi düşünülebilir (ceza değil).
 
 ### Balık tutma
@@ -104,7 +106,8 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 
 ## Açık sorular
 - Yemek pişirmenin mekaniği (işlevsel, farklı).
-- Ekim nasıl yapılır (her kareye tek tek mi, sürükleyerek mi, son düzeni hatırlayıp tek tuşla mı)?
+- Ekim nasıl yapılır (her kareye tek tek mi, sürükleyerek mi)? "Son ekimi hatırla" ileride gemi upgrade'i.
+- Gemi upgrade'leri neyle alınır (henüz para birimi yok)?
 - Büyüme süresi ne kadar (gerçek dakika mı, gün döngüsüne bağlı mı)?
 - Yol nereden başlar: serbest mi, geminin iskele kenarından mı (ilk adalarda serbest, sonra sabit giriş olabilir)?
 - Yapı işlevlerinin genel kural çerçevesi.
