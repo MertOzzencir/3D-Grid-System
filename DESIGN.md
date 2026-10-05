@@ -48,7 +48,7 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
   - **tam tur:** bütün tarla tek yolda (temel kombo)
 - **Ekim ve büyüme döngüsü:** bütün tarla aynı anda ekilir ve aynı anda olgunlaşır, türden bağımsız. Oyuncu o turda istediği ekinleri karelere eker, tarladaki **düğmeye** basar: tarla kapanır, belli bir süre geçer, tarla açılır ve ekilen her şey olgunlaşmıştır. Bulmaca hep tam tarla üzerinde oynanır (farklı büyüme süreleri bulmacayı anlamsızlaştırırdı); ritim oyuncunun elinde.
 - **Ekinlerin farkı sadece ne oldukları:** NPC domates istiyorsa domates ekilir. Ekinin yol kuralına etkisi yok (çekirdekte).
-- **Gemideki tarla alanı:** başlangıçta 3×3, her yeni adada bir kenar büyür (3×3 → 4×4 → 5×5...).
+- **Gemideki tarla alanı:** hep **tek sayılı kare**: 3×3 → 5×5 → 7×7 (her adada iki büyür). Bot hep tarlanın önünde ve ortasında; çift sayıda orta hücre olmazdı.
 - **Tohumlar ücretsiz, seçime dayalı (öneri, onay bekliyor):** tohum harcanan şey değil bilgi; bir ekin türü açılınca sınırsız ekilir. Türleri NPC'ler açar (blueprint ve tarla parçasının yanında). Kıtlığı tarla alanı yaratır (3×3 = 9 kare: "bu tur ne ekeyim?"). Para / dükkân yok. İleride: hasat koşullarının ödülü sınırlı **özel tohumlar** (nadir ekin / varyant).
 - **Gemi upgrade'leri** (küçük bir upgrade sistemi): tarla büyüme süresini kısaltma, geminin hızı, "son ekimi hatırla" düğmesi (tek tuşla aynı düzeni tekrar ek).
 - Bazı dizilimlerde tek yol matematiksel olarak yoktur (satranç boyaması: siyah / beyaz sayısı 1'den fazla farklıysa). Yerleştirirken "tek yolda bitebilir mi" ipucu göstergesi düşünülebilir (ceza değil).
@@ -102,7 +102,9 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 12. Tekrarı önleme: her hasatta rastgele **hasat koşulları** (başla / bitir / sıra), isteğe bağlı ekstra ödül; oyuncunun düzeni asla bozulmaz.
 13. Ekim ve büyüme: bütün tarla aynı anda ekilir, düğmeyle kapanır, süre sonunda hepsi birlikte olgunlaşmış açılır.
 14. Ekinler sadece ürün olarak farklı (NPC ne isterse o ekilir).
-15. Gemideki tarla alanı 3×3 başlar, her adada bir kenar büyür.
+15. Gemideki tarla alanı tek sayılı kare: 3×3 → 5×5 → 7×7; bot önde ortada.
+16. Bot + tarla tren gibi: tarla botun izinden gecikmeli gider (aşağıda "Teknik tasarım").
+17. Tarla parçaları dünyada placeable (build menüsünden spawnlanır, sürüklenir); botun tarlasına bırakılınca oraya oturur.
 
 ## Açık sorular
 - Yemek pişirmenin mekaniği (işlevsel, farklı).
@@ -115,6 +117,27 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - NPC istekleri sadece yemek mi, eylemler de mi?
 - Blueprint (saydam yapı) görünümünün çekici sunumu.
 - Charm'ın yeri (var mı, ne açar?).
+
+## Teknik tasarım: tarla botu
+
+```
+        [ bot 2×1 ]        ← önde ortada, yılan başı + gövdesi (bugünkü gibi)
+      ┌───┬───┬───┐
+      │   │   │   │        ← tarla: tek sayılı kare, merkezi botun izinden birkaç hücre geride
+      ├───┼───┼───┤
+      │   │ ● │   │
+      ├───┼───┼───┤
+      │   │   │   │
+      └───┴───┴───┘
+```
+
+- **Dünya grid'i** bot + tarlayı tek büyük placeable olarak görür, sadece kapladığı su hücrelerini bilir. **İçeride kim nerede**, botun kendi yerel grid'i (`FarmGrid`) tutar: her karede tarla bloğu + ekin. Hepsi botun child'ı, yerel koordinatta; bot hareket edince kendiliğinden gider, hiçbir hücre taşınmaz. `GridManager` bölünmez (refactor yok).
+- **Hareket (tren):** bot bugünkü 2×1 yılan hareketiyle gider; tarlanın merkezi botun izindeki bir noktayı birkaç hücre geriden takip eder (her adımda bir hücre). Köşelerde tarla görsel olarak yumuşakça döner; **tek sayılı kare döndüğünde aynı hücreleri kaplar**, yani dünya grid'inde her adımda sadece bot + tarlanın bir sırası değişir. Gidilecek bütün hücreler su olmalı; değilse gidilmez (büyük tarla dar kanaldan geçemez: rota düşündürür).
+- **Geri gitme (öneri, onay bekliyor):** yok; sadece ileri ve yanlara, U çizerek dönülür (gerçek tekne gibi).
+- **Tarla parçası:** dünyada `GridPlaceable` (odun gibi sürüklenir, build menüsünden spawnlanabilir). Botun tarlasına bırakılınca (`IToolTarget`, odunun odunla birleşmesi gibi) dünya grid'inden çıkıp `FarmGrid`'e oturur. Şekil + döndürme `GridFootprint` / `GridMaskRotator` ile (R). Eldivenin tarlada base gibi yürümesi için "yürünebilir zemin" tanımı genişletilecek (şu an sadece `GridBase`).
+- **Düzenleme:** bot dururken (dünya butonu ya da UI ile açılan mod).
+- **Kayıt:** botun `ISaveState`'i: tarla boyutu, parçalar (tür, yerel konum, dönüş), ekinler, büyüme durumu.
+- **Adımlar:** 1) bot + tarla treni (hareket, dünya grid'i, görsel güverte) 2) `FarmGrid` + tarla parçası (dünyadan tarlaya oturma) 3) düzenleme modu 4) ekim 5) büyüme düğmesi 6) hasat yolu + kombo 7) kayıt.
 
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.
