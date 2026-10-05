@@ -45,9 +45,10 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
   - **başla:** yol bu blokta başlasın
   - **bitir:** yol bu blokta bitsin (parlak "altın ürün" olarak gösterilebilir)
   - **sıra:** önce A, sonra B bloğundan geç (ileride tarif istekleriyle bağlanır)
-  - **ziyaretçi:** yol uyuyan kedinin / konan kuşun karesinden geçsin
   - **tam tur:** bütün tarla tek yolda (temel kombo)
-- **Ziyaretçiler engel değil hediye:** kedi bir karede uyur → yol oradan geçerken okşanır (sevgi); kuş konar → geçince ürküp tüy / tohum düşürür. İstenmezse eldivenle dokunup kovulur. Hiçbiri düzeni bozmaz, yolu kapatmaz.
+- **Ekim ve büyüme döngüsü:** bütün tarla aynı anda ekilir ve aynı anda olgunlaşır, türden bağımsız. Oyuncu o turda istediği ekinleri karelere eker, tarladaki **düğmeye** basar: tarla kapanır, belli bir süre geçer, tarla açılır ve ekilen her şey olgunlaşmıştır. Bulmaca hep tam tarla üzerinde oynanır (farklı büyüme süreleri bulmacayı anlamsızlaştırırdı); ritim oyuncunun elinde.
+- **Ekinlerin farkı sadece ne oldukları:** NPC domates istiyorsa domates ekilir. Ekinin yol kuralına etkisi yok (çekirdekte).
+- **Gemideki tarla alanı:** başlangıçta 3×3, her yeni adada bir kenar büyür (3×3 → 4×4 → 5×5...).
 - Bazı dizilimlerde tek yol matematiksel olarak yoktur (satranç boyaması: siyah / beyaz sayısı 1'den fazla farklıysa). Yerleştirirken "tek yolda bitebilir mi" ipucu göstergesi düşünülebilir (ceza değil).
 
 ### Balık tutma
@@ -96,19 +97,24 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 9. Ceza yok, kombo var (tekrar girmek sadece komboyu bitirir).
 10. Yol kurallarını tarla bloğunun türü belirler (her ada yeni blok türü), ekin sadece ürünü belirler. Örnek: çitli blok üç tarafı kapalı → yolun başı ya da sonu.
 11. Tarla parçaları sadece yatayda birleşir, hepsi 1 birim yüksek.
-12. Tekrarı önleme: her hasatta rastgele **hasat koşulları** (başla / bitir / sıra / ziyaretçi), isteğe bağlı ekstra ödül; oyuncunun düzeni asla bozulmaz. Ziyaretçiler (kedi, kuş) engel değil, yol üstünde hediye; istenirse kovulur.
+12. Tekrarı önleme: her hasatta rastgele **hasat koşulları** (başla / bitir / sıra), isteğe bağlı ekstra ödül; oyuncunun düzeni asla bozulmaz.
+13. Ekim ve büyüme: bütün tarla aynı anda ekilir, düğmeyle kapanır, süre sonunda hepsi birlikte olgunlaşmış açılır.
+14. Ekinler sadece ürün olarak farklı (NPC ne isterse o ekilir).
+15. Gemideki tarla alanı 3×3 başlar, her adada bir kenar büyür.
 
 ## Açık sorular
 - Yemek pişirmenin mekaniği (işlevsel, farklı).
-- Ekim: tek tek ekmek angarya. Fikir: hasat edilen kare otomatik yeniden ekilir (kombo anı tek kalsın) ya da ekim de yol hareketiyle.
-- Gemideki tarla alanının sınırı (çizim yormasın), geminin büyütülmesi.
+- Ekim nasıl yapılır (her kareye tek tek mi, sürükleyerek mi, son düzeni hatırlayıp tek tuşla mı)?
+- Büyüme süresi ne kadar (gerçek dakika mı, gün döngüsüne bağlı mı)?
 - Yol nereden başlar: serbest mi, geminin iskele kenarından mı (ilk adalarda serbest, sonra sabit giriş olabilir)?
-- Ekinlerin büyüme süresi (hepsi aynı anda mı olgunlaşır?).
 - Yapı işlevlerinin genel kural çerçevesi.
 - Malzemelerin işlevleri (taş, demir ve sonrası).
 - NPC istekleri sadece yemek mi, eylemler de mi?
 - Blueprint (saydam yapı) görünümünün çekici sunumu.
 - Charm'ın yeri (var mı, ne açar?).
+
+## Sonraya bırakılanlar
+- **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.
 
 ## Denenip bırakılanlar
 - **Bitki komşuluğu** (seven / huysuz bitkiler, renk takımları, işlevsel varyantlar): oyuncuya fazla hesap yükü, sistem için boşa emek; yerine hasat yolu bulmacası seçildi.
