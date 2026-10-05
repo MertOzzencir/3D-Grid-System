@@ -1,6 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Yürüyenin kafa + gövdesinin yanında grid'de kapladığı ek hücreler (örn. botun arkasından gelen tarla).
+// CellsFor: o adımda kafa / gövde bu hücrelere giderse ek hücreler (dünya); hepsi boşsa adım atılır, OnOccupied çağrılır.
+public interface IWalkerExtraCells
+{
+    System.Collections.Generic.IEnumerable<Vector3Int> CellsFor(Vector3Int head, Vector3Int body);
+    void OnOccupied(Vector3Int head, Vector3Int body);
+}
+
 // Grid'de yürüyen iki hücreli (kafa + gövde) canlının hareket modülü (örn. kedi, 2×1).
 // Yol kafa hücresi için bulunur; gövde kafanın bir önceki hücresine geçer, yani kafanın izinden gelir.
 // Geri dönmek gerekirse (ilk adım gövdenin hücresi) kafa ile gövde yer değiştirir: canlı yerinde döner.
@@ -67,13 +75,37 @@ public class GridWalker : MonoBehaviour
     private bool IsFree(Vector3Int cell, GridPlaceable ignore)
         => medium == Medium.Water ? GridPathfinder.IsSwimmable(cell, ignore) : GridPathfinder.IsStandable(cell, ignore);
 
+    // Ek hücreler: aynı objede IWalkerExtraCells varsa (örn. botun arkasındaki tarla) kafa + gövdeyle birlikte kaplanır
+    private IWalkerExtraCells extraCells;
+    private bool extraSearched;
+
+    private IWalkerExtraCells ExtraCells
+    {
+        get
+        {
+            if (!extraSearched) { extraCells = GetComponent<IWalkerExtraCells>(); extraSearched = true; }
+            return extraCells;
+        }
+    }
+
     // Grid'deki yerini günceller; başka bir obje hücreyi kapadıysa false
     private bool Occupy(Vector3Int head, Vector3Int body)
     {
         GridPlaceable self = Occupant;
-        if (self == null || GridManager.Instance == null) return true;
-        var footprint = new GridFootprint(new[] { Vector3Int.zero, head - body });
-        return GridManager.Instance.TryMovePlaceable(self, body, footprint);
+        if (self == null || GridManager.Instance == null)
+        {
+            ExtraCells?.OnOccupied(head, body);
+            return true;
+        }
+
+        var cells = new System.Collections.Generic.List<Vector3Int> { Vector3Int.zero, head - body };
+        if (ExtraCells != null)
+            foreach (Vector3Int cell in ExtraCells.CellsFor(head, body))
+                if (cell != head && cell != body) cells.Add(cell - body);
+
+        if (!GridManager.Instance.TryMovePlaceable(self, body, new GridFootprint(cells.ToArray()))) return false;
+        ExtraCells?.OnOccupied(head, body);
+        return true;
     }
 
     // Hücrenin tabanı (ayakların bastığı yer)
@@ -82,6 +114,19 @@ public class GridWalker : MonoBehaviour
     public void Place(Vector3Int head, Vector3Int body)
     {
         Occupy(head, body);
+        SetCells(head, body);
+    }
+
+    // Hücreler boşsa oraya ışınlanır (örn. bot limana döner); doluysa hiçbir şey değişmez (false)
+    public bool TryPlace(Vector3Int head, Vector3Int body)
+    {
+        if (!Occupy(head, body)) return false;
+        SetCells(head, body);
+        return true;
+    }
+
+    private void SetCells(Vector3Int head, Vector3Int body)
+    {
         HeadCell = head;
         BodyCell = body;
         headFrom = headTo = FeetPosition(head);

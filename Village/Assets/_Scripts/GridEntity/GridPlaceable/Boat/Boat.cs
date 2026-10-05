@@ -7,9 +7,14 @@ using UnityEngine;
 // WASD ile gidilecek hücre kara (base) ise eldiven oraya iner, mouse imleci de oraya taşınır. Binerken oyuncu girişi
 // kilitli (şimdilik sadece gezme).
 // Görsel: model kodla kurulur; giderken kürekler yol başına çekilir, bot suda hafif inip kalkar, yalpalar, dönüşte yatar.
+// Tarla: botun arkasında tek sayılı kare (3×3, 5×5...), çekme halatıyla botun izinden gelir (IWalkerExtraCells):
+// gövdenin geçtiği hücrelerin izi tutulur, tarla merkezi o izin FarmLag adım gerisindedir. Tek sayılı kare dönünce aynı
+// hücreleri kapladığı için köşeler sorun değil. Halat: iz köşede kıvrıldığı için tarla izde (yarıçap + 1) adım geride
+// olsa köşede botun gövdesiyle çakışırdı; çakışmaması için en az 2 × (yarıçap + 1) geride (düzde arada halat boşluğu).
+// Dünya grid'i bot + tarlayı tek placeable olarak görür. Geri gitme yok; sıkışınca limana dönülür (şimdilik H tuşu).
 [RequireComponent(typeof(GridWalker))]
 [DefaultExecutionOrder(10)] // GridWalker'dan (0) sonra: görsel ve koltuk bu karenin konumuyla, eldiven (LateUpdate) okumadan önce
-public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
+public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCells
 {
     [Header("Model")]
     [Tooltip("Bot modeli (FBX): gövde + iki kürek (kürek origin'leri tutturuldukları yerde)")]
@@ -38,6 +43,21 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     [SerializeField] private GameObject maskModel;
     [Tooltip("Scene görünümünde maskeyi (sarı) göster; Play'e girmeden de, prefab modunda da")]
     [SerializeField] private bool showMaskGizmo = true;
+
+    [Header("Tarla (botun arkasından gelir)")]
+    [Tooltip("Tarla alanının kenarı: hep tek sayı (3, 5, 7...), bot önde ortada. 0 = tarla yok.")]
+    [SerializeField] private int farmSize = 3;
+    [Tooltip("Tarla güvertesinin üst yüzünün su seviyesinden yüksekliği ve güvertenin kalınlığı")]
+    [SerializeField] private float deckHeight = 0.12f;
+    [SerializeField] private float deckThickness = 0.3f;
+    [SerializeField] private Color deckColor = new Color(0.72f, 0.52f, 0.36f);
+    [Tooltip("Tarlanın botu takip yumuşaklığı (küçük = daha gecikmeli)")]
+    [SerializeField] private float deckFollow = 6f;
+    [Tooltip("Bot ile tarla arasındaki halat boşluğu (hücre, düz giderken). -1 = otomatik: köşede çakışmayan en kısa " +
+             "(yarıçap + 1). Daha kısa olursa dönüşlerde tarla botun altına girer.")]
+    [SerializeField] private int towCells = -1;
+    [SerializeField] private Color ropeColor = new Color(0.55f, 0.42f, 0.3f);
+    [SerializeField] private float ropeWidth = 0.04f;
 
     [Header("Binme / inme")]
     [Tooltip("Eldiven kıyıdayken (mouse suda) botun bir hücresine yataydan bu kadar yakınsa biner")]
@@ -78,6 +98,20 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     private Transform maskTransform;
     private Vector3Int? restoredHeadOffset; // kayıttan: arka hücreden ön hücreye
 
+    // Tarla treni: gövdenin geçtiği hücreler (son = şimdiki gövde); tarla merkezi bunun FarmLag adım gerisi
+    private readonly System.Collections.Generic.List<Vector3Int> trail = new System.Collections.Generic.List<Vector3Int>();
+    private Vector3Int farmCenter, farmForward = Vector3Int.forward;
+    private Transform deck;
+    private bool snapDeck = true;
+    private Vector3Int homeHead, homeBody; // liman: ilk konduğu yer
+    private bool hasHome;
+
+    private int FarmRadius => Mathf.Max(0, farmSize) / 2;
+    // Gövdeden tarla merkezine iz üzerinde adım: tarlanın ön kenarı (yarıçap + 1) + halat
+    private int FarmLag => FarmRadius + 1 + (towCells < 0 ? FarmRadius + 1 : towCells);
+    private LineRenderer rope;
+    private bool HasFarm => farmSize > 0;
+
     public bool IsRidden => riding;
 
     private GloveCursor Glove => glove != null ? glove : glove = FindFirstObjectByType<GloveCursor>();
@@ -94,18 +128,130 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     // Sadece su hücreleri
     public override bool CanOccupy(Vector3Int worldCell) => GridManager.Instance != null && GridManager.Instance.IsWater(worldCell);
 
-    // Arka hücre (origin) + ön hücre. Yerleşikken yürüyüşten, yerleşmeden önce kayıttan ya da rotasyondan (Deg0'da ön +Z).
+    // Arka hücre (origin) + ön hücre + arkadaki tarla karesi. Yerleşikken yürüyüşten, yerleşmeden önce kayıttan ya da
+    // rotasyondan (Deg0'da ön +Z; tarla düz arkada). Sıra önemli: [1] ön hücre (OnPlaced kafayı oradan alır).
     public override GridFootprint GetFootprint()
     {
-        Vector3Int front = walker != null && walker.IsPlaced ? walker.HeadCell - walker.BodyCell
+        bool placed = walker != null && walker.IsPlaced;
+        Vector3Int front = placed ? walker.HeadCell - walker.BodyCell
                          : restoredHeadOffset ?? GridMaskRotator.RotateOffset(Vector3Int.forward, Rotation);
-        return new GridFootprint(new[] { Vector3Int.zero, front });
+        var cells = new System.Collections.Generic.List<Vector3Int> { Vector3Int.zero, front };
+        if (HasFarm)
+        {
+            Vector3Int center = placed ? farmCenter - walker.BodyCell : -front * FarmLag;
+            foreach (Vector3Int cell in FarmSquare(center))
+                if (cell != Vector3Int.zero && cell != front) cells.Add(cell);
+        }
+        return new GridFootprint(cells.ToArray());
+    }
+
+    private System.Collections.Generic.IEnumerable<Vector3Int> FarmSquare(Vector3Int center)
+    {
+        int r = FarmRadius;
+        for (int dz = -r; dz <= r; dz++)
+            for (int dx = -r; dx <= r; dx++)
+                yield return center + new Vector3Int(dx, 0, dz);
+    }
+
+    // --- Tarla treni (GridWalker her adımda sorar) ---
+
+    // Bu adım atılırsa tarlanın kaplayacağı hücreler (dünya)
+    public System.Collections.Generic.IEnumerable<Vector3Int> CellsFor(Vector3Int head, Vector3Int body)
+    {
+        if (!HasFarm) return System.Array.Empty<Vector3Int>();
+        return FarmSquare(FarmCenterFor(head, body, out _));
+    }
+
+    // Adım atıldı: iz güncellenir, tarlanın yeni merkezi
+    public void OnOccupied(Vector3Int head, Vector3Int body)
+    {
+        if (!Continues(body))
+        {
+            ResetTrail(head, body);
+            snapDeck = true; // ilk yerleşme / limana dönüş: güverte kaymadan yerine
+        }
+        else if (trail[trail.Count - 1] != body) trail.Add(body);
+        while (trail.Count > FarmLag + 2) trail.RemoveAt(0);
+        farmCenter = FarmCenterFor(head, body, out farmForward);
+    }
+
+    // Gövde izin devamı mı (aynı hücre ya da komşusu); değilse (ilk yerleşme, ışınlanma) iz yeniden kurulur
+    private bool Continues(Vector3Int body)
+    {
+        if (trail.Count == 0) return false;
+        Vector3Int d = body - trail[trail.Count - 1];
+        return Mathf.Abs(d.x) + Mathf.Abs(d.y) + Mathf.Abs(d.z) <= 1;
+    }
+
+    // İz yok: tarla düz arkada
+    private void ResetTrail(Vector3Int head, Vector3Int body)
+    {
+        trail.Clear();
+        Vector3Int back = body - head;
+        for (int i = FarmLag; i >= 0; i--) trail.Add(body + back * i);
+    }
+
+    // Aday iz (mevcut iz + yeni gövde) üzerinde gövdeden FarmLag adım geri; forward: tarlanın gidiş yönü
+    private Vector3Int FarmCenterFor(Vector3Int head, Vector3Int body, out Vector3Int forward)
+    {
+        if (!Continues(body))
+        {
+            Vector3Int back = body - head;
+            forward = -back;
+            return body + back * FarmLag;
+        }
+        bool appended = trail[trail.Count - 1] != body;
+        int count = trail.Count + (appended ? 1 : 0);
+        Vector3Int At(int i) => i < trail.Count ? trail[i] : body;
+
+        int index = count - 1 - FarmLag;
+        if (index < 0)
+        {
+            // İz henüz kısa: ilk hücreden düz geriye uzat
+            Vector3Int direction = count > 1 ? At(1) - At(0) : head - body;
+            forward = direction;
+            return At(0) - direction * (-index);
+        }
+        forward = At(index + 1) - At(index);
+        return At(index);
+    }
+
+    // Bu adımda kafa ya da gövde, tarlanın gideceği karenin içine düşer mi
+    private bool HitsOwnFarm(Vector3Int nextHead)
+    {
+        if (!HasFarm || !walker.IsPlaced) return false;
+        Vector3Int center = FarmCenterFor(nextHead, walker.HeadCell, out _);
+        int r = FarmRadius;
+        bool Inside(Vector3Int cell) => Mathf.Abs(cell.x - center.x) <= r && Mathf.Abs(cell.z - center.z) <= r;
+        return Inside(nextHead) || Inside(walker.HeadCell);
+    }
+
+    // Limana dön (sıkışınca): bütün tarlasıyla ilk konduğu yere ışınlanır. Liman doluysa olmaz.
+    public bool ReturnToHarbor()
+    {
+        if (!hasHome || !walker.IsPlaced) return false;
+        walker.Stop();
+        if (!walker.TryPlace(homeHead, homeBody))
+        {
+            Debug.Log("Boat: liman dolu, dönülemedi.", this);
+            return false;
+        }
+        lastPosition = transform.position;
+        lastYaw = transform.eulerAngles.y;
+        return true;
     }
 
     public override void OnPlaced(Vector3Int origin)
     {
         base.OnPlaced(origin);
-        walker.Place(origin + PlacedFootprint.FilledCells()[1], origin);
+        Vector3Int head = origin + PlacedFootprint.FilledCells()[1];
+        walker.Place(head, origin);
+        if (!hasHome)
+        {
+            homeHead = head;
+            homeBody = origin;
+            hasHome = true;
+        }
         lastPosition = transform.position;
         lastYaw = transform.eulerAngles.y;
     }
@@ -114,17 +260,33 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
     private class SaveState
     {
         public Vector3Int front; // arka hücreden ön hücreye
+        public bool hasHome;
+        public Vector3Int homeHead, homeBody; // liman
+        public int farmSize;                  // 0 = prefab'taki
     }
 
+    // Tarla kayıttan hep botun düz arkasına kurulur (köşede kaydedildiyse de)
     public string CaptureState() => JsonUtility.ToJson(new SaveState
     {
         front = walker.IsPlaced ? walker.HeadCell - walker.BodyCell : Vector3Int.forward,
+        hasHome = hasHome,
+        homeHead = homeHead,
+        homeBody = homeBody,
+        farmSize = farmSize,
     });
 
     public void RestoreState(string state)
     {
         SaveState saved = JsonUtility.FromJson<SaveState>(state);
-        if (saved != null && saved.front != Vector3Int.zero) restoredHeadOffset = saved.front;
+        if (saved == null) return;
+        if (saved.front != Vector3Int.zero) restoredHeadOffset = saved.front;
+        if (saved.farmSize > 0) farmSize = saved.farmSize;
+        if (saved.hasHome)
+        {
+            hasHome = true;
+            homeHead = saved.homeHead;
+            homeBody = saved.homeBody;
+        }
     }
 
     // --- Binme, sürme, inme ---
@@ -137,9 +299,14 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             if (PlacedFootprint != null || !walker.TryPlaceNear(transform.position)) return;
         }
 
-        if (riding) Steer();
+        if (riding)
+        {
+            if (Input.GetKeyDown(KeyCode.H)) ReturnToHarbor(); // geçici: ileride UI / iskele
+            Steer();
+        }
         else TryBoard();
         Animate(Time.deltaTime);
+        UpdateDeck(Time.deltaTime);
     }
 
     private void TryBoard()
@@ -169,9 +336,11 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         if (input.sqrMagnitude < 0.01f || walker.HasQueuedSteps) return;
 
         Vector3Int next = walker.HeadCell + GridDirection(input);
-        if (next == walker.BodyCell || walker.IsWalkable(next))
+        if (next == walker.BodyCell) return; // geri gitme yok (arkada tarla var): U çizerek dönülür
+        if (HitsOwnFarm(next)) return; // yılan gibi: kendi tarlasına çarpamaz (dar U dönüşü için tarla kadar yer gerekir)
+        if (walker.IsWalkable(next))
         {
-            walker.StepTo(next); // gövdenin hücresi = yerinde dön
+            walker.StepTo(next); // tarla hücreleri de boş değilse GridWalker adımı atmaz
             return;
         }
 
@@ -272,6 +441,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
         // Su seviyesi kökün 0.5 üstünde (kök hücrenin tabanında, su en alt kat hücresinin ortasında)
         waterFx.Setup(transform, effectShader, 0.5f);
         CreateWaterMask(model);
+        CreateDeck(model);
     }
 
     // Botun içini dolduran görünmez maske (Blender'da modellenen, maskModel): sudan hemen önce derinlik yazar, arkasındaki
@@ -346,6 +516,84 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough
             if (t.name == objectName) return t;
         Debug.LogWarning($"Boat: modelde '{objectName}' bulunamadı", parent);
         return null;
+    }
+
+    // Tarla güvertesi (şimdilik düz bir sal; tarla parçaları sonra üstüne oturacak). Gövdenin malzemesinden kopya, dokusuz
+    private void CreateDeck(Transform model)
+    {
+        if (!HasFarm) return;
+        GameObject plank = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        plank.name = "Farm Deck";
+        deck = plank.transform;
+        deck.SetParent(transform, false);
+        deck.localScale = new Vector3(farmSize, deckThickness, farmSize);
+
+        Renderer hull = null;
+        foreach (Renderer candidate in model.GetComponentsInChildren<Renderer>())
+            if (candidate.transform != leftOar && candidate.transform != rightOar) { hull = candidate; break; }
+        var renderer = plank.GetComponent<Renderer>();
+        if (hull != null)
+        {
+            var material = new Material(hull.sharedMaterial);
+            if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", null);
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", deckColor);
+            renderer.sharedMaterial = material;
+
+            // Çekme halatı: botun kıçından güvertenin ön kenarına, ortası hafif sarkık
+            var ropeObject = new GameObject("Tow Rope");
+            ropeObject.transform.SetParent(transform, false);
+            rope = ropeObject.AddComponent<LineRenderer>();
+            var ropeMaterial = new Material(hull.sharedMaterial);
+            if (ropeMaterial.HasProperty("_BaseMap")) ropeMaterial.SetTexture("_BaseMap", null);
+            if (ropeMaterial.HasProperty("_BaseColor")) ropeMaterial.SetColor("_BaseColor", ropeColor);
+            rope.sharedMaterial = ropeMaterial;
+            rope.positionCount = 8;
+            rope.widthMultiplier = ropeWidth;
+            rope.useWorldSpace = true;
+            rope.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+        snapDeck = true;
+    }
+
+    // Güverte tarlanın merkezini yumuşakça (gecikmeli) takip eder, gidiş yönüne döner, suda hafif sallanır.
+    // Dünya transform'u her kare yazılır (botun child'ı ama bot döndükçe dönmesin)
+    private void UpdateDeck(float dt)
+    {
+        if (deck == null || !walker.IsPlaced) return;
+        Vector3 target = GridWalker.FeetPosition(farmCenter) + Vector3.up * (0.5f + deckHeight - deckThickness * 0.5f);
+        target.y += Mathf.Sin(Time.time * bobSpeed * Mathf.PI * 2f + 1.7f) * bobAmount;
+        Vector3 forward = new Vector3(farmForward.x, 0f, farmForward.z);
+        Quaternion rotation = forward.sqrMagnitude > 0.01f ? Quaternion.LookRotation(forward, Vector3.up) : deck.rotation;
+        if (snapDeck)
+        {
+            deck.SetPositionAndRotation(target, rotation);
+            snapDeck = false;
+            return;
+        }
+        float k = 1f - Mathf.Exp(-deckFollow * dt);
+        deck.SetPositionAndRotation(Vector3.Lerp(deck.position, target, k), Quaternion.Slerp(deck.rotation, rotation, k));
+        UpdateRope();
+    }
+
+    private void UpdateRope()
+    {
+        if (rope == null) return;
+        float water = transform.position.y + 0.5f;
+        Vector3 from = transform.position - transform.forward * 0.95f; // botun kıçı
+        from.y = water + 0.15f;
+        Vector3 to = deck.position + deck.forward * (farmSize * 0.5f);   // güvertenin ön kenarı
+        to.y = water + deckHeight;
+        float sag = Mathf.Min(0.12f, Vector3.Distance(from, to) * 0.05f);
+        for (int i = 0; i < rope.positionCount; i++)
+        {
+            float s = i / (float)(rope.positionCount - 1);
+            rope.SetPosition(i, Vector3.Lerp(from, to, s) + Vector3.down * (Mathf.Sin(s * Mathf.PI) * sag));
+        }
+    }
+
+    private void OnValidate()
+    {
+        if (farmSize > 0 && farmSize % 2 == 0) farmSize++; // hep tek sayı: bot ortada
     }
 
     private void Animate(float dt)
