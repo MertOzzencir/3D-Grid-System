@@ -190,6 +190,18 @@ public class GridWalker : MonoBehaviour
 
     public bool HasQueuedSteps => path.Count > 0;
 
+    // Yerinde 90° dönüş: gövde yerinde kalır, kafa gövdenin yanındaki hücreye geçer (bot sert dönüşte). Kafanın gideceği
+    // hücre (ve ek hücreler) doluysa ya da o an adım atılıyorsa false.
+    public bool PivotTo(Vector3Int cell)
+    {
+        if (!IsPlaced || IsMoving || !Occupy(cell, BodyCell)) return false;
+        path.Clear();
+        turningAround = false;
+        HeadCell = cell;
+        StartStep(FeetPosition(cell), FeetPosition(BodyCell), turnAroundDuration);
+        return true;
+    }
+
     public void Stop() => path.Clear(); // o anki adım tamamlanır (zıplama da yarıda kesilmez)
 
     // Yay çizerek yeni iki hücreye zıplar (yol bulmadan, aradakilerin üstünden). İniş hücreleri kalkıştan ÖNCE grid'de

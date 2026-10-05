@@ -57,6 +57,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
              "(yarıçap + 1). Daha kısa olursa dönüşlerde tarla botun altına girer.")]
     [SerializeField] private int towCells = -1;
     [SerializeField] private Color ropeColor = new Color(0.55f, 0.42f, 0.3f);
+    [Tooltip("Bot bir adımı atamazsa nedenini konsola yaz (sıkışmaları anlamak için)")]
+    [SerializeField] private bool logBlockedSteps = true;
     [SerializeField] private float ropeWidth = 0.04f;
 
     [Header("Binme / inme")]
@@ -108,6 +110,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     // Gövdeden tarla merkezine iz üzerinde adım: tarlanın ön kenarı (yarıçap + 1) + halat
     private int FarmLag => FarmRadius + 1 + (towCells < 0 ? FarmRadius + 1 : towCells);
     private LineRenderer rope;
+    private string lastBlockLog;
     private bool HasFarm => farmSize > 0;
 
     public bool IsRidden => riding;
@@ -214,14 +217,14 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         return At(index);
     }
 
-    // Bu adımda kafa ya da gövde, tarlanın gideceği karenin içine düşer mi
-    private bool HitsOwnFarm(Vector3Int nextHead)
+    // Kafa / gövde bu hücrelere giderse, tarlanın gideceği karenin içine düşer mi
+    private bool HitsOwnFarm(Vector3Int newHead, Vector3Int newBody)
     {
         if (!HasFarm || !walker.IsPlaced) return false;
-        Vector3Int center = FarmCenterFor(nextHead, walker.HeadCell, out _);
+        Vector3Int center = FarmCenterFor(newHead, newBody, out _);
         int r = FarmRadius;
         bool Inside(Vector3Int cell) => Mathf.Abs(cell.x - center.x) <= r && Mathf.Abs(cell.z - center.z) <= r;
-        return Inside(nextHead) || Inside(walker.HeadCell);
+        return Inside(newHead) || Inside(newBody);
     }
 
     // Limana dön (sıkışınca): bütün tarlasıyla ilk konduğu yere ışınlanır. Liman doluysa olmaz.
@@ -335,18 +338,71 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         Vector2 input = InputManager.MovementVectorNormalized();
         if (input.sqrMagnitude < 0.01f || walker.HasQueuedSteps) return;
 
-        Vector3Int next = walker.HeadCell + GridDirection(input);
-        if (next == walker.BodyCell) return; // geri gitme yok (arkada tarla var): U çizerek dönülür
-        if (HitsOwnFarm(next)) return; // yılan gibi: kendi tarlasına çarpamaz (dar U dönüşü için tarla kadar yer gerekir)
-        if (walker.IsWalkable(next))
+        Vector3Int direction = GridDirection(input);
+        Vector3Int facing = walker.HeadCell - walker.BodyCell;
+        facing.y = 0;
+        if (direction == -facing) return; // geri gitme yok (arkada tarla var): U çizerek dönülür
+
+        // Gidilecek yer kara: eldiven o karonun üstüne iner (mouse da oraya taşınır), bot kalır
+        Vector3Int ahead = walker.HeadCell + direction;
+        if (GridManager.Instance != null && GridManager.Instance.TryGetTopBase(ahead.x, ahead.z, out GridData land))
         {
-            walker.StepTo(next); // tarla hücreleri de boş değilse GridWalker adımı atmaz
+            EndRide(land.WorldPosition + Vector3.up * 0.5f);
             return;
         }
 
-        // Gidilecek yer kara: eldiven o karonun üstüne iner (mouse da oraya taşınır), bot kalır
-        if (GridManager.Instance != null && GridManager.Instance.TryGetTopBase(next.x, next.z, out GridData land))
-            EndRide(land.WorldPosition + Vector3.up * 0.5f);
+        if (direction != facing)
+        {
+            // Sert dönüş: kıçının (gövde hücresi) etrafında yerinde 90°; gövde kıpırdamadığı için tarla da yerinde kalır
+            if (walker.IsMoving) return; // o anki adım bitsin
+            Vector3Int pivotHead = walker.BodyCell + direction;
+            string pivotBlock = HitsOwnFarm(pivotHead, walker.BodyCell) ? "kendi tarlasına çarpar" : BlockReason(pivotHead, walker.BodyCell);
+            if (pivotBlock == null && walker.PivotTo(pivotHead)) lastBlockLog = null;
+            else LogBlocked("dönüş: " + (pivotBlock ?? "o an dönülemedi"));
+            return;
+        }
+
+        string block = HitsOwnFarm(ahead, walker.HeadCell) ? "kendi tarlasına çarpar" : BlockReason(ahead, walker.HeadCell);
+        if (block == null)
+        {
+            walker.StepTo(ahead);
+            lastBlockLog = null;
+        }
+        else LogBlocked("ileri: " + block);
+    }
+
+    // Kafa / gövde bu hücrelere giderse neden gidemez (null = gidebilir): kafanın hücresi ve tarlanın gideceği hücreler
+    private string BlockReason(Vector3Int newHead, Vector3Int newBody)
+    {
+        GridManager grid = GridManager.Instance;
+        if (grid == null) return null;
+
+        string Cell(Vector3Int cell)
+        {
+            if (!grid.TryGetCell(cell, out GridData data)) return $"{cell} grid dışında";
+            if (data.Base != null) return $"{cell} kara";
+            if (!grid.IsWater(cell)) return $"{cell} su değil (en alt kat değil)";
+            if (data.Placeable != null && data.Placeable != this) return $"{cell} dolu ({data.Placeable.name})";
+            return null;
+        }
+
+        string head = Cell(newHead);
+        if (head != null) return "kafa: " + head;
+        if (!HasFarm) return null;
+        foreach (Vector3Int cell in FarmSquare(FarmCenterFor(newHead, newBody, out _)))
+        {
+            string farm = Cell(cell);
+            if (farm != null) return "tarla: " + farm;
+        }
+        return null;
+    }
+
+    // Aynı sebep tekrar tekrar yazılmasın (tuş basılı tutulurken)
+    private void LogBlocked(string reason)
+    {
+        if (!logBlockedSteps || reason == lastBlockLog) return;
+        lastBlockLog = reason;
+        Debug.Log($"Boat: adım atılamadı, {reason}", this);
     }
 
     // Kameraya göre girdi → grid yönü (kamera 90° adımlarla döndüğü için eksenler grid'e denk).
