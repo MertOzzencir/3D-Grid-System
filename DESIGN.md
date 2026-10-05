@@ -29,12 +29,19 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 
 ## Ana sistemler
 
-### Tarım — yüzen tarla
+### Tarım — yüzen tarla + hasat yolu bulmacası
 - Tarım **suyun üstünde**, gemiye takılan şekilli tarla parçalarında (1×1, 2×1, 2×2...). Adada inşa alanını kaplamaz.
-- Tarla parçaları NPC görevlerinin / ilişkisinin ödülü. Parçaları gemiye yerleştirmek bir şekil bulmacası.
-- Gemi istenen adaya / bölgeye götürülebilir. İleride **bölge**: bazı ürünler sadece belli bölgelerde yetişir.
-- **Komşuluk:** bitkilerin birbirine karşı ilişkisi var (seven / huysuz). Etki **işlevsel**: ürünün sayısını değil türünü değiştirir. Örnek: domates fesleğen yanında "Aromalı Domates", havuç domates yanında "Eğri Büğrü Havuç". Varyantların hepsi bir işe yarar (bazı tarifler / NPC'ler özellikle onları ister).
-- Gösterim: ekmeden önce komşuların üstünde ikonlar (kalp = seven, şimşek = huysuz) + çıkacak ürünün ikonu. Bitkiler büyürken ifade gösterir (sarılır / surat asar). Hiçbiri zarar görmez, vicdan yaptırmaz; huysuzluk komik.
+- Tarla parçaları NPC görevlerinin / ilişkisinin ödülü. Parçalar odun gibi birbirine geçer, **sadece yatayda** birleşir, hepsi 1 birim yüksekliğinde (gerçek tarla gibi düz). R ile döner. Gemi istenen adaya / bölgeye götürülür (ileride bölgeye göre ürün).
+- **Hasat = tek çizgi bulmacası (Hamilton yolu):** hasat aletiyle (orak) basılı tutup eldiveni karelerin üstünde sürükleyerek yol çizilir; geçilen kareler hasat edilir. Bulmaca **yerleştirmede**: parçaları öyle dizmeli ki bütün tarla tek yolda, hiçbir kareye iki kez girmeden biter.
+- **Ceza yok, kombo var:** kesintisiz yol uzadıkça kombo artar; tarlanın tamamı tek yolda biterse ürünler en kaliteli / bonuslu. Bir kareye tekrar girmek sadece komboyu bitirir, ürün ezilmez, normal kalitede çıkar.
+- **Kuralları tarla bloğunun türü belirler, ekin sadece ne çıkacağını.** Her yeni adanın NPC'si yeni bir blok türü verir: bulmaca adalarla derinleşir, her ada bir kural öğretir. Örnek fikirler:
+  - normal toprak: bir kez geçilir
+  - **çitli:** üç tarafı kapalı, tek taraftan girilir → yolun ya başı ya sonu olmak zorunda (giren geri dönemez)
+  - taş döşeli: üstünden düz geçilir, dönülmez
+  - köprülü / sulu: iki kez geçilebilir (bir yatay, bir dikey)
+  - dönen karo: her hasattan sonra yön değiştirir
+- İleride ekinlere bir iki küçük kural eklenebilir (örn. 2 karelik kabak art arda geçilmeli), ama çekirdekte ekinler kuralsız.
+- Bazı dizilimlerde tek yol matematiksel olarak yoktur (satranç boyaması: siyah / beyaz sayısı 1'den fazla farklıysa). Yerleştirirken "tek yolda bitebilir mi" ipucu göstergesi düşünülebilir (ceza değil).
 
 ### Balık tutma
 - Bot + olta (alet). Yemeğin ikinci malzeme kaynağı.
@@ -78,16 +85,26 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 5. Tarım suyun üstünde, gemiye takılan şekilli tarla parçalarıyla.
 6. Adalar şimdilik lineer.
 7. Yapı işlevleri genel kurallarla, kontrollü.
-8. Tarım komşuluğu işlevsel (ürün türünü değiştirir), cezasız.
+8. Tarım bulmacası = hasat yolu (tek çizgi): parçaları tek yolda bitecek şekilde diz, eldivenle yolu çiz.
+9. Ceza yok, kombo var (tekrar girmek sadece komboyu bitirir).
+10. Yol kurallarını tarla bloğunun türü belirler (her ada yeni blok türü), ekin sadece ürünü belirler. Örnek: çitli blok üç tarafı kapalı → yolun başı ya da sonu.
+11. Tarla parçaları sadece yatayda birleşir, hepsi 1 birim yüksek.
 
 ## Açık sorular
 - Yemek pişirmenin mekaniği (işlevsel, farklı).
-- Komşuluk kuralının mantığı: mutfak uyumu mu (domates + fesleğen) yoksa renk takımları mı? Renk fikrinde "renge göre dışlama" yanlış okunabilir; takım / rekabet gibi şakacı sunulmalı.
+- **Tekrar riski (en büyük):** çözülen tarla her hasatta aynı yolu çizmeye döner. Fikir: her hasat döngüsünde cezasız küçük sürpriz (kuş konar, su birikintisi, **kedi bir karede uyur**) → yol her seferinde biraz değişir.
+- Ekim: tek tek ekmek angarya. Fikir: hasat edilen kare otomatik yeniden ekilir (kombo anı tek kalsın) ya da ekim de yol hareketiyle.
+- Gemideki tarla alanının sınırı (çizim yormasın), geminin büyütülmesi.
+- Yol nereden başlar: serbest mi, geminin iskele kenarından mı (ilk adalarda serbest, sonra sabit giriş olabilir)?
+- Ekinlerin büyüme süresi (hepsi aynı anda mı olgunlaşır?).
 - Yapı işlevlerinin genel kural çerçevesi.
 - Malzemelerin işlevleri (taş, demir ve sonrası).
 - NPC istekleri sadece yemek mi, eylemler de mi?
 - Blueprint (saydam yapı) görünümünün çekici sunumu.
 - Charm'ın yeri (var mı, ne açar?).
+
+## Denenip bırakılanlar
+- **Bitki komşuluğu** (seven / huysuz bitkiler, renk takımları, işlevsel varyantlar): oyuncuya fazla hesap yükü, sistem için boşa emek; yerine hasat yolu bulmacası seçildi.
 
 ## Teknik riskler
 - **Yüzen tarla = hareket eden grid.** Şu an grid dünyaya sabit. Gemi taşınırken tarla parçaları, üstlerindeki bitkiler ve komşuluklar gemiyle birlikte gitmeli. Tasarımın teknik olarak en büyük işi; detaylara geçmeden önce altyapısı konuşulacak.
