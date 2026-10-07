@@ -14,11 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
   Name: Sickle
   Icon: {fileID: 1287649992867056945, guid: 6eaa9958d83ec43499e946a21edba283, type: 3}
-  size: {x: 1, y: 2, z: 1}
+  saveId: 
+  size: {x: 1, y: 1, z: 1}
   layers:
   - cells: 01
-  - cells: 01
-  layoutSize: {x: 1, y: 2, z: 1}
+  layoutSize: {x: 1, y: 1, z: 1}
   legacySize: {x: 1, y: 1}
   legacyMask: 
   Prefab: {fileID: 8068828346316012274, guid: 167310a861904ca2af9a37a48fe772a6, type: 3}

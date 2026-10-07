@@ -226,7 +226,7 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         if (combo >= 2 && combo == matureAtStart)
         {
             foreach (CropSO crop in harvestedInPath) GiveProduce(crop);
-            FarmPopup.Show($"Tam tur! +{combo}", transform.position + Vector3.up * 1.6f, FullTourColor, 5f);
+            FarmPopup.Show($"Full Harvest! +{combo}", transform.position + Vector3.up * 1.6f, FullTourColor, 5f);
         }
         harvestedInPath.Clear();
     }
