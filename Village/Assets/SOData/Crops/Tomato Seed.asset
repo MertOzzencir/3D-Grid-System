@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CropSO
   Name: Tomato
   produce: {fileID: 11400000, guid: be9bbe8fe1dfa7a4c958354ba9a772a7, type: 2}
-  seedlingModel: {fileID: 0}
+  seedlingModel: {fileID: 919132149155446097, guid: b0a2f3521e8b70e428a5dbc2ae820b6e, type: 3}
   matureModel: {fileID: 0}
   placeholderColor: {r: 0.55, g: 0.8, b: 0.4, a: 1}
   produceColor: {r: 0.9, g: 0.3, b: 0.25, a: 1}
