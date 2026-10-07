@@ -112,7 +112,7 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - Yemek pişirmenin mekaniği (işlevsel, farklı).
 - Tohumlar nereden gelir (NPC, hasat, dükkân)? "Son ekimi hatırla" ileride gemi upgrade'i.
 - Gemi upgrade'leri neyle alınır (henüz para birimi yok)?
-- Büyüme süresi ne kadar (gerçek dakika mı, gün döngüsüne bağlı mı)?
+- Büyüme süresi ne kadar? Şimdilik gerçek süre (botta ayar, test için 60 sn); gün döngüsüne bağlanması sonra.
 - Yol nereden başlar: serbest mi, geminin iskele kenarından mı (ilk adalarda serbest, sonra sabit giriş olabilir)?
 - Yapı işlevlerinin genel kural çerçevesi.
 - Malzemelerin işlevleri (taş, demir ve sonrası).
@@ -140,10 +140,10 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - **Tarla parçası:** dünyada `GridPlaceable` (odun gibi sürüklenir, build menüsünden spawnlanabilir). Botun tarlasına bırakılınca (`IToolTarget`, odunun odunla birleşmesi gibi) dünya grid'inden çıkıp `FarmGrid`'e oturur. Şekil + döndürme `GridFootprint` / `GridMaskRotator` ile (R). Eldivenin tarlada base gibi yürümesi için "yürünebilir zemin" tanımı genişletilecek (şu an sadece `GridBase`).
 - **Binme:** mouse botun ya da tarlasının üstüne gelince uzaklık sınırı olmadan biner (eldiven adada kıyıda bekler, oradan zıplar).
 - **Sert dönüş:** yana basınca bot kıçının etrafında yerinde 90° döner, tarla yerinde kalır (yılan dönüşü köşede takılıyordu).
-- **Şu anki durum (2026-10-05):** 1., 2. adım bitti ve test edildi. 3. adım: karar "her yerden düzenlenir" (kod gerekmedi). 4. adım (ekim) kodlandı, domates tohumu kuruldu, tam test bekliyor: eldiven tarlada yürür, tohum placeable (toplama + sürükleyerek ekme), ekin parçanın hücresinde fide olarak durur. **Sıradaki: 5) büyüme düğmesi.** Çok hücreli parça görseli: şimdilik 1×1 modelin her hücreye kopyası (`tileModel`); ileride istenirse otomatik kenar (ortası kenarsız toprak + dış kenara şerit).
+- **Şu anki durum (2026-10-05):** 1., 2. adım bitti ve test edildi. 3. adım: karar "her yerden düzenlenir" (kod gerekmedi). 4. adım (ekim) kodlandı, domates tohumu kuruldu, tam test bekliyor: eldiven tarlada yürür, tohum placeable (toplama + sürükleyerek ekme), ekin parçanın hücresinde fide olarak durur. 5. adım (büyüme) kodlandı, test bekliyor: tarlanın köşesinde düğme, basınca kapak kapanır, süre (üstünde yazar) dolunca açılır, fideler olgun; kapalıyken tarla kilitli, bot gezebilir. **Sıradaki: 6) hasat yolu + kombo.** Çok hücreli parça görseli: şimdilik 1×1 modelin her hücreye kopyası (`tileModel`); ileride istenirse otomatik kenar (ortası kenarsız toprak + dış kenara şerit).
 - **Düzenleme:** her yerden, ayrı mod yok (bot sadece binilince gider, binince giriş kilitli).
 - **Kayıt:** botun `ISaveState`'i: tarla boyutu, parçalar (tür, yerel konum, dönüş), ekinler, büyüme durumu.
-- **Adımlar:** 1) ✅ bot + tarla treni (hareket, dünya grid'i, görsel güverte, çekme halatı, sert dönüş yerinde, limana dön) 2) ✅ `FarmGrid` + tarla parçası (dünyadan tarlaya oturma, tarlada kaydırma, kayıt; Unity'de test edildi, 1×1 parça modeli var) 3) ✅ düzenleme (her yerden, kod yok) 4) ekim (kodlandı) 5) büyüme düğmesi 6) hasat yolu + kombo 7) kayıt.
+- **Adımlar:** 1) ✅ bot + tarla treni (hareket, dünya grid'i, görsel güverte, çekme halatı, sert dönüş yerinde, limana dön) 2) ✅ `FarmGrid` + tarla parçası (dünyadan tarlaya oturma, tarlada kaydırma, kayıt; Unity'de test edildi, 1×1 parça modeli var) 3) ✅ düzenleme (her yerden, kod yok) 4) ekim (kodlandı) 5) büyüme düğmesi (kodlandı) 6) hasat yolu + kombo 7) kayıt.
 
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.

@@ -62,6 +62,17 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     [SerializeField] private bool logBlockedSteps = true;
     [SerializeField] private float ropeWidth = 0.04f;
 
+    [Header("Tarla büyümesi (düğme + kapak, FarmGrower)")]
+    [Tooltip("Düğmeye basınca tarlanın kapalı kalma süresi (saniye); sonunda bütün fideler olgunlaşır")]
+    [SerializeField] private float growDuration = 60f;
+    [Tooltip("Kapağın güverteden yüksekliği: parçalar (1) + olgun ekinlerin üstünde kalmalı")]
+    [SerializeField] private float coverHeight = 1.5f;
+    [SerializeField] private Color coverColor = new Color(0.93f, 0.85f, 0.7f);
+    [SerializeField] private Color growButtonColor = new Color(0.95f, 0.45f, 0.4f);
+    [Tooltip("Kapak modeli (boşsa kutu). 1×1 alana göre modellenir, pivot tabanın ortasında; kod tarlanın boyuna X/Z'de ölçekler. " +
+             "Yüksekliği Cover Height'a uysun.")]
+    [SerializeField] private GameObject coverModel;
+
     [Header("Binme / inme")]
     [Tooltip("İndikten sonra tekrar binmek için en az bekleme (saniye)")]
     [SerializeField] private float boardCooldown = 0.8f;
@@ -639,6 +650,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
             if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", null);
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", deckColor);
             renderer.sharedMaterial = material;
+            deck.gameObject.AddComponent<FarmGrower>().Setup(farmGrid, farmSize, growDuration, coverHeight, material,
+                                                              coverColor, growButtonColor, coverModel);
 
             // Çekme halatı: botun kıçından güvertenin ön kenarına, ortası hafif sarkık
             var ropeObject = new GameObject("Tow Rope");

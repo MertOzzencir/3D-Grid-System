@@ -8,6 +8,7 @@ using UnityEngine;
 // Görsel: tileModel atanırsa footprint'in her hücresine bir kopyası konur (1×1 modelden çok hücreli parça); atanmazsa
 // prefab'ın kendi modeli kullanılır. Kökte footprint'i saran bir BoxCollider olmalı (tutmak için; yoksa kod ekler).
 // Ekinler parçanın hücrelerinde durur (tohum FarmGrid üzerinden eker); parça taşınınca ekinleri de onunla gider.
+// Tarla büyürken (kapalı, FarmGrid.Locked) tarladaki parça tutulmaz.
 public class FarmPiece : GridPlaceable, IInteractable
 {
     [SerializeField] private float followSpeed = 15f;
@@ -25,6 +26,7 @@ public class FarmPiece : GridPlaceable, IInteractable
     {
         public CropSO crop;
         public GameObject visual;
+        public bool mature;
     }
     private readonly System.Collections.Generic.Dictionary<Vector2Int, PlantedCrop> crops =
         new System.Collections.Generic.Dictionary<Vector2Int, PlantedCrop>();
@@ -36,6 +38,7 @@ public class FarmPiece : GridPlaceable, IInteractable
     private FarmGrid liftedFrom;   // tarladan tutulduysa: bırakılacak yer bulunamazsa oraya geri döner
     private Vector2Int liftedCell;
     private GridMaskRotator.Rotation liftedRotation;
+    private bool grabRefused;      // tarla büyürken (kapalı) tutulmaya çalışıldı: hiç kalkmadı
 
     private void Awake()
     {
@@ -151,6 +154,50 @@ public class FarmPiece : GridPlaceable, IInteractable
         return true;
     }
 
+    public bool HasSeedlings
+    {
+        get
+        {
+            foreach (PlantedCrop planted in crops.Values)
+                if (!planted.mature) return true;
+            return false;
+        }
+    }
+
+    // Bütün fideler olgunlaşır: fide görseli olgun görselle değişir (aynı yerde, aynı yöne), küçükten zıplayarak büyür
+    public void MatureAll()
+    {
+        var tiles = new System.Collections.Generic.List<Vector2Int>(crops.Keys);
+        foreach (Vector2Int tile in tiles)
+        {
+            PlantedCrop planted = crops[tile];
+            if (planted.mature) continue;
+            Transform old = planted.visual.transform;
+            GameObject visual = planted.crop.CreateMature(transform);
+            visual.transform.SetLocalPositionAndRotation(old.localPosition, old.localRotation);
+            Destroy(planted.visual);
+            crops[tile] = new PlantedCrop { crop = planted.crop, visual = visual, mature = true };
+            StartCoroutine(PopIn(visual.transform, Random.Range(0f, 0.15f)));
+        }
+    }
+
+    // Küçükten hafif taşarak normal boyuna büyüme
+    private static System.Collections.IEnumerator PopIn(Transform target, float delay)
+    {
+        Vector3 rest = target.localScale;
+        target.localScale = Vector3.zero;
+        for (float wait = 0f; wait < delay; wait += Time.deltaTime) yield return null;
+        const float duration = 0.35f;
+        for (float t = 0f; t < 1f; t += Time.deltaTime / duration)
+        {
+            if (target == null) yield break;
+            float overshoot = 1f + Mathf.Sin(t * Mathf.PI) * 0.25f * (1f - t);
+            target.localScale = rest * (Mathf.SmoothStep(0f, 1f, t) * overshoot);
+            yield return null;
+        }
+        if (target != null) target.localScale = rest;
+    }
+
     // --- Tarla ---
 
     public void OnAttachedToFarm(FarmGrid farm, Vector2Int cell)
@@ -166,6 +213,8 @@ public class FarmPiece : GridPlaceable, IInteractable
     public void InteractContractBeginnig()
     {
         liftedFrom = null;
+        grabRefused = Farm != null && Farm.Locked; // tarla büyürken kapalı: parçalar yerinde kalır
+        if (grabRefused) return;
         if (Farm != null)
         {
             // Tarladan kaldır: tarla bırakılınca dolu sayılmasın, parça dünyada serbest
@@ -180,13 +229,18 @@ public class FarmPiece : GridPlaceable, IInteractable
 
     public void InteractContract(out bool success)
     {
-        success = true;
-        drag.Tick();
+        success = !grabRefused; // reddedildiyse InteractableController hemen bırakır (ContractCancel)
+        if (success) drag.Tick();
     }
 
     // Sol tık: hedef (tarla) varsa oraya oturt
     public void Interact(out bool finished)
     {
+        if (grabRefused)
+        {
+            finished = true;
+            return;
+        }
         if (!drag.TryUseOnTarget(out finished)) finished = true;
     }
 
@@ -194,6 +248,12 @@ public class FarmPiece : GridPlaceable, IInteractable
     // (su, dolu) tarladaki eski yerine döner.
     public void ContractCancel()
     {
+        if (grabRefused)
+        {
+            grabRefused = false;
+            return;
+        }
+
         FarmGrid hovered = FarmGrid.Hovered;
         if (hovered != null && hovered.TryAttachHovered(this))
         {

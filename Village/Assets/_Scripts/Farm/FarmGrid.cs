@@ -23,6 +23,8 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
     private Quaternion pendingRotation = Quaternion.identity;
 
     public int Size => size;
+    // Tarla büyüyor (kapalı, FarmGrower): ekilmez, parça konmaz / alınmaz
+    public bool Locked { get; set; }
     public IReadOnlyList<FarmPiece> Pieces => pieces;
 
     public void Setup(int farmSize)
@@ -79,10 +81,26 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
     }
 
     // Ekilebilir: hücrede tarla parçası var ve o hücre boş
-    public bool CanPlant(Vector2Int cell) => TryGetPlot(cell, out FarmPiece piece, out Vector2Int tile) && !piece.HasCrop(tile);
+    public bool CanPlant(Vector2Int cell) => !Locked && TryGetPlot(cell, out FarmPiece piece, out Vector2Int tile) && !piece.HasCrop(tile);
 
     public bool TryPlant(CropSO crop, Vector2Int cell) =>
         TryGetPlot(cell, out FarmPiece piece, out Vector2Int tile) && piece.Plant(crop, tile);
+
+    // Büyütülecek fide var mı
+    public bool HasSeedlings
+    {
+        get
+        {
+            foreach (FarmPiece piece in pieces)
+                if (piece.HasSeedlings) return true;
+            return false;
+        }
+    }
+
+    public void MatureAll()
+    {
+        foreach (FarmPiece piece in pieces) piece.MatureAll();
+    }
 
     public void Detach(FarmPiece piece)
     {
@@ -133,7 +151,7 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
             return transform.TransformPoint(CellLocal(cell)) + transform.up * SeedHoverHeight;
         }
 
-        if (!(interacted is FarmPiece piece)) return Vector3.zero;
+        if (!(interacted is FarmPiece piece) || Locked) return Vector3.zero;
         Hovered = this;
         if (!Fits(piece, cell)) return Vector3.zero;
 
