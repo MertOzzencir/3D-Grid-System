@@ -47,6 +47,7 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
   - **sıra:** önce A, sonra B bloğundan geç (ileride tarif istekleriyle bağlanır)
   - **tam tur:** bütün tarla tek yolda (temel kombo)
 - **Ekim ve büyüme döngüsü:** bütün tarla aynı anda ekilir ve aynı anda olgunlaşır, türden bağımsız. Oyuncu o turda istediği ekinleri karelere eker, tarladaki **düğmeye** basar: tarla kapanır, belli bir süre geçer, tarla açılır ve ekilen her şey olgunlaşmıştır. Bulmaca hep tam tarla üzerinde oynanır (farklı büyüme süreleri bulmacayı anlamsızlaştırırdı); ritim oyuncunun elinde.
+- **Görseller:** bütün ekinlerin fidesi aynı model (her CropSO'nun Seedling Model'ine aynı FBX). Türe özel olanlar: tohum kesesi ve olgun bitki. Hangi karede ne ekili olduğu (fide aşamasında) UI ile gösterilecek.
 - **Ekinlerin farkı sadece ne oldukları:** NPC domates istiyorsa domates ekilir. Ekinin yol kuralına etkisi yok (çekirdekte).
 - **Gemideki tarla alanı:** hep **tek sayılı kare**: 3×3 → 5×5 → 7×7 (her adada iki büyür). Bot hep tarlanın önünde ve ortasında; çift sayıda orta hücre olmazdı.
 - **Tohumlar dünyada obje (karar):** tohum adada duran bir placeable (yığın, üstünde sayı). Sağ tıkla tutulur, sol tıkla tarlaya ekilir; sol tık basılı sürüklenince geçilen her boş kareye eker. **Hızlı toplama:** tohum tutarken üstünden geçilen aynı tür tohumlar ele uçup yığına katılır. Tohumların nereden geleceği (NPC, hasat, dükkân) açık. (Eski öneri "tohumlar ücretsiz bilgi" yerine bu seçildi.)
