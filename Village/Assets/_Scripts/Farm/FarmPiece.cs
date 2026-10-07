@@ -154,6 +154,45 @@ public class FarmPiece : GridPlaceable, IInteractable
         return true;
     }
 
+    public bool IsMature(Vector2Int tile) => crops.TryGetValue(tile, out PlantedCrop planted) && planted.mature;
+
+    public int MatureCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (PlantedCrop planted in crops.Values)
+                if (planted.mature) count++;
+            return count;
+        }
+    }
+
+    // Olgun ekini hasat et: hücre boşalır (tekrar ekilebilir), görsel yukarı zıplayıp kaybolur. Olgun değilse null.
+    public CropSO Harvest(Vector2Int tile)
+    {
+        if (!crops.TryGetValue(tile, out PlantedCrop planted) || !planted.mature) return null;
+        crops.Remove(tile);
+        planted.visual.transform.SetParent(null, true); // parça taşınsa da efekt yerinde kalsın
+        StartCoroutine(PopOut(planted.visual));
+        return planted.crop;
+    }
+
+    private static System.Collections.IEnumerator PopOut(GameObject visual)
+    {
+        Transform target = visual.transform;
+        Vector3 start = target.position;
+        Vector3 rest = target.localScale;
+        const float duration = 0.3f;
+        for (float t = 0f; t < 1f; t += Time.deltaTime / duration)
+        {
+            if (target == null) yield break;
+            target.position = start + Vector3.up * (0.6f * Mathf.Sin(t * Mathf.PI * 0.5f));
+            target.localScale = rest * (t < 0.3f ? 1f + t : 1.3f * (1f - (t - 0.3f) / 0.7f));
+            yield return null;
+        }
+        if (visual != null) Destroy(visual);
+    }
+
     public bool HasSeedlings
     {
         get

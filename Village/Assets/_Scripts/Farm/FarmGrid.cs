@@ -8,6 +8,9 @@ using UnityEngine;
 // Ekin: hücredeki parçanın o hücresinde durur (FarmPiece tutar, parça kaydırılınca ekin de gider). Tohum (Seed)
 // tarlanın üstüne getirilince hücrenin üstünde süzülür; sol tık (basılı tutup sürükleyerek de) ekilebilir hücrelere eker.
 // Eldiven tarlanın üstünde base gibi yürür (IGloveWalkable; bot geçirgen kalır).
+// Hasat yolu: orak (Sickle) tutulurken sol tık basılı geçilen olgun kareler hasat edilir; kesintisiz yol kombo sayar.
+// Boş / hasat edilmiş kareye girmek yolu (komboyu) bitirir, ürün kaybolmaz; sonraki olgun karede yeni yol başlar.
+// Bir yolda bütün olgun ekinler hasat edilirse "Tam tur": yoldaki her ekin için bir ürün daha.
 public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
 {
     // Şu an mouse'un altında, elde tutulan parçaya yer gösteren tarla (FarmPiece bırakılırken sorar)
@@ -132,7 +135,108 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         return true;
     }
 
-    // --- IToolTarget: elde parça ya da tohum varken mouse tarlanın üstünde ---
+    // --- Hasat yolu ---
+
+    private static FarmGrid activeHarvest;
+    private bool harvesting;
+    private Vector2Int harvestLast;
+    private int combo;
+    private int matureAtStart;
+    private readonly List<CropSO> harvestedInPath = new List<CropSO>();
+
+    private static readonly Color ComboColor = new Color(1f, 0.95f, 0.75f);
+    private static readonly Color FullTourColor = new Color(1f, 0.82f, 0.3f);
+
+    // Orak bırakıldı / sol tık kalktı: süren yol biter
+    public static void EndActiveHarvest()
+    {
+        if (activeHarvest != null) activeHarvest.EndHarvest();
+    }
+
+    private bool TryGetMature(Vector2Int cell) => TryGetPlot(cell, out FarmPiece piece, out Vector2Int tile) && piece.IsMature(tile);
+
+    private int MatureCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (FarmPiece piece in pieces) count += piece.MatureCount;
+            return count;
+        }
+    }
+
+    private Vector3 CellWorld(Vector2Int cell) => transform.TransformPoint(CellLocal(cell));
+
+    // Orak bu kareye geldi (sol tık basılı). Mouse hızlı gidip kare atladıysa ya da çapraz geçtiyse aradaki kareler
+    // dört komşuluk adımlarıyla tek tek yürünür.
+    private bool HarvestTo(Sickle sickle, Vector2Int cell)
+    {
+        if (Locked) return false;
+        if (!harvesting)
+        {
+            if (!TryGetMature(cell)) return false;
+            if (activeHarvest != null && activeHarvest != this) activeHarvest.EndHarvest();
+            harvesting = true;
+            activeHarvest = this;
+            combo = 0;
+            matureAtStart = MatureCount;
+            harvestedInPath.Clear();
+            HarvestCell(sickle, cell);
+            return true;
+        }
+
+        for (int guard = size * size * 2; harvestLast != cell && guard > 0; guard--)
+        {
+            Vector2Int d = cell - harvestLast;
+            Vector2Int step = Mathf.Abs(d.x) >= Mathf.Abs(d.y)
+                ? new Vector2Int(System.Math.Sign(d.x), 0)
+                : new Vector2Int(0, System.Math.Sign(d.y));
+            Vector2Int next = harvestLast + step;
+            if (!TryGetMature(next))
+            {
+                EndHarvest(); // boş ya da az önce hasat edilmiş kare: kombo biter
+                return true;
+            }
+            HarvestCell(sickle, next);
+        }
+        return true;
+    }
+
+    private void HarvestCell(Sickle sickle, Vector2Int cell)
+    {
+        if (!TryGetPlot(cell, out FarmPiece piece, out Vector2Int tile)) return;
+        CropSO crop = piece.Harvest(tile);
+        if (crop == null) return;
+        harvestLast = cell;
+        combo++;
+        harvestedInPath.Add(crop);
+        GiveProduce(crop);
+        sickle?.OnHarvested();
+        if (combo >= 2)
+            FarmPopup.Show($"×{combo}", CellWorld(cell) + Vector3.up * 0.9f, ComboColor, 3f + Mathf.Min(combo, 10) * 0.15f);
+    }
+
+    private void EndHarvest()
+    {
+        if (!harvesting) return;
+        harvesting = false;
+        if (activeHarvest == this) activeHarvest = null;
+
+        // Bütün olgun ekinler tek yolda: yoldaki her ekin için bir ürün daha
+        if (combo >= 2 && combo == matureAtStart)
+        {
+            foreach (CropSO crop in harvestedInPath) GiveProduce(crop);
+            FarmPopup.Show($"Tam tur! +{combo}", transform.position + Vector3.up * 1.6f, FullTourColor, 5f);
+        }
+        harvestedInPath.Clear();
+    }
+
+    private static void GiveProduce(CropSO crop)
+    {
+        if (crop.produce != null && InventoryManager.Instance != null) InventoryManager.Instance.AddSource(crop.produce);
+    }
+
+    // --- IToolTarget: elde parça, tohum ya da orak varken mouse tarlanın üstünde ---
 
     public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept)
     {
@@ -140,15 +244,16 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         pendingValid = false;
         if (cells == null || !TryGetMouseCell(out Vector2Int cell)) return Vector3.zero;
 
-        // Tohum: tarlanın her hücresinde üstte süzülür (ekilemeyen hücrede de, tarladan düşmesin); ekilebilirse pendingValid
-        if (interacted is Seed seed)
+        // Tohum / orak: tarlanın her hücresinde üstte süzülür (ekilemeyen hücrede de, tarladan düşmesin).
+        // Tohumda pendingValid = ekilebilir; orakta tarlanın içinde (hasat kuralı HarvestTo'da).
+        if (interacted is Seed || interacted is Sickle)
         {
             if (!InBounds(cell)) return Vector3.zero;
             pendingCell = cell;
-            pendingValid = CanPlant(cell);
-            pendingRotation = transform.rotation * seed.GridRotation;
+            pendingValid = interacted is Sickle || CanPlant(cell);
+            pendingRotation = transform.rotation * ((GridEntity)interacted).GridRotation;
             accept = true;
-            return transform.TransformPoint(CellLocal(cell)) + transform.up * SeedHoverHeight;
+            return CellWorld(cell) + transform.up * SeedHoverHeight;
         }
 
         if (!(interacted is FarmPiece piece) || Locked) return Vector3.zero;
@@ -167,6 +272,8 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
     // Sol tık. Parça: oturt (elde tutma biter). Tohum: gösterilen hücreye ek (tohum bitene kadar elde kalır).
     public bool OnToolUsed(IInteractable tool)
     {
+        if (tool is Sickle sickle) return pendingValid && HarvestTo(sickle, pendingCell);
+
         if (tool is Seed seed)
         {
             if (!pendingValid || !TryPlant(seed.Crop, pendingCell)) return false;
@@ -180,7 +287,11 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         return true;
     }
 
-    public void OnToolTargetExit() => ClearHover();
+    public void OnToolTargetExit()
+    {
+        ClearHover();
+        EndHarvest(); // orak tarladan çıktı: yol biter
+    }
 
     private void ClearHover()
     {
@@ -188,5 +299,9 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         if (Hovered == this) Hovered = null;
     }
 
-    private void OnDisable() => ClearHover();
+    private void OnDisable()
+    {
+        ClearHover();
+        EndHarvest();
+    }
 }

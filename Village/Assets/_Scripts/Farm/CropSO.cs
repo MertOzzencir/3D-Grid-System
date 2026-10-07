@@ -7,6 +7,8 @@ using UnityEngine;
 public class CropSO : ScriptableObject
 {
     public string Name;
+    [Tooltip("Hasat edilince envantere giren ürün (Create Source → New Source). Boşsa hasat edilir ama envantere bir şey girmez.")]
+    public SourcesSO produce;
     [Tooltip("Ekilince görünen fide modeli. Pivot dibinde (toprağa değen nokta), 1 hücreye sığar. Boşsa kod yer tutucu fide kurar.")]
     public GameObject seedlingModel;
     [Tooltip("Olgunlaşınca (büyüme düğmesinden sonra) görünen model. Pivot dibinde, 1 hücreye sığar. Boşsa kod yer tutucu kurar.")]

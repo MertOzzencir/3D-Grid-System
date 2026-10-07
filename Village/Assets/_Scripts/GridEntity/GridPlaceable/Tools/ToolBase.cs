@@ -43,6 +43,7 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
     [SerializeField] private ToolSwingAnimation swing = new ToolSwingAnimation();
 
     private GridDragMotor drag;
+    protected GridDragMotor Drag => drag;
     private float nextUseTime;
     private Coroutine useRoutine;
     private Quaternion visualRestRotation;
@@ -205,7 +206,7 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
     }
 
     // Sol tık: hazırsa sallanmayı başlatır. Asıl kullanım (ağacı kesmek) vuruş anında olur.
-    public void Interact(out bool finished)
+    public virtual void Interact(out bool finished)
     {
         finished = false;
         if (!IsReady) return;
@@ -221,9 +222,9 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
         currentGrip = -1; // her tutmada yön baştan seçilsin
         drag.Begin();
     }
-    public void InteractContract(out bool success) { success = true; drag.Tick(); }
+    public virtual void InteractContract(out bool success) { success = true; drag.Tick(); }
 
-    public void ContractCancel()
+    public virtual void ContractCancel()
     {
         StopUse();
         drag.Cancel();
