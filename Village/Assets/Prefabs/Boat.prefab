@@ -91,6 +91,20 @@ MonoBehaviour:
   maskShader: {fileID: 4800000, guid: ca5a4f90e2bc44d299c83a5c655152b8, type: 3}
   maskModel: {fileID: 919132149155446097, guid: 25d98deac116ba5468b242957830a5e3, type: 3}
   showMaskGizmo: 1
+  farmSize: 3
+  deckHeight: 0.12
+  deckThickness: 0.3
+  deckColor: {r: 0.72, g: 0.52, b: 0.36, a: 1}
+  deckFollow: 6
+  towCells: -1
+  ropeColor: {r: 0.55, g: 0.42, b: 0.3, a: 1}
+  logBlockedSteps: 1
+  ropeWidth: 0.04
+  growDuration: 5
+  coverHeight: 1.5
+  coverColor: {r: 0.93, g: 0.85, b: 0.7, a: 1}
+  growButtonColor: {r: 0.95, g: 0.45, b: 0.4, a: 1}
+  coverModel: {fileID: 0}
   boardCooldown: 0.8
   strokeLength: 1.2
   oarSweep: 28
