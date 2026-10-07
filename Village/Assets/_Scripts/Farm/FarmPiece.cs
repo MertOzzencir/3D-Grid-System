@@ -111,14 +111,15 @@ public class FarmPiece : GridPlaceable, IInteractable
         return found;
     }
 
-    // Dünyada da üst üste konmaz (tarla parçaları sadece yatayda birleşir): altındaki hücrede placeable olmamalı.
-    // Yoksa sürüklerken ray başka bir parçanın collider'ının üstüne çarpınca bir üst kata yerleşirdi.
+    // Dünyada sadece zemine konur: hücrenin hemen altında base (ada karosu) olmalı. Başka bir parçanın, odunun ya da
+    // herhangi bir şeyin üstüne konmaz (tarla parçaları sadece yatayda birleşir); sürüklerken ray başka bir parçanın
+    // collider'ının üstüne çarpınca bir üst kata yerleşmesin.
     public override bool CanOccupy(Vector3Int worldCell)
     {
         if (!base.CanOccupy(worldCell)) return false;
         GridManager grid = GridManager.Instance;
-        if (grid == null || !grid.TryGetCell(worldCell + Vector3Int.down, out GridData below)) return true;
-        return below.Placeable == null || below.Placeable == this;
+        if (grid == null) return true;
+        return grid.TryGetCell(worldCell + Vector3Int.down, out GridData below) && below.Base != null;
     }
 
     // --- Ekin ---
