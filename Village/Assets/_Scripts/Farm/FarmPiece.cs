@@ -14,8 +14,8 @@ public class FarmPiece : GridPlaceable, IInteractable
     [Tooltip("1×1 tarla modeli: atanırsa parçanın her hücresine bir kopyası konur (2×1, 3×1, L... için tek model yeter)")]
     [SerializeField] private GameObject tileModel;
     [Tooltip("Ekinlerin dibinin yüksekliği, parçanın pivot'una göre (yerel Y). Pivot hücrenin ortasında, modelin dibi -0.5; " +
-             "toprağın üst yüzü kaçtaysa o (fideler toprağa gömülmesin / havada durmasın)")]
-    [SerializeField] private float soilHeight = -0.3f;
+             "toprağın üst yüzü kaçtaysa o (fideler toprağa gömülmesin / havada durmasın). Tarla parçası 1 birim yüksek: üstü 0.5")]
+    [SerializeField] private float soilHeight = 0.5f;
 
     private GridDragMotor drag;
 
@@ -58,10 +58,20 @@ public class FarmPiece : GridPlaceable, IInteractable
         }
     }
 
-    // Tutmak için kökte collider (InteractableController collider'ın objesinde IInteractable arar)
+    // Tutmak ve eldivenin üstünde yürümesi için kökte collider (InteractableController collider'ın objesinde
+    // IInteractable arar). Modelin mesh'lerini saran kutu: eldiven modelin üst yüzüne oturur, içine girmez.
+    // Mesh yoksa footprint'i saran ince kutu.
     private void EnsureCollider()
     {
         if (GetComponent<Collider>() != null) return;
+        var box = gameObject.AddComponent<BoxCollider>();
+        if (TryGetModelBounds(out Bounds bounds))
+        {
+            box.center = bounds.center;
+            box.size = bounds.size;
+            return;
+        }
+
         GridEntitySOBase data = GetData();
         Vector3 min = Vector3.zero, max = Vector3.zero;
         if (data != null)
@@ -70,9 +80,35 @@ public class FarmPiece : GridPlaceable, IInteractable
                 min = Vector3.Min(min, offset);
                 max = Vector3.Max(max, offset);
             }
-        var box = gameObject.AddComponent<BoxCollider>();
         box.center = new Vector3((min.x + max.x) * 0.5f, -0.35f, (min.z + max.z) * 0.5f);
         box.size = new Vector3(max.x - min.x + 1f, 0.3f, max.z - min.z + 1f);
+    }
+
+    // Kökün yerel uzayında bütün mesh'lerin sınırı (kökün o anki dönüşünden bağımsız)
+    private bool TryGetModelBounds(out Bounds bounds)
+    {
+        bounds = default;
+        bool found = false;
+        Matrix4x4 toRoot = transform.worldToLocalMatrix;
+        foreach (MeshFilter filter in GetComponentsInChildren<MeshFilter>())
+        {
+            if (filter.sharedMesh == null) continue;
+            Matrix4x4 matrix = toRoot * filter.transform.localToWorldMatrix;
+            Bounds mesh = filter.sharedMesh.bounds;
+            for (int i = 0; i < 8; i++)
+            {
+                Vector3 corner = mesh.center + Vector3.Scale(mesh.extents,
+                    new Vector3((i & 1) == 0 ? -1f : 1f, (i & 2) == 0 ? -1f : 1f, (i & 4) == 0 ? -1f : 1f));
+                Vector3 point = matrix.MultiplyPoint3x4(corner);
+                if (!found)
+                {
+                    bounds = new Bounds(point, Vector3.zero);
+                    found = true;
+                }
+                else bounds.Encapsulate(point);
+            }
+        }
+        return found;
     }
 
     // --- Ekin ---
