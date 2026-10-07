@@ -3,6 +3,7 @@
 Unity 6000.3.11f1 (URP 17.3) projesi `Village/` klasöründe. Oyun kodu `Village/Assets/_Scripts`, editör kodu `Village/Assets/Editor`, giriş `Village/Assets/Input`.
 Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe. Commit mesajları (GitHub'da görünenler) İngilizce. **Oyuncunun gördüğü her metin (UI, dünyadaki yazılar, popup'lar) İngilizce**; Türkçe değil.
 Oyun tasarımı (sistemler, ana döngü, kararlar, açık sorular) `DESIGN.md`'de: tasarım konuşmadan önce oku, karar çıkınca güncelle, konuşulanı tekrarlatma.
+Sistem haritası (interaktif): `Docs/system-map.html` (yayında: https://claude.ai/artifact/XtrW1tA3empgpHFkahkkcR). Sistem eklenince, durumu ya da bağlantısı değişince içindeki `NODES` / `EDGES` güncellenir ve aynı adrese yeniden yayınlanır.
 
 ## Çalışma şekli
 - Büyük değişikliklerden önce tasarım konuşulur; kullanıcı "kodu değiştirme" dediyse sadece anlat. Karar soruları somut örnekli, seçenekli sorulur.

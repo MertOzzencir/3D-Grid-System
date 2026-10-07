@@ -1,0 +1,421 @@
+<title>Village Sistem Haritası</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Yerleşim: solda sistem haritası (yüzen tarla = sol sütun, ana halka ortada, altyapı altta), sağda seçilen sistemin kartı */
+:root {
+  --bg: #e9f2ef;          /* sığ su */
+  --surface: #f8fbf9;
+  --ink: #23312f;
+  --muted: #5d6f6b;
+  --line: #b9ccc6;
+  --accent: #d9774b;      /* kil turuncusu */
+  --done: #6fae8f;  --done-bg: #dcefe4;
+  --wip: #d9a441;   --wip-bg: #f6e9c9;
+  --plan: #7f8fcf;  --plan-bg: #e3e7f7;
+  --park: #9aa3a1;  --park-bg: #e7eaea;
+  --node: #ffffff;
+  --shadow: 0 1px 0 rgba(35,49,47,.06), 0 6px 18px rgba(35,49,47,.08);
+  --display: "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+  --body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #13212a; --surface: #1b2c36; --ink: #e4eeeb; --muted: #9fb3ae; --line: #355060; --accent: #ec9466;
+  --done: #7cc4a0; --done-bg: #1f3d33; --wip: #e3b45a; --wip-bg: #3f3520; --plan: #9aa8e6; --plan-bg: #2a3150;
+  --park: #8d9896; --park-bg: #2b3538; --node: #20333e; --shadow: 0 1px 0 rgba(0,0,0,.2), 0 6px 18px rgba(0,0,0,.3);
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #13212a; --surface: #1b2c36; --ink: #e4eeeb; --muted: #9fb3ae; --line: #355060; --accent: #ec9466;
+  --done: #7cc4a0; --done-bg: #1f3d33; --wip: #e3b45a; --wip-bg: #3f3520; --plan: #9aa8e6; --plan-bg: #2a3150;
+  --park: #8d9896; --park-bg: #2b3538; --node: #20333e; --shadow: 0 1px 0 rgba(0,0,0,.2), 0 6px 18px rgba(0,0,0,.3);
+  color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; margin: 0; }
+.wrap { max-width: 1440px; margin: 0 auto; padding: 24px 20px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; margin-bottom: 16px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 34px; line-height: 1.05; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.sub { color: var(--muted); margin: 4px 0 0; max-width: 62ch; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 600 13px var(--body); border: 1.5px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 999px; padding: 5px 12px 5px 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.chip[aria-pressed="false"] { opacity: .45; }
+.chip:focus-visible, .node:focus-visible, .card-btn:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.dot.done { background: var(--done); } .dot.wip { background: var(--wip); }
+.dot.planned { background: var(--plan); } .dot.parked { background: var(--park); }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; align-items: start; }
+@media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.map-box { background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); overflow-x: auto; }
+svg { display: block; width: 100%; min-width: 860px; height: auto; }
+.band-label { font: 600 11px var(--body); letter-spacing: .12em; text-transform: uppercase; fill: var(--muted); }
+.band { fill: var(--bg); opacity: .55; }
+.edge { fill: none; stroke: var(--line); stroke-width: 1.6; transition: opacity .15s, stroke .15s; }
+.edge.planned { stroke-dasharray: 5 5; }
+.edge.on { stroke: var(--accent); stroke-width: 2.4; }
+.edge.off { opacity: .15; }
+.elabel { font: 500 11.5px var(--body); fill: var(--muted); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+.elabel.on { fill: var(--accent); font-weight: 600; }
+.elabel.off { opacity: 0; }
+.node { cursor: pointer; transition: opacity .15s; }
+.node rect { fill: var(--node); stroke-width: 2; }
+.node.done rect { stroke: var(--done); }
+.node.wip rect { stroke: var(--wip); }
+.node.planned rect { stroke: var(--plan); stroke-dasharray: 6 4; }
+.node.parked rect { stroke: var(--park); stroke-dasharray: 3 4; }
+.node.hub rect { stroke-width: 3; }
+.node text { font: 600 14px var(--body); fill: var(--ink); pointer-events: none; }
+.node.hub text { font: 700 16px var(--display); }
+.node .tag { font: 500 10.5px var(--mono); fill: var(--muted); }
+.node.sel rect { fill: var(--accent); stroke: var(--accent); }
+.node.sel text, .node.sel .tag { fill: #fff; }
+.node.off { opacity: .28; }
+.node.hidden { display: none; }
+.arrow { fill: var(--line); } .arrow-on { fill: var(--accent); }
+
+aside { background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 20px 20px 22px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); min-width: 0; }
+@media (max-width: 980px) { aside { position: static; } }
+.status { display: inline-flex; align-items: center; gap: 6px; font: 600 12px var(--body); border-radius: 999px; padding: 3px 10px 3px 8px; }
+.status.done { background: var(--done-bg); } .status.wip { background: var(--wip-bg); }
+.status.planned { background: var(--plan-bg); } .status.parked { background: var(--park-bg); }
+aside h2 { font: 700 26px/1.1 var(--display); margin: 10px 0 6px; text-wrap: balance; }
+aside p { margin: 0 0 12px; }
+aside h3 { font: 600 11px var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
+aside ul { margin: 0; padding-left: 18px; } aside li { margin: 3px 0; }
+.links { list-style: none; padding: 0; display: grid; gap: 6px; }
+.links li { margin: 0; }
+.card-btn { width: 100%; text-align: left; font: 500 13.5px var(--body); color: var(--ink); background: var(--bg); border: 0;
+  border-radius: 10px; padding: 7px 10px; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+.card-btn b { font-weight: 600; white-space: nowrap; }
+.card-btn span { color: var(--muted); }
+.card-btn .dir { color: var(--accent); font-weight: 700; flex: none; }
+.steps { list-style: none; padding: 0; display: grid; gap: 4px; }
+.steps li { display: flex; gap: 8px; align-items: baseline; margin: 0; }
+.steps .n { font: 500 12px var(--mono); color: var(--muted); width: 1.4em; flex: none; }
+.steps .ok { color: var(--done); font-weight: 700; flex: none; }
+.steps .todo { color: var(--wip); font-weight: 700; flex: none; }
+code { font: 12px var(--mono); background: var(--bg); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+.next { border-left: 3px solid var(--accent); padding: 6px 0 6px 12px; margin-top: 4px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: 12.5px; margin-top: 12px; }
+.legend i { display: inline-block; width: 26px; border-top: 2px solid var(--line); vertical-align: middle; margin-right: 6px; }
+.legend i.dash { border-top-style: dashed; }
+.foot { color: var(--muted); font-size: 12.5px; margin-top: 18px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Village <span>Sistem Haritası</span></h1>
+      <p class="sub">Oyundaki sistemler ve birbirine ne verdikleri. Bir sisteme tıkla: bağlantıları yanar, sağda ne yaptığı, ne durumda olduğu ve sırada ne olduğu çıkar.</p>
+    </div>
+    <div class="filters" id="filters" aria-label="Duruma göre filtrele"></div>
+  </header>
+
+  <div class="layout">
+    <div>
+      <div class="map-box"><svg id="map" viewBox="0 0 1200 800" role="img" aria-label="Sistem haritası"></svg></div>
+      <div class="legend">
+        <span><i></i>oyunda çalışıyor</span>
+        <span><i class="dash"></i>planlandı (henüz yok)</span>
+        <span>Kalın çerçeve: ana halkanın sistemleri</span>
+      </div>
+    </div>
+    <aside id="panel" aria-live="polite"></aside>
+  </div>
+  <p class="foot">Son güncelleme: 7 Ekim 2026 · Kaynak: repodaki <code>DESIGN.md</code> ve <code>CLAUDE.md</code>. Sistem eklendikçe ya da durum değiştikçe bu sayfa güncellenir.</p>
+</div>
+
+<script>
+const STATUS = {
+  done: "Çalışıyor",
+  wip: "Yapılıyor",
+  planned: "Planlandı",
+  parked: "Park edildi"
+};
+
+// x, y: kutunun ortası (viewBox 1200 × 800)
+const NODES = [
+  // --- Yüzen tarla (sol sütun) ---
+  { id: "boat", name: "Bot + tarla treni", status: "done", x: 125, y: 95, tag: "Boat",
+    what: "Bota binip WASD ile suda gezersin. Arkasında halatla çekilen tek sayılı kare bir tarla var (3×3 → 5×5 → 7×7). Tarla botun izinden gecikmeli gelir, dar kanaldan geçemez.",
+    how: ["Mouse botun gövdesine gelince eldiven zıplayıp biner", "Geri gitme yok; yana basınca yerinde döner", "Sıkışınca H: limana dön (şimdilik)", "Kara hücresine sürünce eldiven iner"],
+    files: ["Boat/Boat.cs", "Creatures/Movement/GridWalker.cs"],
+    next: "Limana dönüş H tuşu yerine dünyada iskele ya da UI." },
+  { id: "pieces", name: "Tarla parçaları", status: "done", x: 125, y: 190, tag: "FarmPiece",
+    what: "Toprak blokları dünyada normal placeable. Tutup botun tarlasına bırakınca oraya oturur, botla gider. Sadece yan yana birleşir, üst üste konmaz.",
+    how: ["Sağ tık basılı tut, R ile döndür", "Tarlanın üstüne bırakınca oturur, tarladan alıp yerini değiştirebilirsin", "Her yerden düzenlenir (ayrı mod yok)"],
+    files: ["Farm/FarmPiece.cs", "Farm/FarmGrid.cs"],
+    next: "İleride blok türleri (çitli, taş döşeli...) hasat yolunun kurallarını değiştirecek." },
+  { id: "seeds", name: "Tohum ve ekim", status: "done", x: 125, y: 285, tag: "Seed",
+    what: "Tohumlar adada yığın halinde durur. Tutarken üstünden geçtiğin aynı türden tohumlar toplanır. Tarlada sol tıkla (ya da basılı sürükleyerek) ekersin.",
+    how: ["Ekilebilir kare = üstünde parça var ve boş", "Ekin parçanın içinde durur, parça taşınınca ekinler de gider", "Bütün ekinlerin fidesi aynı model, kese ve olgun hali türe özel"],
+    files: ["Farm/Seed.cs", "Farm/CropSO.cs"],
+    next: "Hangi karede ne ekili olduğunu gösteren UI. Tohumların nereden geleceği açık." },
+  { id: "grow", name: "Büyüme düğmesi", status: "done", x: 125, y: 380, tag: "FarmGrower",
+    what: "Tarlanın köşesindeki düğmeye basınca kapak kapanır, süre dolunca açılır ve bütün fideler aynı anda olgunlaşır.",
+    how: ["Kapalıyken tarla kilitli (ekilmez, parça alınmaz)", "Bu sırada botla gezebilirsin", "Süre botun ayarında (şimdilik gerçek saniye)"],
+    files: ["Farm/FarmGrower.cs", "Farm/FarmGrowButton.cs"],
+    next: "Süreyi gün döngüsüne bağlamak; gemi upgrade'i ile kısaltma." },
+  { id: "harvest", name: "Hasat yolu + kombo", status: "done", x: 125, y: 475, tag: "Sickle",
+    what: "Tarlanın bulmacası. Orakla sol tık basılı olgun karelerin üstünden tek çizgi çekersin. Kesintisiz yol kombo sayar; bütün tarla tek yolda biterse ekstra ürün.",
+    how: ["Boş ya da hasat edilmiş kareye girmek sadece komboyu bitirir, ceza yok", "Full Harvest = her ekin için bir ürün daha", "Ürün envantere gider"],
+    files: ["Tools/Sickle.cs", "Farm/FarmGrid.cs", "Farm/FarmPopup.cs"],
+    next: "Hasat koşulları (başla / bitir / sıra) ve blok türlerinin yol kuralları." },
+  { id: "farmsave", name: "Tarla kaydı", status: "wip", x: 125, y: 570, tag: "ISaveState",
+    what: "Botun kaydı şu an tarlanın parçalarını tutuyor ama ekinleri ve büyüme durumunu tutmuyor. Oyun kapanınca fideler ve süren büyüme kaybolur.",
+    how: ["Kaydedilen: bot yönü, liman, tarla boyutu, parçalar (tür, yer, dönüş), tohum yığınlarının sayısı, envanter", "Kaydedilmeyen: ekinler (fide / olgun), büyümenin kalan süresi"],
+    files: ["Boat/Boat.cs", "SaveSystem/SaveManager.cs"],
+    next: "Sıradaki iş: ekinleri ve büyüme durumunu kaydetmek (tarla botunun 7. adımı)." },
+
+  // --- Ana halka ---
+  { id: "farm", name: "Yüzen tarla", status: "done", hub: true, x: 390, y: 285, tag: "ana halka",
+    what: "Tarımın kendisi: suyun üstünde, botun arkasında giden tarla. Soldaki sütun onun parçaları. Yemeğin birinci malzeme kaynağı.",
+    how: ["Döngü: parça diz → ek → düğme → bekle → orakla yol çiz", "Bulmaca yerleştirmede: parçaları tek yolda bitecek şekilde diz", "Ekinler sadece ürün olarak farklı"],
+    files: ["_Scripts/Farm/"],
+    steps: [
+      ["Bot + tarla treni", true], ["Tarla parçaları", true], ["Düzenleme kuralı (her yerden)", true],
+      ["Ekim", true], ["Büyüme düğmesi", true], ["Hasat yolu + kombo", true], ["Kayıt (ekinler + büyüme)", false]
+    ],
+    next: "7. adım: kayıt. Sonra hasat koşulları ve blok türleri." },
+  { id: "fishing", name: "Balık tutma", status: "planned", hub: true, x: 400, y: 600, tag: "ana halka",
+    what: "Bot + olta. Yemeğin ikinci malzeme kaynağı. Henüz tasarlanmadı.",
+    how: ["Bot binilince giriş kilitli; balık için aletli bir mod gerekecek", "İskele yapısı derin suda balık açabilir"],
+    files: [],
+    next: "Mekaniği tasarlanacak." },
+  { id: "cooking", name: "Yemek pişirme", status: "planned", hub: true, x: 640, y: 400, tag: "ana halka",
+    what: "NPC'ler ham ürün yemez, yemek ister. Tarım gibi işlevsel ve alışılmışın dışında bir mekanik olacak.",
+    how: ["Girdi: tarladan ürün + balık", "Çıktı: NPC'nin sevdiği yemekler", "Mutfak yapısı yeni tarifler açabilir"],
+    files: [],
+    next: "Mekaniği tasarlanacak (açık soru)." },
+  { id: "npc", name: "NPC ilişkisi", status: "planned", hub: true, x: 880, y: 400, tag: "ana halka",
+    what: "Her adanın kendi NPC'leri var. Sevdikleri yemekleri verdikçe ilişki büyür; ilişki adanın blueprint'lerini, tarla parçalarını ve yeni blok türlerini açar.",
+    how: ["Her adanın NPC'si yeni bir tarla bloğu türü verir (bulmaca adalarla derinleşir)", "Ekin türlerini de açabilir"],
+    files: [],
+    next: "İstekler sadece yemek mi, eylemler de mi? (açık soru)" },
+  { id: "build", name: "Blueprint ve inşa", status: "wip", hub: true, x: 1080, y: 250, tag: "ana halka",
+    what: "Saydam blueprint'leri parçalarla doldurup yapı kurarsın (boyama kitabı). Sistem var; yapıların oyuna işlev katması henüz yok.",
+    how: ["Uyan parça slota yapışır, tıklayınca dolar", "Hepsi dolunca tamamlandı efekti", "Hedef: iskele → balık, kuyu → tarla, mutfak → tarif, köprü → ulaşım"],
+    files: ["Blueprint/Blueprint.cs", "Blueprint/BlueprintSlot.cs"],
+    next: "Yapı işlevlerinin genel kural çerçevesi; tamamlamanın ödülü." },
+  { id: "island", name: "Ada ilerlemesi", status: "planned", hub: true, x: 1080, y: 580, tag: "ana halka",
+    what: "Adalar lineer ilerler. Her ada kendi NPC'lerini ve yeni bir malzemeyi getirir. Tarla her adada iki büyür.",
+    how: ["3×3 → 5×5 → 7×7 tarla", "Her ada bir yol kuralı öğretir"],
+    files: [],
+    next: "Adalar arası geçiş ve ilk ikinci ada." },
+  { id: "material", name: "Malzeme", status: "wip", hub: true, x: 1080, y: 415, tag: "ana halka",
+    what: "Odun var. İleride taş (ağırlık taşır, suya dayanır) ve demir (hareket eden yapılar). Her malzemenin işlevsel anlamı olacak; kaynaklar sınırlı.",
+    how: ["Odun: dik durur, yan ve tepeden birleşir, blueprint'leri doldurur"],
+    files: ["Drops/Woods/"],
+    next: "Taş ve demirin işlevleri." },
+
+  // --- Kaynak ve envanter ---
+  { id: "inventory", name: "Envanter", status: "done", x: 640, y: 175, tag: "InventoryManager",
+    what: "Toplanan kaynaklar (odun, domates...) burada tutulur ve kaydedilir.",
+    how: ["Hasat edilen ürün buraya girer", "Ekranda arayüzü var"],
+    files: ["Inventory/InventoryManager.cs"],
+    next: "Yemek pişirme buradan malzeme çekecek." },
+  { id: "chop", name: "Ağaç kesme", status: "done", x: 880, y: 175, tag: "Axe",
+    what: "Baltayla ağacı kesince odun düşer. Odun ilk malzeme.",
+    how: ["Balta vuruşu, talaş efekti, ağaç sallanır", "Kesilmiş hali kaydedilmez"],
+    files: ["Tools/Axe.cs", "ResourceEntites/Tree.cs"],
+    next: "Kaynakların sınırlı olması (spawn sınırı)." },
+
+  // --- Altyapı ---
+  { id: "grid", name: "Grid", status: "done", x: 300, y: 735, tag: "GridManager",
+    what: "Her şeyin oturduğu dünya grid'i. Her hücrede bir Base, bir Placeable slotu. Su = en alt kattaki base'siz hücre.",
+    how: ["Footprint, döndürme (R), yürüyen placeable'lar (kedi, bot)", "Build mode ile yerleştirme"],
+    files: ["GridManager/GridManager.cs"], next: "" },
+  { id: "glove", name: "Eldiven imleç", status: "done", x: 500, y: 735, tag: "GloveCursor",
+    what: "Mouse yerine eldiven. Yüzeyde parmaklarıyla yürür, objeleri tutar, aletleri kavrar, bota biner.",
+    how: ["Suda kıyıda bekler", "Tarlanın, kapağın ve parçaların üstünde de yürür"],
+    files: ["Cursor/GloveCursor.cs", "Cursor/GloveFingers.cs"], next: "Durum pozları (önizleme, build mode)." },
+  { id: "save", name: "Kayıt sistemi", status: "done", x: 700, y: 735, tag: "SaveManager",
+    what: "Dünyayı yeniden kuran tarif: her obje için kimlik + hücre + dönüş + ekstra durum. F5 ve çıkışta kaydeder.",
+    how: ["Yeni objeler SaveRegistry'ye eklenmeli (Find All Assets)"],
+    files: ["SaveSystem/SaveManager.cs"], next: "Tarla ekinleri ve büyüme durumu." },
+  { id: "daycycle", name: "Gün döngüsü", status: "done", x: 900, y: 735, tag: "DayCycle",
+    what: "20 dakikada bir gün: güneş, ay, renkler, sis, ateş böcekleri. Kaydedilir.",
+    how: ["Fikir: gece bitkileri, sera yapısı"], files: ["Vfx/DayCycle.cs"],
+    next: "Büyüme süresine bağlanabilir." },
+  { id: "cat", name: "Kedi", status: "parked", x: 1090, y: 735, tag: "Cat",
+    what: "Sevilen, şaplak yiyen, ele zıplayan kedi. Ana halka oturunca yeri belli olacak.",
+    how: ["Fikir: sevgisi yüksekse hediye bırakır", "Fikir: tarla ziyaretçisi (karede uyur)"],
+    files: ["Creatures/Cat/Cat.cs"], next: "Park edildi." },
+
+  // --- Park edilenler / sonraki ---
+  { id: "upgrade", name: "Gemi upgrade'leri", status: "planned", x: 390, y: 95, tag: "fikir",
+    what: "Küçük bir upgrade sistemi: büyüme süresini kısaltma, botun hızı, son ekimi tek tuşla tekrarlama.",
+    how: ["Neyle alınacağı açık (para birimi yok)"], files: [], next: "Para / ödül kaynağı belirlenince." },
+  { id: "album", name: "Koleksiyon albümü", status: "parked", x: 1080, y: 95, tag: "fikir",
+    what: "Boyama kitabı temalı albüm: balık, ürün, kedi hediyeleri çıkartma olur. Hasat koşullarının ödülü olabilir.",
+    how: [], files: [], next: "Park edildi." }
+];
+
+// from → to: ne verir. planned: henüz oyunda yok
+const EDGES = [
+  ["boat", "farm", "taşır", "live"],
+  ["pieces", "farm", "tarlayı kurar", "live"],
+  ["seeds", "farm", "ekin", "live"],
+  ["grow", "farm", "olgunlaştırır", "live"],
+  ["harvest", "farm", "toplar", "live"],
+  ["farmsave", "farm", "saklar", "planned"],
+  ["farm", "inventory", "ürün", "live"],
+  ["chop", "inventory", "odun", "live"],
+  ["inventory", "cooking", "malzeme", "planned"],
+  ["farm", "cooking", "ürün", "planned"],
+  ["fishing", "cooking", "balık", "planned"],
+  ["cooking", "npc", "sevdiği yemek", "planned"],
+  ["npc", "build", "blueprint açar", "planned"],
+  ["npc", "farm", "parça, blok, ekin türü", "planned"],
+  ["npc", "island", "ada ilerler", "planned"],
+  ["island", "material", "yeni malzeme", "planned"],
+  ["island", "npc", "yeni NPC", "planned"],
+  ["material", "build", "yapı malzemesi", "live"],
+  ["chop", "material", "odun", "live"],
+  ["build", "fishing", "iskele", "planned"],
+  ["build", "farm", "kuyu, sera", "planned"],
+  ["build", "cooking", "mutfak", "planned"],
+  ["upgrade", "boat", "hız, süre", "planned"],
+  ["daycycle", "grow", "gece bitkisi?", "planned"],
+  ["save", "farmsave", "", "live"],
+  ["glove", "harvest", "yolu çizer", "live"]
+];
+
+const svgNS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("map");
+const panel = document.getElementById("panel");
+const byId = Object.fromEntries(NODES.map(n => [n.id, n]));
+const visible = { done: true, wip: true, planned: true, parked: true };
+let selected = "farm";
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(svgNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+// kutu boyutu yazıdan
+for (const n of NODES) {
+  const size = n.hub ? 8.6 : 7.6;
+  n.w = Math.max(n.name.length, n.tag.length * 0.8) * size + 34;
+  n.h = n.hub ? 56 : 48;
+}
+
+function draw() {
+  svg.innerHTML = "";
+  const defs = el("defs", {}, svg);
+  for (const [id, cls] of [["arr", "arrow"], ["arr-on", "arrow-on"]]) {
+    const m = el("marker", { id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
+    el("path", { d: "M0,0 L10,5 L0,10 z", class: cls }, m);
+  }
+
+  // bantlar
+  el("rect", { x: 14, y: 46, width: 222, height: 572, rx: 16, class: "band" }, svg);
+  el("text", { x: 30, y: 36, class: "band-label" }, svg).textContent = "Yüzen tarla";
+  el("text", { x: 300, y: 36, class: "band-label" }, svg).textContent = "Ana halka";
+  el("rect", { x: 14, y: 680, width: 1172, height: 104, rx: 16, class: "band" }, svg);
+  el("text", { x: 30, y: 672, class: "band-label" }, svg).textContent = "Altyapı";
+
+  const related = new Set([selected]);
+  for (const [a, b] of EDGES) { if (a === selected) related.add(b); if (b === selected) related.add(a); }
+
+  const edgeLayer = el("g", {}, svg);
+  const labelLayer = el("g", {}, svg);
+  for (const [a, b, label, kind] of EDGES) {
+    const A = byId[a], B = byId[b];
+    if (!visible[A.status] || !visible[B.status]) continue;
+    const on = a === selected || b === selected;
+    const p = curve(A, B);
+    el("path", { d: p.d, class: `edge ${kind === "planned" ? "planned" : ""} ${on ? "on" : "off"}`,
+      "marker-end": `url(#${on ? "arr-on" : "arr"})` }, edgeLayer);
+    if (label) {
+      const t = el("text", { x: p.mx, y: p.my + 4, "text-anchor": "middle", class: `elabel ${on ? "on" : "off"}` }, labelLayer);
+      t.textContent = label;
+    }
+  }
+
+  for (const n of NODES) {
+    const g = el("g", { class: `node ${n.status} ${n.hub ? "hub" : ""} ${n.id === selected ? "sel" : ""} ${related.has(n.id) ? "" : "off"} ${visible[n.status] ? "" : "hidden"}`,
+      tabindex: 0, role: "button", "aria-label": `${n.name}, ${STATUS[n.status]}` }, svg);
+    el("rect", { x: n.x - n.w / 2, y: n.y - n.h / 2, width: n.w, height: n.h, rx: n.hub ? 18 : 14 }, g);
+    el("text", { x: n.x, y: n.y - 1, "text-anchor": "middle" }, g).textContent = n.name;
+    el("text", { x: n.x, y: n.y + 15, "text-anchor": "middle", class: "tag" }, g).textContent = n.tag;
+    g.addEventListener("click", () => select(n.id));
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(n.id); } });
+  }
+  svg.appendChild(labelLayer); // yazılar kutuların üstünde
+}
+
+// iki kutu arasında hafif kavisli yol; uçlar kutu kenarında
+function curve(A, B) {
+  const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy) || 1;
+  const bend = 0.12;
+  const cx = (A.x + B.x) / 2 - dy * bend, cy = (A.y + B.y) / 2 + dx * bend;
+  const s = edgePoint(A, cx - A.x, cy - A.y, 2);
+  const e = edgePoint(B, cx - B.x, cy - B.y, 6);
+  return { d: `M${s.x},${s.y} Q${cx},${cy} ${e.x},${e.y}`, mx: 0.25 * s.x + 0.5 * cx + 0.25 * e.x, my: 0.25 * s.y + 0.5 * cy + 0.25 * e.y };
+}
+function edgePoint(n, vx, vy, pad) {
+  const hw = n.w / 2 + pad, hh = n.h / 2 + pad;
+  const k = Math.min(hw / Math.abs(vx || 1e-6), hh / Math.abs(vy || 1e-6));
+  return { x: n.x + vx * k, y: n.y + vy * k };
+}
+
+function select(id) {
+  selected = id;
+  draw();
+  renderPanel();
+}
+
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function renderPanel() {
+  const n = byId[selected];
+  const outs = EDGES.filter(e => e[0] === n.id), ins = EDGES.filter(e => e[1] === n.id);
+  let html = `<span class="status ${n.status}"><span class="dot ${n.status}"></span>${STATUS[n.status]}</span>
+    <h2>${esc(n.name)}</h2><p>${esc(n.what)}</p>`;
+  if (n.how && n.how.length) html += `<h3>Nasıl çalışıyor</h3><ul>${n.how.map(h => `<li>${esc(h)}</li>`).join("")}</ul>`;
+  if (n.steps) html += `<h3>Tarla botu adımları</h3><ol class="steps">${n.steps.map((s, i) =>
+    `<li><span class="n">${i + 1}</span><span class="${s[1] ? "ok" : "todo"}">${s[1] ? "✓" : "○"}</span><span>${esc(s[0])}</span></li>`).join("")}</ol>`;
+  if (ins.length || outs.length) {
+    html += `<h3>Bağlantılar</h3><ul class="links">`;
+    for (const [a, , label, kind] of ins)
+      html += `<li><button class="card-btn" data-go="${a}"><span class="dir">←</span><b>${esc(byId[a].name)}</b><span>${esc(label || "")}${kind === "planned" ? " · planlandı" : ""}</span></button></li>`;
+    for (const [, b, label, kind] of outs)
+      html += `<li><button class="card-btn" data-go="${b}"><span class="dir">→</span><b>${esc(byId[b].name)}</b><span>${esc(label || "")}${kind === "planned" ? " · planlandı" : ""}</span></button></li>`;
+    html += `</ul>`;
+  }
+  if (n.files && n.files.length) html += `<h3>Kod</h3><p>${n.files.map(f => `<code>${esc(f)}</code>`).join(" ")}</p>`;
+  if (n.next) html += `<h3>Sırada</h3><p class="next">${esc(n.next)}</p>`;
+  panel.innerHTML = html;
+  panel.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => select(b.dataset.go)));
+}
+
+function renderFilters() {
+  const box = document.getElementById("filters");
+  for (const key of Object.keys(STATUS)) {
+    const count = NODES.filter(n => n.status === key).length;
+    const b = document.createElement("button");
+    b.className = "chip"; b.id = `filter-${key}`;
+    b.setAttribute("aria-pressed", "true");
+    b.innerHTML = `<span class="dot ${key}"></span>${STATUS[key]} <span style="color:var(--muted);font-weight:500">${count}</span>`;
+    b.addEventListener("click", () => {
+      visible[key] = !visible[key];
+      b.setAttribute("aria-pressed", String(visible[key]));
+      if (!visible[byId[selected].status]) selected = NODES.find(n => visible[n.status])?.id || selected;
+      draw(); renderPanel();
+    });
+    box.appendChild(b);
+  }
+}
+
+renderFilters();
+draw();
+renderPanel();
+</script>

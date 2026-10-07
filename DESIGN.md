@@ -3,6 +3,7 @@
 Oyunun tasarım kararları ve sistemlerin birbirine nasıl bağlandığı. Teknik kurallar `CLAUDE.md`'de, burada "ne ve neden".
 Yaklaşım: **önce ana resim, sonra detay.** Bir sistemin içeriğine geçmeden önce diğer sistemlerle bağlantısı burada netleşir.
 Konuştukça güncellenir; karar verilenler "Kararlar", verilmeyenler "Açık sorular" altında.
+Sistemlerin görsel haritası: `Docs/system-map.html` (https://claude.ai/artifact/XtrW1tA3empgpHFkahkkcR).
 
 ## Tür ve his
 - Cozy, grid tabanlı köy kurma / bulmaca. Kil gibi yuvarlak modeller, pastel renkler, minyatür diorama görünümü.
