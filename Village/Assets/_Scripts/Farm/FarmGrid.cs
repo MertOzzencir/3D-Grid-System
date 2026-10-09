@@ -189,6 +189,7 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
             matureAtStart = MatureCount;
             harvestedInPath.Clear();
             harvestSickle = sickle;
+            Fx?.BeginPath();
             HarvestCell(sickle, cell);
             return true;
         }
@@ -220,6 +221,7 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         harvestedInPath.Add(crop);
         GiveProduce(crop);
         Fx?.Harvest(piece.SoilPoint(tile), combo);
+        Fx?.AddPathPoint(piece.SoilPoint(tile), combo / (float)Mathf.Max(1, matureAtStart));
         if (sickle != null) sickle.OnHarvested(combo);
         if (combo >= 2)
             FarmPopup.Show($"×{combo}", CellWorld(cell) + Vector3.up * 0.9f, ComboColor, 3f + Mathf.Min(combo, 10) * 0.15f);
@@ -232,7 +234,9 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         if (activeHarvest == this) activeHarvest = null;
 
         // Bütün olgun ekinler tek yolda: yoldaki her ekin için bir ürün daha
-        if (combo >= 2 && combo == matureAtStart)
+        bool full = combo >= 2 && combo == matureAtStart;
+        Fx?.EndPath(full);
+        if (full)
         {
             foreach (CropSO crop in harvestedInPath) GiveProduce(crop);
             FarmPopup.Show($"Full Harvest! +{combo}", transform.position + Vector3.up * 1.6f, FullTourColor, 5f);
@@ -326,6 +330,7 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
     // Boş el tarlanın üstünde gezerken yakınındaki ekinler sallanır (CropSway)
     private void Update()
     {
+        Fx?.Tick();
         GloveCursor glove = GloveCursor.Instance;
         bool onFarm = glove != null && glove.HasSurface && glove.SurfaceCollider != null &&
                       glove.SurfaceCollider.transform.IsChildOf(transform);

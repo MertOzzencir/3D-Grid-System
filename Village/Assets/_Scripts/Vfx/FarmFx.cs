@@ -6,6 +6,8 @@ using UnityEngine;
 //   hasat: toprak topakları + yaprak parçaları + toz (kombo büyüdükçe biraz daha çok)
 //   kapak: kapanınca tarlanın kenarından dışarı toz halkası; açılınca ekinlerin üstünden yükselen parıltı
 //   Full Harvest: parıltı + yaprak patlaması
+//   hasat izi: yolun geçtiği karelerin ortasından toprağa yakın şerit; rengi tamamlama oranıyla açık yeşilden altına döner,
+//   yol bitince söner (Full Harvest'ta önce parlar). Tarlanın child'ı: botla gider.
 // Topak ve yapraklar ışık alan küçük mesh'ler (güvertenin malzemesinin renklendirilmiş kopyası: kil gibi), toz ve
 // parıltı yumuşak diskler (botun efekt shader'ı, "Village/Water Foam", _Shape 0).
 [Serializable]
@@ -28,8 +30,31 @@ public class FarmFx
     [SerializeField] private float dustSize = 0.3f;
     [SerializeField] private float sparkleSize = 0.09f;
 
+    [Header("Hasat izi")]
+    [SerializeField] private float trailWidth = 0.16f;
+    [Tooltip("İzin rengi: yolun başında ve bütün olgun ekinler toplanınca (arası tamamlama oranıyla karışır)")]
+    [SerializeField] private Color trailStartColor = new Color(0.92f, 1f, 0.82f, 0.75f);
+    [SerializeField] private Color trailFullColor = new Color(1f, 0.82f, 0.3f, 0.95f);
+    [Tooltip("Yol bitince sönme süresi (saniye)")]
+    [SerializeField] private float trailFade = 0.7f;
+    [Tooltip("Toprağın ne kadar üstünde (birim)")]
+    [SerializeField] private float trailLift = 0.06f;
+
     private ParticleSystem clods, leaves, dust, sparkles;
     private bool ready;
+
+    // Hasat izleri: biri çizilirken önceki sönüyor olabilir
+    private class Trail
+    {
+        public LineRenderer line;
+        public readonly System.Collections.Generic.List<Vector3> points = new System.Collections.Generic.List<Vector3>();
+        public Color color;
+        public bool drawing;
+        public float fadeStart = -1f;
+        public float holdUntil;
+    }
+    private readonly Trail[] trails = new Trail[3];
+    private Trail currentTrail;
 
     private static readonly int ShapeId = Shader.PropertyToID("_Shape");
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -49,7 +74,119 @@ public class FarmFx
         leaves = CreateSystem(parent, "Farm Leaves", Colored(litMaterial, leafColor), sphere, 0.35f, true);
         dust = CreateSystem(parent, "Farm Dust", Soft(softShader), null, -0.05f, false);
         sparkles = CreateSystem(parent, "Farm Sparkles", Soft(softShader), null, -0.15f, false);
+        var stripe = new Material(softShader);
+        stripe.SetFloat(ShapeId, 1f); // şerit
+        for (int i = 0; i < trails.Length; i++) trails[i] = new Trail { line = CreateTrailLine(parent, stripe, i) };
         ready = true;
+    }
+
+    // --- Hasat izi ---
+
+    // Yeni yol başladı: boştaki (sönmüş) bir iz alınır
+    public void BeginPath()
+    {
+        if (!ready) return;
+        Trail free = null;
+        foreach (Trail trail in trails)
+            if (!trail.drawing && trail.fadeStart < 0f) { free = trail; break; }
+        if (free == null) // hepsi sönüyor: en eskisi
+        {
+            free = trails[0];
+            foreach (Trail trail in trails)
+                if (!trail.drawing && trail.fadeStart < free.fadeStart) free = trail;
+        }
+        free.points.Clear();
+        free.line.positionCount = 0;
+        free.line.enabled = true;
+        free.drawing = true;
+        free.fadeStart = -1f;
+        currentTrail = free;
+    }
+
+    // Yol bir kareye geldi. soil: karenin toprak yüzeyi (dünya), progress: hasat edilen / yol başındaki olgun ekin
+    public void AddPathPoint(Vector3 soil, float progress)
+    {
+        if (!ready || currentTrail == null) return;
+        Trail trail = currentTrail;
+        trail.points.Add(trail.line.transform.InverseTransformPoint(soil + Vector3.up * trailLift));
+        trail.line.positionCount = trail.points.Count;
+        trail.line.SetPositions(trail.points.ToArray());
+        trail.color = Color.Lerp(trailStartColor, trailFullColor, Mathf.Clamp01(progress));
+        SetTrailColor(trail, 1f);
+    }
+
+    // Yol bitti: söner (full: bütün olgun ekinler toplandı, önce altın renginde parlar)
+    public void EndPath(bool full)
+    {
+        if (!ready || currentTrail == null) return;
+        Trail trail = currentTrail;
+        currentTrail = null;
+        trail.drawing = false;
+        if (trail.points.Count == 0)
+        {
+            trail.line.enabled = false;
+            return;
+        }
+        if (full)
+        {
+            trail.color = trailFullColor;
+            trail.holdUntil = Time.time + 0.4f;
+        }
+        else trail.holdUntil = Time.time;
+        trail.fadeStart = trail.holdUntil;
+        SetTrailColor(trail, 1f);
+    }
+
+    // FarmGrid her kare: sönen izler
+    public void Tick()
+    {
+        if (!ready) return;
+        foreach (Trail trail in trails)
+        {
+            if (trail.drawing || trail.fadeStart < 0f || Time.time < trail.holdUntil) continue;
+            float k = (Time.time - trail.fadeStart) / Mathf.Max(trailFade, 0.0001f);
+            if (k >= 1f)
+            {
+                trail.fadeStart = -1f;
+                trail.line.enabled = false;
+                trail.line.positionCount = 0;
+                continue;
+            }
+            SetTrailColor(trail, 1f - k);
+        }
+    }
+
+    private static void SetTrailColor(Trail trail, float alpha)
+    {
+        Color c = trail.color;
+        c.a *= alpha;
+        Color tail = c;
+        tail.a *= 0.55f; // yolun başı biraz daha soluk: yön okunsun
+        var gradient = new Gradient();
+        gradient.SetKeys(new[] { new GradientColorKey(c, 0f), new GradientColorKey(c, 1f) },
+                         new[] { new GradientAlphaKey(tail.a, 0f), new GradientAlphaKey(c.a, 1f) });
+        trail.line.colorGradient = gradient;
+    }
+
+    // Toprağa yatık şerit: TransformZ hizası şeridi objenin Z'sine dik çizer, obje -90° X ile Z yukarı bakar
+    private LineRenderer CreateTrailLine(Transform parent, Material material, int index)
+    {
+        var holder = new GameObject($"Harvest Trail {index}").transform;
+        holder.SetParent(parent, false);
+        holder.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+        LineRenderer line = holder.gameObject.AddComponent<LineRenderer>();
+        line.useWorldSpace = false;
+        line.sharedMaterial = material;
+        line.alignment = LineAlignment.TransformZ;
+        line.textureMode = LineTextureMode.Stretch;
+        line.widthMultiplier = trailWidth;
+        line.numCornerVertices = 4;
+        line.numCapVertices = 4;
+        line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        line.receiveShadows = false;
+        line.positionCount = 0;
+        line.enabled = false;
+        return line;
     }
 
     // Tohum ekildi (point: hücrenin toprak yüzeyi)

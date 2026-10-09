@@ -163,14 +163,15 @@ const NODES = [
     next: "Süreyi gün döngüsüne bağlamak; gemi upgrade'i ile kısaltma." },
   { id: "harvest", name: "Hasat yolu + kombo", status: "done", x: 125, y: 475, tag: "Sickle",
     what: "Tarlanın bulmacası. Orakla sol tık basılı olgun karelerin üstünden tek çizgi çekersin. Kesintisiz yol kombo sayar; bütün tarla tek yolda biterse ekstra ürün.",
-    how: ["Boş ya da hasat edilmiş kareye girmek sadece komboyu bitirir, ceza yok", "Full Harvest = her ekin için bir ürün daha", "Ürün envantere gider"],
+    how: ["Boş ya da hasat edilmiş kareye girmek sadece komboyu bitirir, ceza yok", "Full Harvest = her ekin için bir ürün daha", "Ürün envantere gider",
+          "Yolun izi kalır: rengi tamamlandıkça altına döner", "Orak hasatta yatar, geri çekilir, durunca seker"],
     files: ["Tools/Sickle.cs", "Farm/FarmGrid.cs", "Farm/FarmPopup.cs"],
     next: "Hasat koşulları (başla / bitir / sıra) ve blok türlerinin yol kuralları." },
-  { id: "farmsave", name: "Tarla kaydı", status: "wip", x: 125, y: 570, tag: "ISaveState",
-    what: "Botun kaydı şu an tarlanın parçalarını tutuyor ama ekinleri ve büyüme durumunu tutmuyor. Oyun kapanınca fideler ve süren büyüme kaybolur.",
+  { id: "farmsave", name: "Tarla kaydı", status: "done", x: 125, y: 570, tag: "ISaveState",
+    what: "Botun kaydı tarlanın parçalarını tutar. Ekinler ve büyüme bilerek kaydedilmez (karar): oyun kapanınca tarla ekinlerden boş açılır.",
     how: ["Kaydedilen: bot yönü, liman, tarla boyutu, parçalar (tür, yer, dönüş), tohum yığınlarının sayısı, envanter", "Kaydedilmeyen: ekinler (fide / olgun), büyümenin kalan süresi"],
     files: ["Boat/Boat.cs", "SaveSystem/SaveManager.cs"],
-    next: "Sıradaki iş: ekinleri ve büyüme durumunu kaydetmek (tarla botunun 7. adımı)." },
+    next: "" },
 
   // --- Ana halka ---
   { id: "farm", name: "Yüzen tarla", status: "done", hub: true, x: 390, y: 285, tag: "ana halka",
@@ -179,9 +180,9 @@ const NODES = [
     files: ["_Scripts/Farm/"],
     steps: [
       ["Bot + tarla treni", true], ["Tarla parçaları", true], ["Düzenleme kuralı (her yerden)", true],
-      ["Ekim", true], ["Büyüme düğmesi", true], ["Hasat yolu + kombo", true], ["Kayıt (ekinler + büyüme)", false]
+      ["Ekim", true], ["Büyüme düğmesi", true], ["Hasat yolu + kombo", true], ["Kayıt: ekinler kaydedilmez (karar)", true]
     ],
-    next: "7. adım: kayıt. Sonra hasat koşulları ve blok türleri." },
+    next: "Cila: hasat yolu ipucu, etiket UI, efekt modelleri. Sonra hasat koşulları, blok türleri; madencilik tarlayı besleyecek." },
   { id: "fishing", name: "Balık tutma", status: "planned", hub: true, x: 400, y: 600, tag: "ana halka",
     what: "Bot + olta. Yemeğin ikinci malzeme kaynağı. Henüz tasarlanmadı.",
     how: ["Bot binilince giriş kilitli; balık için aletli bir mod gerekecek", "İskele yapısı derin suda balık açabilir"],
@@ -265,7 +266,7 @@ const EDGES = [
   ["seeds", "farm", "ekin", "live"],
   ["grow", "farm", "olgunlaştırır", "live"],
   ["harvest", "farm", "toplar", "live"],
-  ["farmsave", "farm", "saklar", "planned"],
+  ["farmsave", "farm", "parçaları saklar", "live"],
   ["farm", "inventory", "ürün", "live"],
   ["chop", "inventory", "odun", "live"],
   ["inventory", "cooking", "malzeme", "planned"],
