@@ -42,7 +42,7 @@ public class Sickle : ToolBase
     private Vector3 restLocalPosition;
     private Quaternion restLocalRotation;
     private float lay, layVelocity;        // 0 = dik, 1 = yatık (hasat)
-    private float swing, swingVelocity;    // derece, swingAxis etrafında
+    private float swingAngle, swingAngleVelocity;    // derece, swingAxis etrafında
     private float spinStart = -1f;
     private bool animating;
 
@@ -96,8 +96,8 @@ public class Sickle : ToolBase
     public void OnHarvested(int combo)
     {
         if (!Harvesting) return;
-        float direction = Mathf.Abs(swing) > 1f ? Mathf.Sign(swing) : -Mathf.Sign(swingPerSpeed);
-        swingVelocity += direction * harvestKick * (1f + Mathf.Min(combo, 10) * 0.05f);
+        float direction = Mathf.Abs(swingAngle) > 1f ? Mathf.Sign(swingAngle) : -Mathf.Sign(swingPerSpeed);
+        swingAngleVelocity += direction * harvestKick * (1f + Mathf.Min(combo, 10) * 0.05f);
         animating = true;
     }
 
@@ -135,9 +135,9 @@ public class Sickle : ToolBase
             float along = Vector3.Dot(flat, Vector3.ProjectOnPlane(tipDirection, Vector3.up).normalized);
             swingTarget = Mathf.Clamp(-along * swingPerSpeed, -maxSwing, maxSwing);
         }
-        swingVelocity += (swingStiffness * (swingTarget - swing) - swingDamping * swingVelocity) * dt;
-        swing += swingVelocity * dt;
-        swing = Mathf.Clamp(swing, -maxSwing * 1.5f, maxSwing * 1.5f);
+        swingAngleVelocity += (swingStiffness * (swingTarget - swingAngle) - swingDamping * swingAngleVelocity) * dt;
+        swingAngle += swingAngleVelocity * dt;
+        swingAngle = Mathf.Clamp(swingAngle, -maxSwing * 1.5f, maxSwing * 1.5f);
 
 
         float spin = 0f;
@@ -148,8 +148,8 @@ public class Sickle : ToolBase
             else spin = 360f * Mathf.SmoothStep(0f, 1f, t);
         }
 
-        bool active = Mathf.Abs(lay) > 0.001f || Mathf.Abs(layVelocity) > 0.001f || Mathf.Abs(swing) > 0.05f ||
-                      Mathf.Abs(swingVelocity) > 0.05f || IsLeaning ||
+        bool active = Mathf.Abs(lay) > 0.001f || Mathf.Abs(layVelocity) > 0.001f || Mathf.Abs(swingAngle) > 0.05f ||
+                      Mathf.Abs(swingAngleVelocity) > 0.05f || IsLeaning ||
                       spinStart >= 0f;
         if (!active)
         {
@@ -158,7 +158,7 @@ public class Sickle : ToolBase
                 VisualTransform.SetLocalPositionAndRotation(restLocalPosition, restLocalRotation);
                 animating = false;
             }
-            swing = swingVelocity = 0f;
+            swingAngle = swingAngleVelocity = 0f;
             return;
         }
         animating = true;
@@ -166,7 +166,7 @@ public class Sickle : ToolBase
         Quaternion leanRotation = LeanRotation();
         // Sağdaki dönüş önce: önce sap etrafında tur, sonra yatık orağın X'inde sallama, sonra Z'de yatma
         Quaternion rotation = leanRotation * restLocalRotation * layRotation *
-                              Quaternion.AngleAxis(swing, swingAxis) *
+                              Quaternion.AngleAxis(swingAngle, swingAxis) *
                               Quaternion.AngleAxis(spin, handleAxis);
 
         // Tutma noktasının etrafında dön: el sapta kalsın
