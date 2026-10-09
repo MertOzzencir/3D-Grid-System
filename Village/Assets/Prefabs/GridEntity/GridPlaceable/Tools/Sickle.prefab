@@ -296,8 +296,18 @@ MonoBehaviour:
     windUpDuration: 0.15
     strikeDuration: 0.07
     returnDuration: 0.2
-  swishAngle: 25
-  swishDuration: 0.12
+  layAngle: 90
+  layAxis: {x: -1, y: 0, z: 0}
+  swingAxis: {x: 0, y: 0, z: 1}
+  swingPerSpeed: 20
+  maxSwing: 55
+  swingStiffness: 140
+  swingDamping: 8
+  harvestKick: 120
+  leanPerSpeed: 4
+  maxLean: 18
+  handleAxis: {x: 0, y: 1, z: 0}
+  spinDuration: 0.55
 --- !u!136 &1267462294107112075
 CapsuleCollider:
   m_ObjectHideFlags: 0

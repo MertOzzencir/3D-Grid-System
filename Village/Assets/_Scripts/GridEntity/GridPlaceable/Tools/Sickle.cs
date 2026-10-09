@@ -3,11 +3,12 @@ using UnityEngine;
 // Orak: hasat aleti (DESIGN.md: hasat yolu bulmacası). Balta gibi sağ tık basılı tutulur. Botun tarlasının üstünde
 // hücrenin üstünde süzülür (FarmGrid IToolTarget); sol tık basılıyken geçilen olgun kareler hasat edilir, yol FarmGrid'de
 // sayılır (kombo). Sol tık bırakılınca ya da tarladan çıkınca yol biter.
-// Animasyon (prosedürel, VisualTransform'u tutma noktasının etrafında döndürür; el sapta kalır). Eksenler modelin uzayında:
-// Y sap (yukarı), bıçak Y-Z düzleminde, X bıçağa dik.
+// Animasyon (prosedürel, VisualTransform'u tutma noktasının etrafında döndürür; el sapta kalır). Eksenler modelin uzayında,
+// prefab'taki modele göre kullanıcının ayarı: -X etrafında yatar, Z etrafında sallanır.
 // - Tutarken (sol tık basılı değil): gidiş yönüne yatar, hareketin biraz gerisinden gelir.
-// - Sol tık basılıyken (hasat): Z'de 90° yatar (bıçak yatay); hareket ederken X'te gidişin tersine geri çekilir (bıçak
-//   arkada kalır), durunca X'te ileri sekip sıfıra oturur (sallama). Her hasat edilen kare geri çekişe küçük bir itki ekler.
+// - Sol tık basılıyken (hasat): 90° yatar (bıçak yatay) ve harvestLift kadar kalkar (yatınca bıçak tutma noktasının
+//   yüksekliğine iniyor, tarla parçalarının içinde kalıyordu); hareket ederken gidişin tersine geri çekilir (bıçak arkada
+//   kalır), durunca ileri sekip sıfıra oturur (sallama). Her hasat edilen kare geri çekişe küçük bir itki ekler.
 //   Sol tık bırakılınca eski haline döner.
 // - Full Harvest'ta sapın etrafında tam tur.
 public class Sickle : ToolBase
@@ -15,9 +16,11 @@ public class Sickle : ToolBase
     [Header("Hasat duruşu (sol tık basılı)")]
     [Tooltip("Hasatta orağın yatma açısı ve ekseni (modelin uzayında). Ters yöne yatıyorsa açıyı eksi yap.")]
     [SerializeField] private float layAngle = 90f;
-    [SerializeField] private Vector3 layAxis = Vector3.forward;
+    [SerializeField] private Vector3 layAxis = Vector3.left;
     [Tooltip("Yattıktan sonra geri çekilme / sekme ekseni (modelin uzayında)")]
-    [SerializeField] private Vector3 swingAxis = Vector3.right;
+    [SerializeField] private Vector3 swingAxis = Vector3.forward;
+    [Tooltip("Hasatta orağın yukarı kalkması (birim): yatık bıçak ekinlerin ortasından geçsin, tarla parçalarına girmesin")]
+    [SerializeField] private float harvestLift = 0.45f;
     [Tooltip("Hız (birim/sn) başına geri çekilme açısı. Orak gidiş yönüne doğru (önde) kalıyorsa eksi yap.")]
     [SerializeField] private float swingPerSpeed = 20f;
     [Tooltip("En fazla geri çekilme açısı")]
@@ -190,7 +193,8 @@ public class Sickle : ToolBase
         // Tutma noktasının etrafında dön: el sapta kalsın
         Vector3 pivot = GripPoint != null && GripPoint.parent == VisualTransform ? GripPoint.localPosition : Vector3.zero;
         Vector3 scaled = Vector3.Scale(pivot, VisualTransform.localScale);
-        Vector3 position = restLocalPosition + restLocalRotation * scaled - rotation * scaled;
+        Vector3 lift = (parent != null ? parent.InverseTransformDirection(Vector3.up) : Vector3.up) * (harvestLift * lay);
+        Vector3 position = restLocalPosition + restLocalRotation * scaled - rotation * scaled + lift;
         VisualTransform.SetLocalPositionAndRotation(position, rotation);
     }
 }
