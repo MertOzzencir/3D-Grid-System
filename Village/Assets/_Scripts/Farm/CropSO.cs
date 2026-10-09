@@ -18,6 +18,18 @@ public class CropSO : ScriptableObject
     [Tooltip("Model yokken olgun yer tutucunun ürün (meyve) rengi")]
     public Color produceColor = new Color(0.9f, 0.3f, 0.25f);
 
+    [Header("Animasyon (CropSway)")]
+    [Tooltip("Olgun modelde meyve objelerinin adı. Bu adı taşıyan ya da \"ad.001\" gibi devam eden objeler meyve sayılır: " +
+             "eldiven geçince sapından sallanır, hasatta savrulur. Pivot'ları meyvenin tepesinde (sapa bağlandığı yerde) olmalı. " +
+             "Boşsa meyve yok, sadece bitki eğilir.")]
+    public string fruitName = "Tomato";
+    [Tooltip("Eldiven geçince bitkinin tabanından eğilme miktarı (0 = hiç)")]
+    [Range(0f, 2f)] public float touchSway = 1f;
+    [Tooltip("Eldiven geçince meyvelerin sallanma miktarı (0 = hiç)")]
+    [Range(0f, 2f)] public float fruitSwing = 1f;
+    [Tooltip("Hasatta meyvelerin savrulma gücü")]
+    [Range(0.2f, 3f)] public float scatterForce = 1f;
+
     // Fide görseli (collider'sız): model varsa onun kopyası, yoksa küçük yer tutucu (sap + iki yaprak)
     public GameObject CreateSeedling(Transform parent)
     {

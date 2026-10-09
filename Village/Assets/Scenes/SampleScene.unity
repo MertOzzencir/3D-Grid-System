@@ -2111,6 +2111,8 @@ MonoBehaviour:
     m_Bits: 4294967295
   fallbackHeight: 0
   maxDistance: 200
+  palmRadius: 0.22
+  switchBias: 1.4
   surfaceOffset: 0.02
   fingerLift: 10
   moveSharpness: 25

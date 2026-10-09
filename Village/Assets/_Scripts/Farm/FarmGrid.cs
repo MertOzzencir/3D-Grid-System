@@ -304,4 +304,31 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         ClearHover();
         EndHarvest();
     }
+
+    // --- Eldiven ekinlere dokunuyor ---
+
+    private const float TouchRadius = 0.55f;
+    private Vector3 lastGlovePoint;
+    private bool hasLastGlovePoint;
+
+    // Boş el tarlanın üstünde gezerken yakınındaki ekinler sallanır (CropSway)
+    private void Update()
+    {
+        GloveCursor glove = GloveCursor.Instance;
+        bool onFarm = glove != null && glove.HasSurface && glove.SurfaceCollider != null &&
+                      glove.SurfaceCollider.transform.IsChildOf(transform);
+        if (!onFarm || pieces.Count == 0)
+        {
+            hasLastGlovePoint = false;
+            return;
+        }
+
+        Vector3 point = glove.SurfacePoint;
+        Vector3 velocity = hasLastGlovePoint ? (point - lastGlovePoint) / Mathf.Max(Time.deltaTime, 0.0001f) : Vector3.zero;
+        lastGlovePoint = point;
+        hasLastGlovePoint = true;
+        if (velocity.sqrMagnitude < 0.04f) return; // durunca sallamaz
+
+        foreach (FarmPiece piece in pieces) piece.PokeCrops(point, velocity, TouchRadius);
+    }
 }

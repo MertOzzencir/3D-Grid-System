@@ -150,6 +150,7 @@ public class FarmPiece : GridPlaceable, IInteractable
         // Her fide biraz farklı dursun (aynı yöne bakan sıra yapay görünür)
         visual.transform.SetLocalPositionAndRotation(new Vector3(tile.x, soilHeight, tile.y),
                                                      Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
+        visual.AddComponent<CropSway>().Setup(crop);
         crops[tile] = new PlantedCrop { crop = crop, visual = visual };
         return true;
     }
@@ -173,8 +174,24 @@ public class FarmPiece : GridPlaceable, IInteractable
         if (!crops.TryGetValue(tile, out PlantedCrop planted) || !planted.mature) return null;
         crops.Remove(tile);
         planted.visual.transform.SetParent(null, true); // parça taşınsa da efekt yerinde kalsın
-        StartCoroutine(PopOut(planted.visual));
+        // Meyveli modelde meyveler savrulur; yoksa bütün bitki zıplayıp kaybolur
+        if (planted.visual.TryGetComponent(out CropSway sway) && sway.HasFruits) sway.Scatter();
+        else StartCoroutine(PopOut(planted.visual));
         return planted.crop;
+    }
+
+    // Eldiven dokunuyor: yakınındaki ekinler gidiş yönüne sallanır (uzaklıkla azalan)
+    public void PokeCrops(Vector3 point, Vector3 velocity, float radius)
+    {
+        foreach (PlantedCrop planted in crops.Values)
+        {
+            if (planted.visual == null) continue;
+            Vector3 offset = planted.visual.transform.position - point;
+            offset.y = 0f;
+            float distance = offset.magnitude;
+            if (distance > radius) continue;
+            if (planted.visual.TryGetComponent(out CropSway sway)) sway.Poke(velocity, 1f - distance / radius);
+        }
     }
 
     private static System.Collections.IEnumerator PopOut(GameObject visual)
@@ -214,6 +231,7 @@ public class FarmPiece : GridPlaceable, IInteractable
             Transform old = planted.visual.transform;
             GameObject visual = planted.crop.CreateMature(transform);
             visual.transform.SetLocalPositionAndRotation(old.localPosition, old.localRotation);
+            visual.AddComponent<CropSway>().Setup(planted.crop);
             Destroy(planted.visual);
             crops[tile] = new PlantedCrop { crop = planted.crop, visual = visual, mature = true };
             StartCoroutine(PopIn(visual.transform, Random.Range(0f, 0.15f)));
