@@ -31,32 +31,26 @@ public class Sickle : ToolBase
     [Tooltip("Her hasat edilen karede geri çekişe eklenen itki (derece/sn)")]
     [SerializeField] private float harvestKick = 120f;
 
-    [Header("Tutarken")]
-    [Tooltip("Gidiş yönüne yatma: hız (birim/sn) başına açı ve en fazla açı")]
-    [SerializeField] private float leanPerSpeed = 4f;
-    [SerializeField] private float maxLean = 18f;
-
     [Header("Full Harvest")]
     [Tooltip("Sapın ekseni (modelin uzayında): tam tur bunun etrafında")]
     [SerializeField] private Vector3 handleAxis = Vector3.up;
     [SerializeField] private float spinDuration = 0.55f;
 
     private const float LayStiffness = 300f, LayDamping = 30f;
-    private const float LeanStiffness = 70f, LeanDamping = 11f;
 
     private bool leftHeld;
-    private float lastHeldTime = float.MinValue;
     private Vector3 restLocalPosition;
     private Quaternion restLocalRotation;
     private float lay, layVelocity;        // 0 = dik, 1 = yatık (hasat)
     private float swing, swingVelocity;    // derece, swingAxis etrafında
-    private Vector2 lean, leanVelocity;    // dünya XZ'de yatma (derece, gidiş yönünde)
-    private Vector3 lastPosition;
     private float spinStart = -1f;
     private bool animating;
 
-    private bool Held => Time.time - lastHeldTime < 0.1f;
+    private bool Held => IsHeld;
     private bool Harvesting => Held && leftHeld;
+
+    // Görseli bu sınıf yazar; eğilmeyi ToolBase hesaplar (LeanRotation)
+    protected override bool OwnsVisualPose => true;
 
     protected override void Awake()
     {
@@ -66,7 +60,6 @@ public class Sickle : ToolBase
             restLocalPosition = VisualTransform.localPosition;
             restLocalRotation = VisualTransform.localRotation;
         }
-        lastPosition = transform.position;
     }
 
     private void OnEnable() => InputManager.OnMouseLeft += OnMouseLeft;
@@ -90,7 +83,6 @@ public class Sickle : ToolBase
     public override void InteractContract(out bool success)
     {
         base.InteractContract(out success);
-        lastHeldTime = Time.time;
         if (leftHeld) Drag.TryUseOnTarget(out _); // basılı sürükleme: geçilen kareler
     }
 
@@ -116,17 +108,16 @@ public class Sickle : ToolBase
         animating = true;
     }
 
-    private void LateUpdate()
+    protected override void LateUpdate()
     {
+        LeanScale = 1f - Mathf.Clamp01(lay); // hasatta eğilme kapanır
+        base.LateUpdate();                   // eğilmeyi hesaplar (görseli bu sınıf yazar)
         if (VisualTransform == null) return;
         float dt = Mathf.Min(Time.deltaTime, 0.05f);
         LockGripSelection = Held; // tutarken seçilen yön bırakana kadar sabit (dönerken el sapta zıplamasın)
         Transform parent = VisualTransform.parent;
 
-        // Kökün hızı (GridDragMotor sürer)
-        Vector3 velocity = (transform.position - lastPosition) / Mathf.Max(dt, 0.0001f);
-        lastPosition = transform.position;
-        Vector3 flat = Held ? Vector3.ProjectOnPlane(velocity, Vector3.up) : Vector3.zero;
+        Vector3 flat = HeldVelocity;
 
         // Yatma (hasat)
         layVelocity += (LayStiffness * ((Harvesting ? 1f : 0f) - lay) - LayDamping * layVelocity) * dt;
@@ -148,11 +139,6 @@ public class Sickle : ToolBase
         swing += swingVelocity * dt;
         swing = Mathf.Clamp(swing, -maxSwing * 1.5f, maxSwing * 1.5f);
 
-        // Yatma (tutarken): hasatta kapanır
-        Vector2 leanTarget = new Vector2(flat.x, flat.z) * leanPerSpeed * (1f - Mathf.Clamp01(lay));
-        leanTarget = Vector2.ClampMagnitude(leanTarget, maxLean);
-        leanVelocity += (LeanStiffness * (leanTarget - lean) - LeanDamping * leanVelocity) * dt;
-        lean += leanVelocity * dt;
 
         float spin = 0f;
         if (spinStart >= 0f)
@@ -163,7 +149,7 @@ public class Sickle : ToolBase
         }
 
         bool active = Mathf.Abs(lay) > 0.001f || Mathf.Abs(layVelocity) > 0.001f || Mathf.Abs(swing) > 0.05f ||
-                      Mathf.Abs(swingVelocity) > 0.05f || lean.sqrMagnitude > 0.0001f || leanVelocity.sqrMagnitude > 0.0001f ||
+                      Mathf.Abs(swingVelocity) > 0.05f || IsLeaning ||
                       spinStart >= 0f;
         if (!active)
         {
@@ -177,14 +163,7 @@ public class Sickle : ToolBase
         }
         animating = true;
 
-        // Yatma (tutarken): dünya ekseni (yukarı × gidiş yönü) → parent'ın uzayı
-        Quaternion leanRotation = Quaternion.identity;
-        if (lean.sqrMagnitude > 0.0001f)
-        {
-            Vector3 axis = Vector3.Cross(Vector3.up, new Vector3(lean.x, 0f, lean.y).normalized);
-            if (parent != null) axis = parent.InverseTransformDirection(axis);
-            leanRotation = Quaternion.AngleAxis(lean.magnitude, axis);
-        }
+        Quaternion leanRotation = LeanRotation();
         // Sağdaki dönüş önce: önce sap etrafında tur, sonra yatık orağın X'inde sallama, sonra Z'de yatma
         Quaternion rotation = leanRotation * restLocalRotation * layRotation *
                               Quaternion.AngleAxis(swing, swingAxis) *

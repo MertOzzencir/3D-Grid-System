@@ -37,6 +37,11 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
         }
     }
 
+    [Header("Eğilme (tutarken)")]
+    [Tooltip("Tutup gezdirirken gidiş yönüne eğilme: hız (birim/sn) başına açı ve en fazla açı. 0 = eğilmez.")]
+    [SerializeField] private float leanPerSpeed = 4f;
+    [SerializeField] private float maxLean = 18f;
+
     [Header("Kullanım")]
     [Tooltip("İki kullanım arasındaki en kısa süre (saniye). Tıklama anından itibaren sayılır.")]
     [SerializeField] private float cooldown = 0.6f;
@@ -49,6 +54,26 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
     private float nextUseTime;
     private Coroutine useRoutine;
     private Quaternion visualRestRotation;
+    private Vector3 visualRestPosition;
+
+    // Eğilme: kökün hızına (GridDragMotor sürer) yaylı, hareketin biraz gerisinden gelir
+    private const float LeanStiffness = 70f, LeanDamping = 11f;
+    private Vector2 lean, leanVelocity;   // dünya XZ'de (derece, gidiş yönünde)
+    private Vector3 lastPosition;
+    private float lastHeldTime = float.MinValue;
+    private bool leanApplied;
+
+    // Elde tutuluyor mu (InteractContract her kare çağrılır)
+    protected bool IsHeld => Time.time - lastHeldTime < 0.1f;
+    // Kökün bu karedeki yatay hızı (tutulmuyorsa sıfır)
+    protected Vector3 HeldVelocity { get; private set; }
+    // Eğilmenin çarpanı (alt sınıf kendi duruşunda kısabilir, örn. orak hasatta)
+    protected float LeanScale { get; set; } = 1f;
+    // Alt sınıf görseli kendisi yazıyorsa (orak) ToolBase eğilmeyi uygulamaz, sadece hesaplar (LeanRotation)
+    protected virtual bool OwnsVisualPose => false;
+    protected Vector3 VisualRestPosition => visualRestPosition;
+    protected Quaternion VisualRestRotation => visualRestRotation;
+    protected bool IsLeaning => lean.sqrMagnitude > 0.0001f || leanVelocity.sqrMagnitude > 0.0001f;
 
     // Cooldown doldu ve önceki sallanma bitti
     public bool IsReady => Time.time >= nextUseTime && useRoutine == null;
@@ -57,8 +82,66 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
     {
         drag = new GridDragMotor(this, followSpeed);
         if (VisualTransform != null)
+        {
             visualRestRotation = VisualTransform.localRotation;
+            visualRestPosition = VisualTransform.localPosition;
+        }
+        lastPosition = transform.position;
         CreateGloveGrips();
+    }
+
+    // Eğilme: her kare hesaplanır; OwnsVisualPose değilse görsele (vuruş animasyonunun üstüne) uygulanır
+    protected virtual void LateUpdate()
+    {
+        float dt = Mathf.Min(Time.deltaTime, 0.05f);
+        Vector3 velocity = (transform.position - lastPosition) / Mathf.Max(dt, 0.0001f);
+        lastPosition = transform.position;
+        HeldVelocity = IsHeld ? Vector3.ProjectOnPlane(velocity, Vector3.up) : Vector3.zero;
+
+        Vector2 target = new Vector2(HeldVelocity.x, HeldVelocity.z) * leanPerSpeed * LeanScale;
+        target = Vector2.ClampMagnitude(target, maxLean);
+        leanVelocity += (LeanStiffness * (target - lean) - LeanDamping * leanVelocity) * dt;
+        lean += leanVelocity * dt;
+        if (!IsLeaning)
+        {
+            lean = Vector2.zero;
+            leanVelocity = Vector2.zero;
+        }
+
+        if (OwnsVisualPose || VisualTransform == null) return;
+        if (!IsLeaning)
+        {
+            // Bitince bir kez dinlenme pozuna (vuruş sürüyorsa onun pozu kalır)
+            if (leanApplied && useRoutine == null)
+                VisualTransform.SetLocalPositionAndRotation(visualRestPosition, visualRestRotation);
+            leanApplied = false;
+            return;
+        }
+        leanApplied = true;
+
+        // Vuruş sürüyorsa bu karenin vuruş pozu (coroutine LateUpdate'ten önce yazar), yoksa dinlenme pozu
+        Quaternion baseRotation = useRoutine != null ? VisualTransform.localRotation : visualRestRotation;
+        Quaternion rotation = LeanRotation() * baseRotation;
+        // Tutma noktasının etrafında: el sapta kalsın
+        Vector3 pivot = Vector3.Scale(GripPivotLocal(), VisualTransform.localScale);
+        VisualTransform.SetLocalPositionAndRotation(visualRestPosition + baseRotation * pivot - rotation * pivot, rotation);
+    }
+
+    // Gidiş yönüne eğilme (VisualTransform'un parent'ının uzayında)
+    protected Quaternion LeanRotation()
+    {
+        if (lean.sqrMagnitude < 0.0001f) return Quaternion.identity;
+        Vector3 axis = Vector3.Cross(Vector3.up, new Vector3(lean.x, 0f, lean.y).normalized);
+        Transform parent = VisualTransform != null ? VisualTransform.parent : null;
+        if (parent != null) axis = parent.InverseTransformDirection(axis);
+        return Quaternion.AngleAxis(lean.magnitude, axis);
+    }
+
+    // Eldivenin tuttuğu nokta, görselin uzayında (yoksa görselin pivot'u)
+    protected Vector3 GripPivotLocal()
+    {
+        Transform grip = GripPoint;
+        return grip != null && grip.parent == VisualTransform ? grip.localPosition : Vector3.zero;
     }
 
     // Dört yön: gloveGrip ve onun sap ekseni etrafında 90°, 180°, 270° döndürülmüş kopyaları.
@@ -224,7 +307,12 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
         currentGrip = -1; // her tutmada yön baştan seçilsin
         drag.Begin();
     }
-    public virtual void InteractContract(out bool success) { success = true; drag.Tick(); }
+    public virtual void InteractContract(out bool success)
+    {
+        success = true;
+        lastHeldTime = Time.time;
+        drag.Tick();
+    }
 
     public virtual void ContractCancel()
     {
