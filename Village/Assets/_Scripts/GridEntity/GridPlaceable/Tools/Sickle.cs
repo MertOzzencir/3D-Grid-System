@@ -3,59 +3,57 @@ using UnityEngine;
 // Orak: hasat aleti (DESIGN.md: hasat yolu bulmacası). Balta gibi sağ tık basılı tutulur. Botun tarlasının üstünde
 // hücrenin üstünde süzülür (FarmGrid IToolTarget); sol tık basılıyken geçilen olgun kareler hasat edilir, yol FarmGrid'de
 // sayılır (kombo). Sol tık bırakılınca ya da tarladan çıkınca yol biter.
-// Animasyon (prosedürel, VisualTransform'u tutma noktasının etrafında döndürür; el sapta kalır):
-// - Sol tık basılıyken "biçmeye hazır" duruş: bıçak öne eğilir, bırakınca yaylanarak geri gelir.
-// - Giderken gidiş yönüne yatar, hareketin biraz gerisinden gelir.
-// - Her hasat edilen karede (sol tık basılıyken) yatay kesme: orak modelin Z ekseninde 90° yatar (bıçak yere paralel),
-//   sonra dünyanın dikeyi etrafında dönerek yana savrulur (ekranın sağına / soluna, sırayla), hafif öne yay çizer, yerine
-//   döner. Art arda kesilirken yatık kalır, son kesmeden kısa süre sonra kalkar. Kombo büyüdükçe canlanır.
+// Animasyon (prosedürel, VisualTransform'u tutma noktasının etrafında döndürür; el sapta kalır). Eksenler modelin uzayında:
+// Y sap (yukarı), bıçak Y-Z düzleminde, X bıçağa dik.
+// - Tutarken (sol tık basılı değil): gidiş yönüne yatar, hareketin biraz gerisinden gelir.
+// - Sol tık basılıyken (hasat): Z'de 90° yatar (bıçak yatay); hareket ederken X'te gidişin tersine geri çekilir (bıçak
+//   arkada kalır), durunca X'te ileri sekip sıfıra oturur (sallama). Her hasat edilen kare geri çekişe küçük bir itki ekler.
+//   Sol tık bırakılınca eski haline döner.
 // - Full Harvest'ta sapın etrafında tam tur.
-// Eksenler modelin uzayında (VisualTransform): sap Y boyunca; bıçak düzlemine dik eksen Z. Ters görünürse açının işaretini çevir.
 public class Sickle : ToolBase
 {
-    public enum SlashAxis { ViewForward, ViewRight, WorldUp }
+    [Header("Hasat duruşu (sol tık basılı)")]
+    [Tooltip("Hasatta orağın yatma açısı ve ekseni (modelin uzayında). Ters yöne yatıyorsa açıyı eksi yap.")]
+    [SerializeField] private float layAngle = 90f;
+    [SerializeField] private Vector3 layAxis = Vector3.forward;
+    [Tooltip("Yattıktan sonra geri çekilme / sekme ekseni (modelin uzayında)")]
+    [SerializeField] private Vector3 swingAxis = Vector3.right;
+    [Tooltip("Hız (birim/sn) başına geri çekilme açısı. Orak gidiş yönüne doğru (önde) kalıyorsa eksi yap.")]
+    [SerializeField] private float swingPerSpeed = 20f;
+    [Tooltip("En fazla geri çekilme açısı")]
+    [SerializeField] private float maxSwing = 55f;
+    [Tooltip("Sallama yayı: sertlik (büyük = hızlı döner) ve sönüm (küçük = durunca daha çok ileri seker)")]
+    [SerializeField] private float swingStiffness = 140f;
+    [SerializeField] private float swingDamping = 8f;
+    [Tooltip("Her hasat edilen karede geri çekişe eklenen itki (derece/sn)")]
+    [SerializeField] private float harvestKick = 120f;
 
-    [Header("Animasyon")]
-    [Tooltip("Basılıyken bıçağın öne eğilme açısı (derece). Ters yöne eğiliyorsa eksi yap.")]
-    [SerializeField] private float readyAngle = 40f;
-    [Tooltip("Hazır duruşun eğilme ekseni (modelin uzayında)")]
-    [SerializeField] private Vector3 readyAxis = Vector3.forward;
-    [Tooltip("Sapın ekseni (modelin uzayında): tam tur bunun etrafında")]
-    [SerializeField] private Vector3 handleAxis = Vector3.up;
-    [Tooltip("Kesme: yana savrulma mesafesi (birim), dikey etrafında dönme (derece), süre (saniye)")]
-    [SerializeField] private float slashReach = 0.3f;
-    [SerializeField] private float slashYaw = 60f;
-    [Tooltip("Kesmede dönme ekseni. ViewForward: kameranın baktığı yatay yön (bıçak ekranda sağa sola yay çizer); " +
-             "ViewRight: ekranın yatayı (öne arkaya); WorldUp: dünyanın dikeyi (sapın etrafında)")]
-    [SerializeField] private SlashAxis slashAxis = SlashAxis.WorldUp;
-    [Tooltip("Kesmeden önce orağın yatma açısı ve ekseni (modelin uzayında). Ters yöne yatıyorsa açıyı eksi yap.")]
-    [SerializeField] private float slashLayAngle = 90f;
-    [SerializeField] private Vector3 slashLayAxis = Vector3.forward;
-    [Tooltip("Son kesmeden sonra orağın yatık kalma süresi (saniye): art arda kesilirken her karede kalkıp yatmasın")]
-    [SerializeField] private float slashLayHold = 0.3f;
-    [SerializeField] private float slashDuration = 0.18f;
-    [Tooltip("Giderken yatma: hız (birim/sn) başına açı ve en fazla açı")]
+    [Header("Tutarken")]
+    [Tooltip("Gidiş yönüne yatma: hız (birim/sn) başına açı ve en fazla açı")]
     [SerializeField] private float leanPerSpeed = 4f;
     [SerializeField] private float maxLean = 18f;
+
+    [Header("Full Harvest")]
+    [Tooltip("Sapın ekseni (modelin uzayında): tam tur bunun etrafında")]
+    [SerializeField] private Vector3 handleAxis = Vector3.up;
     [SerializeField] private float spinDuration = 0.55f;
 
-    private const float ReadyStiffness = 220f, ReadyDamping = 20f;
+    private const float LayStiffness = 300f, LayDamping = 30f;
     private const float LeanStiffness = 70f, LeanDamping = 11f;
-    private const float LayStiffness = 400f, LayDamping = 34f;
 
     private bool leftHeld;
     private float lastHeldTime = float.MinValue;
     private Vector3 restLocalPosition;
     private Quaternion restLocalRotation;
-    private float ready, readyVelocity;
-    private Vector2 lean, leanVelocity;   // dünya XZ'de yatma (derece, gidiş yönünde)
+    private float lay, layVelocity;        // 0 = dik, 1 = yatık (hasat)
+    private float swing, swingVelocity;    // derece, swingAxis etrafında
+    private Vector2 lean, leanVelocity;    // dünya XZ'de yatma (derece, gidiş yönünde)
     private Vector3 lastPosition;
-    private float slashStart = -1f, slashSign = 1f, slashScale = 1f;
-    private float lay, layVelocity, lastSlashTime = float.MinValue;
     private float spinStart = -1f;
     private bool animating;
 
     private bool Held => Time.time - lastHeldTime < 0.1f;
+    private bool Harvesting => Held && leftHeld;
 
     protected override void Awake()
     {
@@ -99,14 +97,12 @@ public class Sickle : ToolBase
         base.ContractCancel();
     }
 
-    // FarmGrid bir kareyi hasat etti: biçme vuruşu (yön sırayla değişir, kombo büyüdükçe biraz daha geniş ve hızlı)
+    // FarmGrid bir kareyi hasat etti: geri çekişe itki (o anki çekiş yönünde; kombo büyüdükçe biraz daha güçlü)
     public void OnHarvested(int combo)
     {
-        if (!leftHeld) return;
-        slashStart = Time.time;
-        lastSlashTime = Time.time;
-        slashSign = -slashSign;
-        slashScale = 1f + Mathf.Min(combo, 10) * 0.04f;
+        if (!Harvesting) return;
+        float direction = Mathf.Abs(swing) > 1f ? Mathf.Sign(swing) : -Mathf.Sign(swingPerSpeed);
+        swingVelocity += direction * harvestKick * (1f + Mathf.Min(combo, 10) * 0.05f);
         animating = true;
     }
 
@@ -122,40 +118,39 @@ public class Sickle : ToolBase
         if (VisualTransform == null) return;
         float dt = Mathf.Min(Time.deltaTime, 0.05f);
         LockGripSelection = Held; // tutarken seçilen yön bırakana kadar sabit (dönerken el sapta zıplamasın)
+        Transform parent = VisualTransform.parent;
 
-        // Hazır duruş: tutarken ve sol tık basılıyken
-        float readyTarget = Held && leftHeld ? 1f : 0f;
-        readyVelocity += (ReadyStiffness * (readyTarget - ready) - ReadyDamping * readyVelocity) * dt;
-        ready += readyVelocity * dt;
-
-        // Yatma: kökün hızı (GridDragMotor sürer); hareketin gerisinden gelsin diye yaylı
+        // Kökün hızı (GridDragMotor sürer)
         Vector3 velocity = (transform.position - lastPosition) / Mathf.Max(dt, 0.0001f);
         lastPosition = transform.position;
-        Vector2 flat = Held ? new Vector2(velocity.x, velocity.z) * leanPerSpeed : Vector2.zero;
-        flat = Vector2.ClampMagnitude(flat, maxLean);
-        leanVelocity += (LeanStiffness * (flat - lean) - LeanDamping * leanVelocity) * dt;
+        Vector3 flat = Held ? Vector3.ProjectOnPlane(velocity, Vector3.up) : Vector3.zero;
+
+        // Yatma (hasat)
+        layVelocity += (LayStiffness * ((Harvesting ? 1f : 0f) - lay) - LayDamping * layVelocity) * dt;
+        lay += layVelocity * dt;
+        Quaternion layRotation = Quaternion.AngleAxis(layAngle * lay, layAxis);
+
+        // Geri çekilme: yatık orağın X ekseni etrafında, hızın o eksene dik (bıçağı süpüren) bileşeni kadar, gidişin tersine
+        float swingTarget = 0f;
+        if (Harvesting && flat.sqrMagnitude > 0.0001f)
+        {
+            Quaternion world = (parent != null ? parent.rotation : Quaternion.identity) * restLocalRotation * layRotation;
+            Vector3 axisWorld = world * swingAxis.normalized;
+            // Eksen etrafında + yönde dönünce bıçağın ucunun (sapın ucu, Y) gittiği yön
+            Vector3 tipDirection = Vector3.Cross(axisWorld, world * handleAxis.normalized);
+            float along = Vector3.Dot(flat, Vector3.ProjectOnPlane(tipDirection, Vector3.up).normalized);
+            swingTarget = Mathf.Clamp(-along * swingPerSpeed, -maxSwing, maxSwing);
+        }
+        swingVelocity += (swingStiffness * (swingTarget - swing) - swingDamping * swingVelocity) * dt;
+        swing += swingVelocity * dt;
+        swing = Mathf.Clamp(swing, -maxSwing * 1.5f, maxSwing * 1.5f);
+
+        // Yatma (tutarken): hasatta kapanır
+        Vector2 leanTarget = new Vector2(flat.x, flat.z) * leanPerSpeed * (1f - Mathf.Clamp01(lay));
+        leanTarget = Vector2.ClampMagnitude(leanTarget, maxLean);
+        leanVelocity += (LeanStiffness * (leanTarget - lean) - LeanDamping * leanVelocity) * dt;
         lean += leanVelocity * dt;
 
-        // Yatma: kesme sürerken ve son kesmeden slashLayHold kadar sonra yatık (hızlı yay)
-        float layTarget = Held && leftHeld && Time.time - lastSlashTime < slashDuration + slashLayHold ? 1f : 0f;
-        layVelocity += (LayStiffness * (layTarget - lay) - LayDamping * layVelocity) * dt;
-        lay += layVelocity * dt;
-
-        // Kesme eğrisi: ilk %40'ta hızla yana çıkar, sonra hafif taşarak yerine döner
-        float slash = 0f, thrust = 0f;
-        if (slashStart >= 0f)
-        {
-            float t = (Time.time - slashStart) / Mathf.Max(slashDuration / slashScale, 0.0001f);
-            if (t >= 1f) slashStart = -1f;
-            else
-            {
-                float curve = t < 0.4f
-                    ? 1f - (1f - t / 0.4f) * (1f - t / 0.4f)
-                    : 1f - Mathf.SmoothStep(0f, 1f, (t - 0.4f) / 0.6f) - 0.12f * Mathf.Sin((t - 0.4f) / 0.6f * Mathf.PI);
-                slash = slashSign * slashScale * curve;
-                thrust = slashScale * Mathf.Sin(t * Mathf.PI);
-            }
-        }
         float spin = 0f;
         if (spinStart >= 0f)
         {
@@ -164,8 +159,9 @@ public class Sickle : ToolBase
             else spin = 360f * Mathf.SmoothStep(0f, 1f, t);
         }
 
-        bool active = Mathf.Abs(lay) > 0.001f || Mathf.Abs(layVelocity) > 0.001f || Mathf.Abs(ready) > 0.001f || Mathf.Abs(readyVelocity) > 0.001f || lean.sqrMagnitude > 0.0001f ||
-                      leanVelocity.sqrMagnitude > 0.0001f || slashStart >= 0f || spinStart >= 0f;
+        bool active = Mathf.Abs(lay) > 0.001f || Mathf.Abs(layVelocity) > 0.001f || Mathf.Abs(swing) > 0.05f ||
+                      Mathf.Abs(swingVelocity) > 0.05f || lean.sqrMagnitude > 0.0001f || leanVelocity.sqrMagnitude > 0.0001f ||
+                      spinStart >= 0f;
         if (!active)
         {
             if (animating)
@@ -173,12 +169,12 @@ public class Sickle : ToolBase
                 VisualTransform.SetLocalPositionAndRotation(restLocalPosition, restLocalRotation);
                 animating = false;
             }
+            swing = swingVelocity = 0f;
             return;
         }
         animating = true;
 
-        // Yatma: dünya ekseni (yukarı × gidiş yönü) → parent'ın uzayı
-        Transform parent = VisualTransform.parent;
+        // Yatma (tutarken): dünya ekseni (yukarı × gidiş yönü) → parent'ın uzayı
         Quaternion leanRotation = Quaternion.identity;
         if (lean.sqrMagnitude > 0.0001f)
         {
@@ -186,30 +182,15 @@ public class Sickle : ToolBase
             if (parent != null) axis = parent.InverseTransformDirection(axis);
             leanRotation = Quaternion.AngleAxis(lean.magnitude, axis);
         }
-        // Kesme: dünyanın dikeyi etrafında dönme + ekranın sağına / soluna savrulma, hafif öne yay
-        Quaternion slashRotation = Quaternion.identity;
-        Vector3 slashOffset = Vector3.zero;
-        if (slash != 0f || thrust != 0f)
-        {
-            Camera view = Camera.main;
-            Vector3 side = view != null ? Vector3.ProjectOnPlane(view.transform.right, Vector3.up).normalized : Vector3.right;
-            Vector3 ahead = view != null ? Vector3.ProjectOnPlane(view.transform.forward, Vector3.up).normalized : Vector3.forward;
-            Vector3 axis = slashAxis == SlashAxis.ViewForward ? ahead : slashAxis == SlashAxis.ViewRight ? side : Vector3.up;
-            if (parent != null) axis = parent.InverseTransformDirection(axis);
-            slashRotation = Quaternion.AngleAxis(-slash * slashYaw, axis);
-            Vector3 world = side * (slash * slashReach) + ahead * (thrust * slashReach * 0.35f);
-            slashOffset = parent != null ? parent.InverseTransformVector(world) : world;
-        }
-        // Yatıkken hazır duruşun eğimi kalkar (ikisi aynı eksende toplanıp aşırı dönmesin)
-        Quaternion rotation = slashRotation * leanRotation * restLocalRotation *
-                              Quaternion.AngleAxis(readyAngle * ready * (1f - Mathf.Clamp01(lay)), readyAxis) *
-                              Quaternion.AngleAxis(slashLayAngle * lay, slashLayAxis) *
+        // Sağdaki dönüş önce: önce sap etrafında tur, sonra yatık orağın X'inde sallama, sonra Z'de yatma
+        Quaternion rotation = leanRotation * restLocalRotation * layRotation *
+                              Quaternion.AngleAxis(swing, swingAxis) *
                               Quaternion.AngleAxis(spin, handleAxis);
 
         // Tutma noktasının etrafında dön: el sapta kalsın
         Vector3 pivot = GripPoint != null && GripPoint.parent == VisualTransform ? GripPoint.localPosition : Vector3.zero;
-        Vector3 fixedPoint = restLocalPosition + restLocalRotation * Vector3.Scale(pivot, VisualTransform.localScale);
-        Vector3 position = fixedPoint - rotation * Vector3.Scale(pivot, VisualTransform.localScale) + slashOffset;
+        Vector3 scaled = Vector3.Scale(pivot, VisualTransform.localScale);
+        Vector3 position = restLocalPosition + restLocalRotation * scaled - rotation * scaled;
         VisualTransform.SetLocalPositionAndRotation(position, rotation);
     }
 }
