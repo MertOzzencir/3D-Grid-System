@@ -2,8 +2,14 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
-// 3D eldiven imleç. Mouse'tan dünyaya ray atılır; eldiven, avucunun ortası (palmContact) çarpılan noktaya gelecek ve
-// avucu yüzeye bakacak şekilde yerleşir. Normal etrafındaki dönüş kameraya göre sabittir: parmaklar hep ekranın
+// 3D eldiven imleç. Mouse'tan dünyaya avuç büyüklüğünde bir ışın demeti atılır (ortada mouse ışını, etrafında iki halka,
+// hepsi kamera yönüne paralel). Çarpmalar collider'a göre gruplanır; avucun en çok kapladığı collider kazanır ve eldiven
+// onun çarpmalarının ortalama düzlemine, mouse ışınının o düzlemi kestiği yere oturur (kutunun köşesinde üst ve yan yüzün
+// ortalaması: el kenarda yuvarlanır; kedi gibi yuvarlak collider'larda da düzgün). Kazanan, ancak diğerini belirgin şekilde
+// geçince değişir: tek ışın köşede üst yüz ile yan duvar arasında gidip geliyordu. Etkileşim de aynı demetten: avucun en
+// çok kapladığı etkileşimli collider (IInteractable / IClickable / IHoverable) TargetCollider olur; InteractableController
+// tutma, tıklama ve hover'ı buna gönderir (el neyin üstündeyse onunla etkileşilir). Eldiven avucu yüzeye bakacak şekilde
+// yerleşir. Normal etrafındaki dönüş kameraya göre sabittir: parmaklar hep ekranın
 // "yukarısını" gösterir (kameranın yukarı yönü yüzeye izdüşürülür). Normal kenarlarda aniden değişebildiği için
 // pozisyon ve rotasyon yumuşatılarak takip edilir. Hiçbir şeye çarpmazsa su seviyesindeki bir düzlemde durur.
 // Mouse bir UI elemanının üstündeyken eldiven gizlenir, sistem imleci görünür.
@@ -21,6 +27,13 @@ public class GloveCursor : MonoBehaviour
     [Tooltip("Hiçbir şeye çarpmazsa eldivenin durduğu yükseklik (su seviyesi)")]
     [SerializeField] private float fallbackHeight = 0f;
     [SerializeField] private float maxDistance = 200f;
+
+    [Header("Avuç (yüzey ve etkileşim)")]
+    [Tooltip("Işın demetinin yarıçapı (birim): eldivenin avucu kadar. Büyüdükçe köşelerde daha kararlı, ama küçük " +
+             "objelerin kenarına gelince de onlar seçilir.")]
+    [SerializeField] private float palmRadius = 0.22f;
+    [Tooltip("Şu an seçili yüzey / hedef, yenisi bu kat daha fazla kaplanmadıkça değişmez (köşede gidip gelmesin)")]
+    [SerializeField] private float switchBias = 1.4f;
 
     [Header("Duruş")]
     [Tooltip("Avucun yüzeyden yüksekliği (gömülmesin diye)")]
@@ -139,6 +152,43 @@ public class GloveCursor : MonoBehaviour
     public Vector3 SurfaceNormal { get; private set; } = Vector3.up;
     public Collider SurfaceCollider { get; private set; }
 
+    // Elin altındaki etkileşimli collider (avucun en çok kapladığı) ve oradaki en iyi çarpma; yoksa null
+    public Collider TargetCollider { get; private set; }
+    public RaycastHit TargetHit { get; private set; }
+    public static GloveCursor Instance { get; private set; }
+
+    // Avuç demeti: ortada mouse ışını (ağırlık 3), iç halka 6 ışın (1.5), dış halka 10 ışın (1)
+    private static readonly float[] PalmWeights = new float[17];
+    private static readonly Vector2[] PalmOffsets = BuildPalmOffsets(PalmWeights);
+    private readonly RaycastHit[] palmHits = new RaycastHit[17];
+    private readonly float[] palmHitWeights = new float[17];
+    private readonly RaycastHit[] rayBuffer = new RaycastHit[32];
+    // Collider başına grup hesapları için
+    private readonly Collider[] groupCollider = new Collider[17];
+    private readonly Vector3[] groupNormalSum = new Vector3[17], groupPointSum = new Vector3[17];
+    private readonly float[] groupWeight = new float[17];
+    private readonly int[] groupBest = new int[17];
+
+    private static Vector2[] BuildPalmOffsets(float[] weights)
+    {
+        var offsets = new Vector2[17];
+        offsets[0] = Vector2.zero;
+        weights[0] = 3f;
+        for (int i = 0; i < 6; i++)
+        {
+            float a = i * Mathf.PI * 2f / 6f;
+            offsets[1 + i] = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 0.5f;
+            weights[1 + i] = 1.5f;
+        }
+        for (int i = 0; i < 10; i++)
+        {
+            float a = (i + 0.5f) * Mathf.PI * 2f / 10f;
+            offsets[7 + i] = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+            weights[7 + i] = 1f;
+        }
+        return offsets;
+    }
+
     private void Awake()
     {
         cam = Camera.main;
@@ -157,10 +207,16 @@ public class GloveCursor : MonoBehaviour
         palmLocalRotation = Quaternion.Inverse(transform.rotation) * palmContact.rotation;
     }
 
-    private void OnEnable() => Cursor.visible = false;
+    private void OnEnable()
+    {
+        Cursor.visible = false;
+        Instance = this;
+    }
 
     private void OnDisable()
     {
+        if (Instance == this) Instance = null;
+        TargetCollider = null;
         EndGrip();
         Cursor.visible = true;
         SetHidden(false);
@@ -179,6 +235,8 @@ public class GloveCursor : MonoBehaviour
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
         HoveredPassThrough = null; // sadece yüzey takibinde (FindSurface) dolar: tutarken / binmişken eski değer kalmasın
         HoveredPassThroughCollider = null;
+        Collider previousTarget = TargetCollider;
+        TargetCollider = null;     // aynı şekilde: sadece yüzey takibinde hedef olur (tutarken, binmişken, UI'da yok)
 
         if (rideSeat != null)
         {
@@ -208,7 +266,7 @@ public class GloveCursor : MonoBehaviour
             return;
         }
 
-        FindSurface(ray);
+        FindSurface(ray, previousTarget);
         UpdateBaseMotion();
         TargetRootPose(out Vector3 rootPosition, out Quaternion rootRotation);
 
@@ -567,7 +625,7 @@ public class GloveCursor : MonoBehaviour
         SurfaceNormal = grabbed.TransformDirection(grabLocalNormal).normalized;
     }
 
-    private void FindSurface(Ray ray)
+    private void FindSurface(Ray ray, Collider previousTarget)
     {
         IsAtShore = false;
         bool solid = TryRaycastSolid(ray, out RaycastHit hit, out IGlovePassThrough passThrough, out Collider passCollider);
@@ -575,10 +633,7 @@ public class GloveCursor : MonoBehaviour
         HoveredPassThroughCollider = passCollider;
         if (solid)
         {
-            HasSurface = true;
-            SurfacePoint = hit.point;
-            SurfaceNormal = hit.normal;
-            SurfaceCollider = hit.collider;
+            SamplePalm(ray, hit, previousTarget);
             return;
         }
 
@@ -600,6 +655,130 @@ public class GloveCursor : MonoBehaviour
         SurfaceCollider = null;
         SurfaceNormal = Vector3.up;
         SurfacePoint = waterPoint;
+    }
+
+    // Avuç demeti: her ışının ilk katı çarpması toplanır, düzlemlere göre gruplanır, en çok kaplanan (ağırlığı en büyük)
+    // yüzey kazanır. Önceki karenin yüzeyi ve hedefi switchBias kadar avantajlı.
+    private void SamplePalm(Ray ray, RaycastHit center, Collider previousTarget)
+    {
+        Vector3 forward = ray.direction;
+        Vector3 right = Vector3.Cross(Vector3.up, forward);
+        right = right.sqrMagnitude > 0.0001f ? right.normalized : cam.transform.right;
+        Vector3 up = Vector3.Cross(forward, right);
+        float radius = palmRadius;
+
+        int count = 0;
+        for (int i = 0; i < PalmOffsets.Length; i++)
+        {
+            RaycastHit h;
+            if (i == 0) h = center;
+            else
+            {
+                Vector2 o = PalmOffsets[i] * radius;
+                if (!TryNearestSolid(new Ray(ray.origin + right * o.x + up * o.y, forward), out h)) continue;
+            }
+            palmHits[count] = h;
+            palmHitWeights[count] = PalmWeights[i];
+            count++;
+        }
+
+        // Yüzey: avucun en çok kapladığı collider (önceki karedeki switchBias kadar avantajlı)
+        Collider previousSurface = SurfaceCollider;
+        int groups = GroupByCollider(count, false);
+        int best = PickGroup(groups, previousSurface);
+
+        Vector3 normal = groupNormalSum[best].sqrMagnitude > 0.0001f ? groupNormalSum[best].normalized : center.normal;
+        Vector3 average = groupPointSum[best] / Mathf.Max(groupWeight[best], 0.0001f);
+        // Eldiven mouse'un altında kalsın: mouse ışınının ortalama düzlemi kestiği nokta (çok yatık ya da uzaksa ortalama)
+        Vector3 point = average;
+        float denom = Vector3.Dot(forward, normal);
+        if (Mathf.Abs(denom) > 0.15f)
+        {
+            Vector3 onPlane = ray.origin + forward * (Vector3.Dot(average - ray.origin, normal) / denom);
+            if ((onPlane - average).sqrMagnitude < radius * radius * 4f) point = onPlane;
+        }
+
+        HasSurface = true;
+        SurfacePoint = point;
+        SurfaceNormal = normal;
+        SurfaceCollider = groupCollider[best];
+
+        // Hedef: avucun en çok kapladığı etkileşimli collider
+        groups = GroupByCollider(count, true);
+        if (groups > 0)
+        {
+            int chosen = PickGroup(groups, previousTarget);
+            TargetCollider = groupCollider[chosen];
+            TargetHit = palmHits[groupBest[chosen]];
+        }
+        for (int g = 0; g < groups; g++) groupCollider[g] = null;
+    }
+
+    // Çarpmaları collider'a göre topla (ağırlık, ağırlıklı normal / nokta toplamı, en ağır çarpma). targetsOnly: sadece
+    // etkileşimli collider'lar
+    private int GroupByCollider(int count, bool targetsOnly)
+    {
+        int groups = 0;
+        for (int i = 0; i < count; i++)
+        {
+            Collider c = palmHits[i].collider;
+            if (targetsOnly && !IsTargetable(c)) continue;
+            int g = 0;
+            for (; g < groups; g++) if (groupCollider[g] == c) break;
+            if (g == groups)
+            {
+                groupCollider[g] = c;
+                groupNormalSum[g] = Vector3.zero;
+                groupPointSum[g] = Vector3.zero;
+                groupWeight[g] = 0f;
+                groupBest[g] = i;
+                groups++;
+            }
+            float w = palmHitWeights[i];
+            groupNormalSum[g] += palmHits[i].normal * w;
+            groupPointSum[g] += palmHits[i].point * w;
+            groupWeight[g] += w;
+            if (w > palmHitWeights[groupBest[g]]) groupBest[g] = i;
+        }
+        return groups;
+    }
+
+    // En ağır grup; önceki seçim switchBias kadar avantajlı
+    private int PickGroup(int groups, Collider previous)
+    {
+        int best = 0;
+        float bestScore = -1f;
+        for (int g = 0; g < groups; g++)
+        {
+            float score = groupWeight[g] * (groupCollider[g] == previous ? switchBias : 1f);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = g;
+            }
+        }
+        return best;
+    }
+
+    private static bool IsTargetable(Collider collider) =>
+        collider.TryGetComponent(out IInteractable _) || collider.TryGetComponent(out IClickable _) ||
+        collider.TryGetComponent(out IHoverable _);
+
+    // Işının ilk katı çarpması (geçirgenler atlanır, yürünebilirler katı); bellek ayırmaz
+    private bool TryNearestSolid(Ray ray, out RaycastHit result)
+    {
+        result = default;
+        float nearest = float.MaxValue;
+        int hits = Physics.RaycastNonAlloc(ray, rayBuffer, maxDistance, surfaceMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < hits; i++)
+        {
+            RaycastHit hit = rayBuffer[i];
+            if (hit.distance >= nearest) continue;
+            if (!IsWalkable(hit.collider) && hit.collider.GetComponentInParent<IGlovePassThrough>() != null) continue;
+            nearest = hit.distance;
+            result = hit;
+        }
+        return nearest < float.MaxValue;
     }
 
     private Vector3 WaterPoint(Ray ray)

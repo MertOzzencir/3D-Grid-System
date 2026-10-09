@@ -127,7 +127,7 @@ code { font: 12px var(--mono); background: var(--bg); padding: 1px 5px; border-r
     </div>
     <aside id="panel" aria-live="polite"></aside>
   </div>
-  <p class="foot">Son güncelleme: 7 Ekim 2026 · Kaynak: repodaki <code>DESIGN.md</code> ve <code>CLAUDE.md</code>. Sistem eklendikçe ya da durum değiştikçe bu sayfa güncellenir.</p>
+  <p class="foot">Son güncelleme: 9 Ekim 2026 · Kaynak: repodaki <code>DESIGN.md</code> ve <code>CLAUDE.md</code>. Sistem eklendikçe ya da durum değiştikçe bu sayfa güncellenir.</p>
 </div>
 
 <script>
@@ -232,7 +232,9 @@ const NODES = [
     files: ["GridManager/GridManager.cs"], next: "" },
   { id: "glove", name: "Eldiven imleç", status: "done", x: 500, y: 735, tag: "GloveCursor",
     what: "Mouse yerine eldiven. Yüzeyde parmaklarıyla yürür, objeleri tutar, aletleri kavrar, bota biner.",
-    how: ["Suda kıyıda bekler", "Tarlanın, kapağın ve parçaların üstünde de yürür"],
+    how: ["Avuç büyüklüğünde ışın demeti: avucun en çok kapladığı yüzeye oturur, köşede gidip gelmez",
+          "Etkileşim elin altındaki objeye gider (tutma, tıklama, üstüne gelme)",
+          "Suda kıyıda bekler", "Tarlanın, kapağın ve parçaların üstünde de yürür"],
     files: ["Cursor/GloveCursor.cs", "Cursor/GloveFingers.cs"], next: "Durum pozları (önizleme, build mode)." },
   { id: "save", name: "Kayıt sistemi", status: "done", x: 700, y: 735, tag: "SaveManager",
     what: "Dünyayı yeniden kuran tarif: her obje için kimlik + hücre + dönüş + ekstra durum. F5 ve çıkışta kaydeder.",

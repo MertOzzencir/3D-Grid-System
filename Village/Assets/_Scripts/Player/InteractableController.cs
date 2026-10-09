@@ -1,6 +1,8 @@
 using System;
 using UnityEngine;
 
+// Ne zaman tutulur / tıklanır / hover olur. Eldiven varsa hedef eldivenin altındaki obje (GloveCursor.TargetCollider:
+// avucun en çok kapladığı etkileşimli collider): el neyin üstündeyse onunla etkileşilir. Eldiven yoksa mouse ışını.
 public class InteractableController : MonoBehaviour
 {
     public static InteractableController Instance;
@@ -53,6 +55,17 @@ public class InteractableController : MonoBehaviour
         if (obj)
         {
             tryingToInteract = true;
+            if (UsesGlove(out GloveCursor glove))
+            {
+                if (glove.TargetCollider != null && glove.TargetCollider.TryGetComponent(out IInteractable target))
+                {
+                    currentInteracted = target;
+                    currentInteracted.InteractContractBeginnig();
+                    OnNewInteractable?.Invoke(currentInteracted);
+                }
+                return;
+            }
+
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             RaycastHit[] hits = Physics.RaycastAll(ray);
             System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
@@ -112,8 +125,22 @@ public class InteractableController : MonoBehaviour
             currentInteracted.Interact(out bool f);
     }
 
+    // Eldiven sahnede ve açık: hedefi o seçer
+    private static bool UsesGlove(out GloveCursor glove)
+    {
+        glove = GloveCursor.Instance;
+        return glove != null && glove.isActiveAndEnabled;
+    }
+
     private void TryClick()
     {
+        if (UsesGlove(out GloveCursor glove))
+        {
+            if (glove.TargetCollider != null && glove.TargetCollider.TryGetComponent(out IClickable target))
+                target.OnClicked(glove.TargetHit);
+            return;
+        }
+
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         if (Physics.Raycast(ray, out RaycastHit hit) && hit.collider.TryGetComponent(out IClickable clickable))
             clickable.OnClicked(hit);
@@ -134,9 +161,16 @@ public class InteractableController : MonoBehaviour
     private void UpdateHover()
     {
         IHoverable target = null;
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out RaycastHit hit))
-            hit.collider.TryGetComponent(out target);
+        if (UsesGlove(out GloveCursor glove))
+        {
+            if (glove.TargetCollider != null) glove.TargetCollider.TryGetComponent(out target);
+        }
+        else
+        {
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out RaycastHit hit))
+                hit.collider.TryGetComponent(out target);
+        }
         SetHovered(target);
     }
 
