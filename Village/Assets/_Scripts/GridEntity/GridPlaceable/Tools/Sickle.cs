@@ -7,11 +7,14 @@ using UnityEngine;
 // - Sol tık basılıyken "biçmeye hazır" duruş: bıçak öne eğilir, bırakınca yaylanarak geri gelir.
 // - Giderken gidiş yönüne yatar, hareketin biraz gerisinden gelir.
 // - Her hasat edilen karede (sol tık basılıyken) yatay kesme: orak hızla yana savrulur (ekranın sağına / soluna, sırayla),
-//   hafif öne yay çizerek, dünyanın dikeyi etrafında döner, sonra yerine döner. Kombo büyüdükçe canlanır.
+//   hafif öne yay çizerek, slashAxis etrafında döner (varsayılan: kameranın baktığı yatay yön, bıçak ekranda sağa sola
+//   yay çizer), sonra yerine döner. Kombo büyüdükçe canlanır.
 // - Full Harvest'ta sapın etrafında tam tur.
 // Eksenler modelin uzayında (VisualTransform): sap Y boyunca; bıçak düzlemine dik eksen Z. Ters görünürse açının işaretini çevir.
 public class Sickle : ToolBase
 {
+    public enum SlashAxis { ViewForward, ViewRight, WorldUp }
+
     [Header("Animasyon")]
     [Tooltip("Basılıyken bıçağın öne eğilme açısı (derece). Ters yöne eğiliyorsa eksi yap.")]
     [SerializeField] private float readyAngle = 40f;
@@ -22,6 +25,9 @@ public class Sickle : ToolBase
     [Tooltip("Kesme: yana savrulma mesafesi (birim), dikey etrafında dönme (derece), süre (saniye)")]
     [SerializeField] private float slashReach = 0.3f;
     [SerializeField] private float slashYaw = 60f;
+    [Tooltip("Kesmede dönme ekseni. ViewForward: kameranın baktığı yatay yön (bıçak ekranda sağa sola yay çizer); " +
+             "ViewRight: ekranın yatayı (öne arkaya); WorldUp: dünyanın dikeyi (sapın etrafında)")]
+    [SerializeField] private SlashAxis slashAxis = SlashAxis.ViewForward;
     [SerializeField] private float slashDuration = 0.18f;
     [Tooltip("Giderken yatma: hız (birim/sn) başına açı ve en fazla açı")]
     [SerializeField] private float leanPerSpeed = 4f;
@@ -175,8 +181,9 @@ public class Sickle : ToolBase
             Camera view = Camera.main;
             Vector3 side = view != null ? Vector3.ProjectOnPlane(view.transform.right, Vector3.up).normalized : Vector3.right;
             Vector3 ahead = view != null ? Vector3.ProjectOnPlane(view.transform.forward, Vector3.up).normalized : Vector3.forward;
-            Vector3 up = parent != null ? parent.InverseTransformDirection(Vector3.up) : Vector3.up;
-            slashRotation = Quaternion.AngleAxis(-slash * slashYaw, up);
+            Vector3 axis = slashAxis == SlashAxis.ViewForward ? ahead : slashAxis == SlashAxis.ViewRight ? side : Vector3.up;
+            if (parent != null) axis = parent.InverseTransformDirection(axis);
+            slashRotation = Quaternion.AngleAxis(-slash * slashYaw, axis);
             Vector3 world = side * (slash * slashReach) + ahead * (thrust * slashReach * 0.35f);
             slashOffset = parent != null ? parent.InverseTransformVector(world) : world;
         }
