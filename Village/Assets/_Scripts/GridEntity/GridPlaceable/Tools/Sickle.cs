@@ -6,9 +6,9 @@ using UnityEngine;
 // Animasyon (prosedürel, VisualTransform'u tutma noktasının etrafında döndürür; el sapta kalır):
 // - Sol tık basılıyken "biçmeye hazır" duruş: bıçak öne eğilir, bırakınca yaylanarak geri gelir.
 // - Giderken gidiş yönüne yatar, hareketin biraz gerisinden gelir.
-// - Her hasat edilen karede (sol tık basılıyken) yatay kesme: orak hızla yana savrulur (ekranın sağına / soluna, sırayla),
-//   hafif öne yay çizerek, slashAxis etrafında döner (varsayılan: kameranın baktığı yatay yön, bıçak ekranda sağa sola
-//   yay çizer), sonra yerine döner. Kombo büyüdükçe canlanır.
+// - Her hasat edilen karede (sol tık basılıyken) yatay kesme: orak modelin Z ekseninde 90° yatar (bıçak yere paralel),
+//   sonra dünyanın dikeyi etrafında dönerek yana savrulur (ekranın sağına / soluna, sırayla), hafif öne yay çizer, yerine
+//   döner. Art arda kesilirken yatık kalır, son kesmeden kısa süre sonra kalkar. Kombo büyüdükçe canlanır.
 // - Full Harvest'ta sapın etrafında tam tur.
 // Eksenler modelin uzayında (VisualTransform): sap Y boyunca; bıçak düzlemine dik eksen Z. Ters görünürse açının işaretini çevir.
 public class Sickle : ToolBase
@@ -27,7 +27,12 @@ public class Sickle : ToolBase
     [SerializeField] private float slashYaw = 60f;
     [Tooltip("Kesmede dönme ekseni. ViewForward: kameranın baktığı yatay yön (bıçak ekranda sağa sola yay çizer); " +
              "ViewRight: ekranın yatayı (öne arkaya); WorldUp: dünyanın dikeyi (sapın etrafında)")]
-    [SerializeField] private SlashAxis slashAxis = SlashAxis.ViewForward;
+    [SerializeField] private SlashAxis slashAxis = SlashAxis.WorldUp;
+    [Tooltip("Kesmeden önce orağın yatma açısı ve ekseni (modelin uzayında). Ters yöne yatıyorsa açıyı eksi yap.")]
+    [SerializeField] private float slashLayAngle = 90f;
+    [SerializeField] private Vector3 slashLayAxis = Vector3.forward;
+    [Tooltip("Son kesmeden sonra orağın yatık kalma süresi (saniye): art arda kesilirken her karede kalkıp yatmasın")]
+    [SerializeField] private float slashLayHold = 0.3f;
     [SerializeField] private float slashDuration = 0.18f;
     [Tooltip("Giderken yatma: hız (birim/sn) başına açı ve en fazla açı")]
     [SerializeField] private float leanPerSpeed = 4f;
@@ -36,6 +41,7 @@ public class Sickle : ToolBase
 
     private const float ReadyStiffness = 220f, ReadyDamping = 20f;
     private const float LeanStiffness = 70f, LeanDamping = 11f;
+    private const float LayStiffness = 400f, LayDamping = 34f;
 
     private bool leftHeld;
     private float lastHeldTime = float.MinValue;
@@ -45,6 +51,7 @@ public class Sickle : ToolBase
     private Vector2 lean, leanVelocity;   // dünya XZ'de yatma (derece, gidiş yönünde)
     private Vector3 lastPosition;
     private float slashStart = -1f, slashSign = 1f, slashScale = 1f;
+    private float lay, layVelocity, lastSlashTime = float.MinValue;
     private float spinStart = -1f;
     private bool animating;
 
@@ -97,6 +104,7 @@ public class Sickle : ToolBase
     {
         if (!leftHeld) return;
         slashStart = Time.time;
+        lastSlashTime = Time.time;
         slashSign = -slashSign;
         slashScale = 1f + Mathf.Min(combo, 10) * 0.04f;
         animating = true;
@@ -128,6 +136,11 @@ public class Sickle : ToolBase
         leanVelocity += (LeanStiffness * (flat - lean) - LeanDamping * leanVelocity) * dt;
         lean += leanVelocity * dt;
 
+        // Yatma: kesme sürerken ve son kesmeden slashLayHold kadar sonra yatık (hızlı yay)
+        float layTarget = Held && leftHeld && Time.time - lastSlashTime < slashDuration + slashLayHold ? 1f : 0f;
+        layVelocity += (LayStiffness * (layTarget - lay) - LayDamping * layVelocity) * dt;
+        lay += layVelocity * dt;
+
         // Kesme eğrisi: ilk %40'ta hızla yana çıkar, sonra hafif taşarak yerine döner
         float slash = 0f, thrust = 0f;
         if (slashStart >= 0f)
@@ -151,7 +164,7 @@ public class Sickle : ToolBase
             else spin = 360f * Mathf.SmoothStep(0f, 1f, t);
         }
 
-        bool active = Mathf.Abs(ready) > 0.001f || Mathf.Abs(readyVelocity) > 0.001f || lean.sqrMagnitude > 0.0001f ||
+        bool active = Mathf.Abs(lay) > 0.001f || Mathf.Abs(layVelocity) > 0.001f || Mathf.Abs(ready) > 0.001f || Mathf.Abs(readyVelocity) > 0.001f || lean.sqrMagnitude > 0.0001f ||
                       leanVelocity.sqrMagnitude > 0.0001f || slashStart >= 0f || spinStart >= 0f;
         if (!active)
         {
@@ -187,8 +200,10 @@ public class Sickle : ToolBase
             Vector3 world = side * (slash * slashReach) + ahead * (thrust * slashReach * 0.35f);
             slashOffset = parent != null ? parent.InverseTransformVector(world) : world;
         }
+        // Yatıkken hazır duruşun eğimi kalkar (ikisi aynı eksende toplanıp aşırı dönmesin)
         Quaternion rotation = slashRotation * leanRotation * restLocalRotation *
-                              Quaternion.AngleAxis(readyAngle * ready, readyAxis) *
+                              Quaternion.AngleAxis(readyAngle * ready * (1f - Mathf.Clamp01(lay)), readyAxis) *
+                              Quaternion.AngleAxis(slashLayAngle * lay, slashLayAxis) *
                               Quaternion.AngleAxis(spin, handleAxis);
 
         // Tutma noktasının etrafında dön: el sapta kalsın
