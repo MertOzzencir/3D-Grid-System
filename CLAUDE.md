@@ -19,6 +19,7 @@ Sistem haritası (interaktif): `Docs/system-map.html` (yayında: https://claude.
 - Aynı ayarı iki bileşende tutma (biri diğerini spawn'da ezer, Inspector'daki değer etkisiz görünür): botun `moveSpeed`'i `GridWalker` hızını eziyordu, kaldırıldı.
 - **Child'ı dünya uzayında kodla süren yumuşak takip, transform'dan okumamalı:** parent o kare hareket edince child da onunla gider; takip transform'un o anki değerinden başlarsa parent'ın dönüşü sızar (botun güvertesi bot dönünce anlık sağa dönüp düzeliyordu). Yumuşatılmış pozu kendi değişkeninde tut, sonucu yaz.
 - Türü belli olan bileşen ayarlarını (örn. botun `GridWalker.Medium`'u) prefab'a bırakma, kod kendisi ayarlasın.
+- Alt sınıfta, üst sınıfın serialize edilen bir alanıyla aynı isimde alan açma (private olsa da): Unity "The same field name is serialized multiple times" hatası verir (orağın `swing` açısı ToolBase'in `swing` animasyonuyla çakıştı).
 - Materyali elle düzenlerken: Unity eski shader'ların değerlerini materyalde tutar; shader değişince materyali Reset'le.
 
 ## Temel kurallar (koddan kolay çıkmayanlar)
