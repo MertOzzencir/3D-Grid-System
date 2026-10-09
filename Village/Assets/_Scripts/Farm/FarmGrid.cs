@@ -28,6 +28,8 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
     public int Size => size;
     // Tarla büyüyor (kapalı, FarmGrower): ekilmez, parça konmaz / alınmaz
     public bool Locked { get; set; }
+    // Ekim / hasat / Full Harvest efektleri (Boat kurar; yoksa efekt yok)
+    public FarmFx Fx { get; set; }
     public IReadOnlyList<FarmPiece> Pieces => pieces;
 
     public void Setup(int farmSize)
@@ -86,8 +88,12 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
     // Ekilebilir: hücrede tarla parçası var ve o hücre boş
     public bool CanPlant(Vector2Int cell) => !Locked && TryGetPlot(cell, out FarmPiece piece, out Vector2Int tile) && !piece.HasCrop(tile);
 
-    public bool TryPlant(CropSO crop, Vector2Int cell) =>
-        TryGetPlot(cell, out FarmPiece piece, out Vector2Int tile) && piece.Plant(crop, tile);
+    public bool TryPlant(CropSO crop, Vector2Int cell)
+    {
+        if (!TryGetPlot(cell, out FarmPiece piece, out Vector2Int tile) || !piece.Plant(crop, tile)) return false;
+        Fx?.Plant(piece.SoilPoint(tile));
+        return true;
+    }
 
     // Büyütülecek fide var mı
     public bool HasSeedlings
@@ -213,6 +219,7 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         combo++;
         harvestedInPath.Add(crop);
         GiveProduce(crop);
+        Fx?.Harvest(piece.SoilPoint(tile), combo);
         if (sickle != null) sickle.OnHarvested(combo);
         if (combo >= 2)
             FarmPopup.Show($"×{combo}", CellWorld(cell) + Vector3.up * 0.9f, ComboColor, 3f + Mathf.Min(combo, 10) * 0.15f);
@@ -230,6 +237,7 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
             foreach (CropSO crop in harvestedInPath) GiveProduce(crop);
             FarmPopup.Show($"Full Harvest! +{combo}", transform.position + Vector3.up * 1.6f, FullTourColor, 5f);
             if (harvestSickle != null) harvestSickle.OnFullHarvest();
+            Fx?.FullHarvest(transform, size);
         }
         harvestedInPath.Clear();
         harvestSickle = null;

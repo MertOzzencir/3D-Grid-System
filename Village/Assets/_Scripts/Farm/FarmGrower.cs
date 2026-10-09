@@ -18,6 +18,7 @@ public class FarmGrower : MonoBehaviour
     private const float PressDepth = 0.05f;
 
     private FarmGrid grid;
+    private int farmSize;
     private float duration;
     private float coverHeight;
     private Transform cover;
@@ -29,6 +30,7 @@ public class FarmGrower : MonoBehaviour
     private Coroutine pressRoutine;
 
     public State Current => state;
+    public FarmFx Fx { get; set; }
     public float Remaining => remaining;
 
     // Kök = güvertenin üst yüzünün ortası, +Z botun tarafı (ön). baseMaterial her parçaya kopyalanmadan verilir,
@@ -37,6 +39,7 @@ public class FarmGrower : MonoBehaviour
                       Color coverColor, Color buttonColor, GameObject coverModel)
     {
         grid = farmGrid;
+        farmSize = size;
         duration = Mathf.Max(0f, growDuration);
         coverHeight = Mathf.Max(0.2f, height);
         float half = size * 0.5f;
@@ -157,6 +160,7 @@ public class FarmGrower : MonoBehaviour
             yield return null;
         }
         SetCoverHeight(1f);
+        Fx?.CoverClosed(transform, farmSize);
 
         state = State.Growing;
         label.gameObject.SetActive(true);
@@ -179,6 +183,7 @@ public class FarmGrower : MonoBehaviour
         cover.gameObject.SetActive(false);
         grid.Locked = false;
         grid.MatureAll();
+        Fx?.CoverOpened(transform, farmSize);
         state = State.Idle;
     }
 

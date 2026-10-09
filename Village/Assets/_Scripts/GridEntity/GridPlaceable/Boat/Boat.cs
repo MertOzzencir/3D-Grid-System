@@ -73,6 +73,9 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
              "Yüksekliği Cover Height'a uysun.")]
     [SerializeField] private GameObject coverModel;
 
+    [Header("Tarla efektleri (ekim, hasat, kapak)")]
+    [SerializeField] private FarmFx farmFx = new FarmFx();
+
     [Header("Binme / inme")]
     [Tooltip("İndikten sonra tekrar binmek için en az bekleme (saniye)")]
     [SerializeField] private float boardCooldown = 0.8f;
@@ -650,8 +653,11 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
             if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", null);
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", deckColor);
             renderer.sharedMaterial = material;
-            deck.gameObject.AddComponent<FarmGrower>().Setup(farmGrid, farmSize, growDuration, coverHeight, material,
-                                                              coverColor, growButtonColor, coverModel);
+            farmFx.Setup(deck, material, effectShader);
+            farmGrid.Fx = farmFx;
+            FarmGrower grower = deck.gameObject.AddComponent<FarmGrower>();
+            grower.Fx = farmFx;
+            grower.Setup(farmGrid, farmSize, growDuration, coverHeight, material, coverColor, growButtonColor, coverModel);
 
             // Çekme halatı: botun kıçından güvertenin ön kenarına, ortası hafif sarkık
             var ropeObject = new GameObject("Tow Rope");

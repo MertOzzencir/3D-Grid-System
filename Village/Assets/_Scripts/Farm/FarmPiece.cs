@@ -152,8 +152,12 @@ public class FarmPiece : GridPlaceable, IInteractable
                                                      Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
         visual.AddComponent<CropSway>().Setup(crop);
         crops[tile] = new PlantedCrop { crop = crop, visual = visual };
+        StartCoroutine(PopIn(visual.transform, 0f)); // fide topraktan çıkar
         return true;
     }
+
+    // Hücrenin toprak yüzeyi (dünya): ekinlerin dibi, efektlerin çıktığı yer
+    public Vector3 SoilPoint(Vector2Int tile) => transform.TransformPoint(new Vector3(tile.x, soilHeight, tile.y));
 
     public bool IsMature(Vector2Int tile) => crops.TryGetValue(tile, out PlantedCrop planted) && planted.mature;
 
