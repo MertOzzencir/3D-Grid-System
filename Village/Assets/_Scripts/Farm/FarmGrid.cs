@@ -142,6 +142,7 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
     private Vector2Int harvestLast;
     private int combo;
     private int matureAtStart;
+    private Sickle harvestSickle;
     private readonly List<CropSO> harvestedInPath = new List<CropSO>();
 
     private static readonly Color ComboColor = new Color(1f, 0.95f, 0.75f);
@@ -181,6 +182,7 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
             combo = 0;
             matureAtStart = MatureCount;
             harvestedInPath.Clear();
+            harvestSickle = sickle;
             HarvestCell(sickle, cell);
             return true;
         }
@@ -211,7 +213,7 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         combo++;
         harvestedInPath.Add(crop);
         GiveProduce(crop);
-        sickle?.OnHarvested();
+        if (sickle != null) sickle.OnHarvested(combo);
         if (combo >= 2)
             FarmPopup.Show($"×{combo}", CellWorld(cell) + Vector3.up * 0.9f, ComboColor, 3f + Mathf.Min(combo, 10) * 0.15f);
     }
@@ -227,8 +229,10 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         {
             foreach (CropSO crop in harvestedInPath) GiveProduce(crop);
             FarmPopup.Show($"Full Harvest! +{combo}", transform.position + Vector3.up * 1.6f, FullTourColor, 5f);
+            if (harvestSickle != null) harvestSickle.OnFullHarvest();
         }
         harvestedInPath.Clear();
+        harvestSickle = null;
     }
 
     private static void GiveProduce(CropSO crop)

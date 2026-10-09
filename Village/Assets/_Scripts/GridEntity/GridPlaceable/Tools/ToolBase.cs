@@ -44,6 +44,8 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
 
     private GridDragMotor drag;
     protected GridDragMotor Drag => drag;
+    // Alt sınıf görseli kendisi döndürürken (örn. orağın animasyonu) eldivenin tutma yönü değişmesin
+    protected bool LockGripSelection { get; set; }
     private float nextUseTime;
     private Coroutine useRoutine;
     private Quaternion visualRestRotation;
@@ -150,7 +152,7 @@ public abstract class ToolBase : GridPlaceable, IInteractable, IGloveGrip
     private Transform SelectGrip()
     {
         // Sallanırken görsel (ve grip'ler) dönüyor: yön seçimi vuruş bitene kadar sabit, eldiven sıçramasın
-        if (useRoutine != null && currentGrip >= 0) return gloveGrips[currentGrip];
+        if ((useRoutine != null || LockGripSelection) && currentGrip >= 0) return gloveGrips[currentGrip];
 
         Vector3 view = Camera.main.transform.forward;
         int best = 0;
