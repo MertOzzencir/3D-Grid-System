@@ -41,6 +41,9 @@ public class PlacementController : MonoBehaviour
         InputManager.OnSpace -= OpenBuildMode;
     }
 
+    // Build mode açık mı (eldiven gizlenir, mouse imleci görünür: GloveCursor)
+    public static bool IsBuildMode { get; private set; }
+
     // Space ve build mode butonu bunu çağırır
     public void OpenBuildMode() => SetBuildMode(!isOpen);
 
@@ -49,6 +52,7 @@ public class PlacementController : MonoBehaviour
     public void SetBuildMode(bool open)
     {
         isOpen = open;
+        IsBuildMode = open;
 
         SetDeActiveMenus();
         enabled = open;
