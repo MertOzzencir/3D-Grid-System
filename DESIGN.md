@@ -155,7 +155,12 @@ Tarlayı madenciliğe bağlayan halka. Önce gemi modeli (kullanıcı yapıyor),
 - **Çalışma masası:** geminin arkasında. Tıklanınca ayrı bir **yapım platformu** açılır, UI yok, her şey dünyada: toprak miktarı yazar, açılmış blueprint'ler durur, biri seçilir, şekli saydam taslak olarak belirir.
 - **Yapım:** oyuncu taslağın hücrelerine sol tıklayarak toprak doldurur (her hücre topraktan düşer, dolunca toprak olur). Hepsi dolunca parça hazır. Oyun / zorluk yok; amaç "kendim yapıyorum" hissi.
 - **Gemi:** bot büyük gemi olacak. Parçaları: gövde, toprak deposu (toprak yığını doluluğa göre yükselebilir), çalışma masası, tarla bağlantı noktası; ileride upgrade masası ve borulu matkap.
-- **Açık:** maliyet (hücre başına 1 toprak?), platformun yeri / kamera / çıkış, biten parçanın nereye gittiği, doldurma tek tık mı sürükleme mi, geminin grid boyutu.
+- **Maliyet:** hücre başına sabit toprak; parçanın maliyeti = hücre sayısı × o değer.
+- **Platform:** masaya basınca masa ters döner, geminin en üstünde düz bir 3×3 grid açılır (bugünkü grid gibi). Üstünde seçili blueprint'in taslağı, yanında toprak miktarını gösteren depo.
+- **Biten parça:** platformun üstünde kalır, oyuncu alana kadar orada durur. O sırada gemi ve başka şeyler kullanılamaz.
+- **Doldurma:** her hücreye ayrı tık, çok kısa (bir saniyeden az). Amaç tatmin: doldurma / tamamlama hissi.
+- **Bilinen sorun:** gemi ile adalar arasındaki geçiş karışık; oyuncu eldivenin gemide mi adada mı olduğunu anlamıyor. Geçiş sistemi sonra (cila).
+- **Açık:** geminin grid boyutu; modele göre sistem değişebilir (kullanıcı modeli yapınca tekrar konuşulacak).
 
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.
