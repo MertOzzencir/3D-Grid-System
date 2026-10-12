@@ -189,6 +189,8 @@ public class GridWalker : MonoBehaviour
     }
 
     public bool HasQueuedSteps => path.Count > 0;
+    // O anki adımın ilerlemesi (0 = başladı, 1 = bitti); başka şeyler adıma bağlı hareket etsin diye (örn. botun tarlası)
+    public float StepProgress => stepProgress;
 
     // Yerinde 90° dönüş: gövde yerinde kalır, kafa gövdenin yanındaki hücreye geçer (bot sert dönüşte). Kafanın gideceği
     // hücre (ve ek hücreler) doluysa ya da o an adım atılıyorsa false.

@@ -67,7 +67,7 @@ MonoBehaviour:
   modelPrefab: {fileID: 919132149155446097, guid: 3cba37ada4f944544bd0c65cb45761bb, type: 3}
   modelRotation: {x: 0, y: 0, z: 0}
   modelScale: 1
-  waterline: 0.15
+  waterline: 0.55
   modelOffset: {x: 0, y: 0, z: -0.5}
   showModelGizmo: 1
   seatOffset: {x: 0, y: -0.2, z: 0}
@@ -89,8 +89,9 @@ MonoBehaviour:
   shipLength: 5
   shipWidth: 3
   wheelPrefix: WHEEL
-  wheelAxis: {x: 1, y: 0, z: 0}
-  wheelDegreesPerUnit: 120
+  fenderSwing: 10
+  fenderMaxSwing: 18
+  fenderIdleSway: 2.5
   soil: 3
   soilBagModel: {fileID: 919132149155446097, guid: 20d176b436cad4a46a3f154208628c8e, type: 3}
   soilStackAnchor: {fileID: 132954020359127902}
@@ -159,7 +160,7 @@ Transform:
   m_GameObject: {fileID: 5209889382397251334}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.04, y: 0.92, z: -0.8}
+  m_LocalPosition: {x: 0.04, y: 1.26, z: -0.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

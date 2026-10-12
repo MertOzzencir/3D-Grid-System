@@ -86,8 +86,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     [SerializeField] private float deckHeight = 0.12f;
     [SerializeField] private float deckThickness = 0.3f;
     [SerializeField] private Color deckColor = new Color(0.72f, 0.52f, 0.36f);
-    [Tooltip("Tarlanın botu takip yumuşaklığı (küçük = daha gecikmeli)")]
-    [SerializeField] private float deckFollow = 6f;
     [Tooltip("Gemi ile tarla arasındaki halat boşluğu (hücre, düz giderken). -1 = otomatik: dönüşlerde gemiyle çakışmayan " +
              "(tarla yarıçapı + 1 + gemi yarı genişliği). Daha kısa olursa dönüşlerde tarla geminin altına girer (o adım atılmaz).")]
     [SerializeField] private int towCells = -1;
@@ -156,6 +154,9 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     // olduğu için bot dönünce o kare botla birlikte dönmüş halinden başlardı (anlık sağa dönüp düzelme).
     private Vector3 deckPosition;
     private Quaternion deckRotation = Quaternion.identity;
+    // Tarla geminin adımıyla birlikte gider: adım başında bulunduğu yerden yeni yerine, adımın ilerlemesiyle (sabit hızda)
+    private Vector3 deckFrom, deckTo;
+    private Quaternion deckRotationFrom = Quaternion.identity, deckRotationTo = Quaternion.identity;
     private Vector3Int homeHead, homeBody; // liman: ilk konduğu yer
     private bool hasHome;
 
@@ -258,6 +259,19 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         else if (trail[trail.Count - 1] != body) trail.Add(body);
         while (trail.Count > FarmLag + 2) trail.RemoveAt(0);
         farmCenter = FarmCenterFor(head, body, out farmForward);
+
+        // Adım başı: tarla şu anki yerinden yeni yerine bu adım boyunca gider
+        deckFrom = deckPosition;
+        deckRotationFrom = deckRotation;
+        deckTo = DeckTarget(out deckRotationTo);
+    }
+
+    // Tarlanın merkezinin (güvertenin üst yüzü) yeri ve gidiş yönüne bakan dönüşü
+    private Vector3 DeckTarget(out Quaternion rotation)
+    {
+        Vector3 forward = new Vector3(farmForward.x, 0f, farmForward.z);
+        rotation = forward.sqrMagnitude > 0.01f ? Quaternion.LookRotation(forward, Vector3.up) : deckRotation;
+        return GridWalker.FeetPosition(farmCenter) + Vector3.up * (0.5f + deckHeight);
     }
 
     // Gövde izin devamı mı (aynı hücre ya da komşusu); değilse (ilk yerleşme, ışınlanma) iz yeniden kurulur
@@ -798,28 +812,25 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         snapDeck = true;
     }
 
-    // Güverte tarlanın merkezini yumuşakça (gecikmeli) takip eder, gidiş yönüne döner, suda hafif sallanır.
+    // Güverte geminin adımıyla birlikte gider (gemi gibi sabit hızda; köşede adım boyunca döner), suda hafif sallanır.
     // Dünya transform'u her kare yazılır (botun child'ı ama bot döndükçe dönmesin)
     private void UpdateDeck(float dt)
     {
         if (deck == null || !walker.IsPlaced) return;
-        Vector3 target = GridWalker.FeetPosition(farmCenter) + Vector3.up * (0.5f + deckHeight); // üst yüz
-        target.y += Mathf.Sin(Time.time * bobSpeed * Mathf.PI * 2f + 1.7f) * bobAmount;
-        Vector3 forward = new Vector3(farmForward.x, 0f, farmForward.z);
-        Quaternion rotation = forward.sqrMagnitude > 0.01f ? Quaternion.LookRotation(forward, Vector3.up) : deckRotation;
         if (snapDeck)
         {
-            deckPosition = target;
-            deckRotation = rotation;
+            deckTo = deckFrom = deckPosition = DeckTarget(out deckRotationTo);
+            deckRotationFrom = deckRotation = deckRotationTo;
             snapDeck = false;
         }
         else
         {
-            float k = 1f - Mathf.Exp(-deckFollow * dt);
-            deckPosition = Vector3.Lerp(deckPosition, target, k);
-            deckRotation = Quaternion.Slerp(deckRotation, rotation, k);
+            float progress = walker.StepProgress;
+            deckPosition = Vector3.Lerp(deckFrom, deckTo, progress);
+            deckRotation = Quaternion.Slerp(deckRotationFrom, deckRotationTo, Mathf.SmoothStep(0f, 1f, progress));
         }
-        deck.SetPositionAndRotation(deckPosition, deckRotation);
+        Vector3 bob = Vector3.up * (Mathf.Sin(Time.time * bobSpeed * Mathf.PI * 2f + 1.7f) * bobAmount);
+        deck.SetPositionAndRotation(deckPosition + bob, deckRotation);
         UpdateRope();
     }
 
