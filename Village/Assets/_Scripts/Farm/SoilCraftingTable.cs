@@ -192,7 +192,11 @@ public class SoilCraftingTable : GridPlaceable, IInteractable, IClickable
 
     private void BuildGhosts()
     {
-        if (tileModel == null) return;
+        if (tileModel == null)
+        {
+            Debug.LogWarning("SoilCraftingTable: Tile Model atanmamış; doldurulacak hücreler görünmez (1×1 toprak bloğunu ata).", this);
+            return;
+        }
         foreach (Vector2Int cell in blueprintCells)
         {
             Transform tile = Instantiate(tileModel, transform).transform;
