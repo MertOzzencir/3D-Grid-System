@@ -148,6 +148,15 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - **Kayıt:** botun `ISaveState`'i: tarla boyutu, parçalar (tür, yerel konum, dönüş). Ekinler ve büyüme kaydedilmez (karar).
 - **Adımlar:** 1) ✅ bot + tarla treni (hareket, dünya grid'i, görsel güverte, çekme halatı, sert dönüş yerinde, limana dön) 2) ✅ `FarmGrid` + tarla parçası (dünyadan tarlaya oturma, tarlada kaydırma, kayıt; Unity'de test edildi, 1×1 parça modeli var) 3) ✅ düzenleme (her yerden, kod yok) 4) ✅ ekim (tohum yığını, toplama, sürükleyerek ekme) 5) ✅ büyüme düğmesi (kapak, süre, olgunlaşma) 6) ✅ hasat yolu + kombo 7) ~~kayıt~~ (iptal: ekinler kaydedilmez).
 
+## Taslak: toprak ve tarla parçası üretimi (2026-10-12, model bekleniyor)
+Tarlayı madenciliğe bağlayan halka. Önce gemi modeli (kullanıcı yapıyor), sonra küçükten başlanacak.
+- **Toprak:** gemideki depoda duran sayı. Tarla parçaları bununla yapılır. Şimdilik elle ayarlanır; ileride madencilikle artar. Kaydedilir.
+- **Blueprint'ler:** tarla parçası şekilleri (1×1, 2×1, L...). Dünyada bulundukça açılır (ileride madenden, NPC'den). Şekil sayısını tasarım belirler.
+- **Çalışma masası:** geminin arkasında. Tıklanınca ayrı bir **yapım platformu** açılır, UI yok, her şey dünyada: toprak miktarı yazar, açılmış blueprint'ler durur, biri seçilir, şekli saydam taslak olarak belirir.
+- **Yapım:** oyuncu taslağın hücrelerine sol tıklayarak toprak doldurur (her hücre topraktan düşer, dolunca toprak olur). Hepsi dolunca parça hazır. Oyun / zorluk yok; amaç "kendim yapıyorum" hissi.
+- **Gemi:** bot büyük gemi olacak. Parçaları: gövde, toprak deposu (toprak yığını doluluğa göre yükselebilir), çalışma masası, tarla bağlantı noktası; ileride upgrade masası ve borulu matkap.
+- **Açık:** maliyet (hücre başına 1 toprak?), platformun yeri / kamera / çıkış, biten parçanın nereye gittiği, doldurma tek tık mı sürükleme mi, geminin grid boyutu.
+
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.
 
