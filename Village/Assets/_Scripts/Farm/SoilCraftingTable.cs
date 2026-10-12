@@ -11,7 +11,7 @@ using UnityEngine;
 //   kalır (o sırada yenisi yapılmaz). Alınan parça bir yere konamazsa masaya geri döner.
 // - Masanın yanına gelince ekranın altında basit UI (CraftingTableUI): blueprint seçimi, maliyet, toprak miktarı.
 // Toprak şimdilik sahnedeki gemiden (Boat.Soil) otomatik çekilir.
-public class SoilCraftingTable : GridPlaceable, IInteractable
+public class SoilCraftingTable : GridPlaceable, IInteractable, IClickable
 {
     public const int TraySize = 3;
 
@@ -127,6 +127,9 @@ public class SoilCraftingTable : GridPlaceable, IInteractable
         var box = gameObject.AddComponent<BoxCollider>();
         if (found)
         {
+            // Tepesi tepsinin yüzeyinde kesilir: slotlar (tıklanan ince kutular) gövdenin içinde kalmasın
+            float top = Mathf.Min(bounds.max.y, trayCenter.y - 0.01f);
+            if (top > bounds.min.y + 0.05f) bounds.SetMinMax(bounds.min, new Vector3(bounds.max.x, top, bounds.max.z));
             box.center = bounds.center;
             box.size = bounds.size;
         }
@@ -209,6 +212,15 @@ public class SoilCraftingTable : GridPlaceable, IInteractable
         foreach (Transform tile in tiles.Values)
             if (tile != null) Destroy(tile.gameObject);
         tiles.Clear();
+    }
+
+    // Masanın gövdesine sol tık (eldiven slotun değil gövdenin üstündeyse): tıklanan noktanın altındaki slot
+    public void OnClicked(RaycastHit hit)
+    {
+        Vector3 local = transform.InverseTransformPoint(hit.point) - trayCenter;
+        var cell = new Vector2Int(Mathf.RoundToInt(local.x / slotSpacing) + 1, Mathf.RoundToInt(local.z / slotSpacing) + 1);
+        if (cell.x < 0 || cell.y < 0 || cell.x >= TraySize || cell.y >= TraySize) return;
+        OnSlotClicked(cell);
     }
 
     // Slota sol tık
