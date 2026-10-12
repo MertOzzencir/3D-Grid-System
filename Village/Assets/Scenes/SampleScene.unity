@@ -3096,7 +3096,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 204edd606ec8e874bbcf37b251e8840d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DayCycle
-  cycleMinutes: 1
+  cycleMinutes: 20
   time: 0.1
   paused: 0
   sun: {fileID: 0}

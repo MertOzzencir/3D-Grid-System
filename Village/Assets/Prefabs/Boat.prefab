@@ -30,7 +30,8 @@ Transform:
   m_LocalPosition: {x: -1.36225, y: 1.40143, z: -0.55249}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 132954020359127902}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &8984584451345983729
@@ -63,12 +64,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Boat
   data: {fileID: 11400000, guid: 3101bab913ae25a4482ce9d2450afa72, type: 2}
   rotation: 0
-  modelPrefab: {fileID: 919132149155446097, guid: 2f708dc613c5e05458e0c55674124c69, type: 3}
+  modelPrefab: {fileID: 919132149155446097, guid: 3cba37ada4f944544bd0c65cb45761bb, type: 3}
   modelRotation: {x: 0, y: 0, z: 0}
   modelScale: 1
   waterline: 0.15
-  leftOarName: KUREK-LEFT
-  rightOarName: KUREK-RIGHT
+  modelOffset: {x: 0, y: 0, z: -0.5}
+  showModelGizmo: 1
   seatOffset: {x: 0, y: -0.2, z: 0}
   effectShader: {fileID: 4800000, guid: ec496355df9a4cc89f9c7868ca47608b, type: 3}
   waterFx:
@@ -77,12 +78,6 @@ MonoBehaviour:
     wakeWidthStart: 0.55
     wakeWidthEnd: 1.6
     wakeColor: {r: 1, g: 1, b: 1, a: 0.7}
-    splashDrops: 10
-    splashSpeed: 1.6
-    splashSize: 0.07
-    splashReach: 0.55
-    splashSweep: 0.25
-    splashColor: {r: 0.92, g: 0.97, b: 1, a: 0.9}
     rippleSize: 0.7
     rippleLife: 0.9
     bowRippleEvery: 0.3
@@ -91,6 +86,16 @@ MonoBehaviour:
   maskShader: {fileID: 4800000, guid: ca5a4f90e2bc44d299c83a5c655152b8, type: 3}
   maskModel: {fileID: 919132149155446097, guid: 25d98deac116ba5468b242957830a5e3, type: 3}
   showMaskGizmo: 1
+  shipLength: 5
+  shipWidth: 3
+  wheelPrefix: WHEEL
+  wheelAxis: {x: 1, y: 0, z: 0}
+  wheelDegreesPerUnit: 120
+  soil: 3
+  soilBagModel: {fileID: 919132149155446097, guid: 20d176b436cad4a46a3f154208628c8e, type: 3}
+  soilStackAnchor: {fileID: 132954020359127902}
+  soilBagSpacing: 0
+  soilLayerHeight: 0
   farmSize: 3
   deckHeight: 0.12
   deckThickness: 0.3
@@ -98,6 +103,8 @@ MonoBehaviour:
   deckFollow: 6
   towCells: -1
   ropeColor: {r: 0.55, g: 0.42, b: 0.3, a: 1}
+  ropeStart: {x: 0, y: 1.14, z: -2.87}
+  ropeEndOffset: {x: 0, y: 0, z: 0}
   logBlockedSteps: 1
   ropeWidth: 0.04
   growDuration: 5
@@ -105,14 +112,56 @@ MonoBehaviour:
   coverColor: {r: 0.93, g: 0.85, b: 0.7, a: 1}
   growButtonColor: {r: 0.95, g: 0.45, b: 0.4, a: 1}
   coverModel: {fileID: 0}
+  farmFx:
+    soilColor: {r: 0.47, g: 0.32, b: 0.22, a: 1}
+    leafColor: {r: 0.45, g: 0.72, b: 0.32, a: 1}
+    dustColor: {r: 0.78, g: 0.66, b: 0.52, a: 0.6}
+    sparkleColor: {r: 1, g: 0.95, b: 0.7, a: 0.95}
+    harvestClods: 5
+    harvestLeaves: 4
+    clodSize: 0.09
+    leafSize: 0.12
+    dustSize: 0.3
+    sparkleSize: 0.09
+    trailWidth: 0.16
+    trailStartColor: {r: 0.92, g: 1, b: 0.82, a: 0.75}
+    trailFullColor: {r: 1, g: 0.82, b: 0.3, a: 0.95}
+    trailFade: 0.7
+    trailLift: 0.06
   boardCooldown: 0.8
-  strokeLength: 1.2
-  oarSweep: 28
-  oarLift: 14
   bobAmount: 0.025
   bobSpeed: 0.5
   rockAngle: 2.5
   turnLean: 0.09
   surgePitch: 2
-  strokeLunge: 0.08
-  strokePitch: 3
+--- !u!1 &5209889382397251334
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 132954020359127902}
+  m_Layer: 0
+  m_Name: SoilStack
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &132954020359127902
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5209889382397251334}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.04, y: 0.92, z: -0.8}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7577823915301400241}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
