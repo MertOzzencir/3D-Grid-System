@@ -173,6 +173,12 @@ const NODES = [
     files: ["Boat/Boat.cs", "SaveSystem/SaveManager.cs"],
     next: "" },
 
+  { id: "craft", name: "Toprak çalışma masası", status: "done", x: 400, y: 450, tag: "SoilCraftingTable",
+    what: "Adada duran 3×3 masa. Seçilen tarla parçası şeklinin hücrelerine tek tek tıklayıp gemiden toprak dökerek parçayı kendin yaparsın. Biten parça masada bekler, alıp tarlana koyarsın.",
+    how: ["Blueprint = tarla parçasının SO'su (şekil oradan)", "Hücre başına 1 toprak, gemiden otomatik", "Şimdilik basit ekran UI ile şekil seçimi"],
+    files: ["Farm/SoilCraftingTable.cs", "Farm/CraftingTableUI.cs"],
+    next: "Blueprint'lerin dünyada / madende bulunması; seçimin dünyada bir sisteme dönüşmesi." },
+
   // --- Ana halka ---
   { id: "farm", name: "Yüzen tarla", status: "done", hub: true, x: 390, y: 285, tag: "ana halka",
     what: "Tarımın kendisi: suyun üstünde, botun arkasında giden tarla. Soldaki sütun onun parçaları. Yemeğin birinci malzeme kaynağı.",
@@ -262,6 +268,8 @@ const NODES = [
 // from → to: ne verir. planned: henüz oyunda yok
 const EDGES = [
   ["boat", "farm", "taşır", "live"],
+  ["boat", "craft", "toprak", "live"],
+  ["craft", "pieces", "parça yapar", "live"],
   ["pieces", "farm", "tarlayı kurar", "live"],
   ["seeds", "farm", "ekin", "live"],
   ["grow", "farm", "olgunlaştırır", "live"],
