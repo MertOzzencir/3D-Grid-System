@@ -821,7 +821,9 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     private void UpdateRope()
     {
         if (rope == null) return;
-        Vector3 from = transform.TransformPoint(ropeStart);                                  // geminin kıçı (ayar)
+        // Geminin kıçı (ayar): görsele bağlı, gemi sallandıkça uç da onunla gider. ropeStart kökün uzayında, görselin
+        // dinlenme pozuna göre yazılmış; görselin uzayına çevrilir
+        Vector3 from = visual != null ? visual.TransformPoint(ropeStart - visualRest) : transform.TransformPoint(ropeStart);
         Vector3 to = deck.TransformPoint(new Vector3(0f, 0f, farmSize * 0.5f) + ropeEndOffset); // güvertenin ön kenarı
         float sag = Mathf.Min(0.12f, Vector3.Distance(from, to) * 0.05f);
         for (int i = 0; i < rope.positionCount; i++)
