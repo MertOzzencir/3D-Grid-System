@@ -76,6 +76,16 @@ public class FarmPiece : GridPlaceable, IInteractable
 
         GridEntitySOBase data = GetData();
         if (data == null || (tileModel == null && template == null)) return;
+
+        // Prefab'taki model pivot hücresinde (sol alt, 0,0) duruyor: şekil o hücreyi içermiyorsa (L, T...) gizlenir
+        if (template != null)
+        {
+            bool pivotFilled = false;
+            foreach (Vector3Int offset in data.GetFootprint().FilledCells())
+                if (offset == Vector3Int.zero) pivotFilled = true;
+            template.gameObject.SetActive(pivotFilled);
+        }
+
         foreach (Vector3Int offset in data.GetFootprint().FilledCells())
         {
             if (offset.y != 0) continue; // tarla tek kat
