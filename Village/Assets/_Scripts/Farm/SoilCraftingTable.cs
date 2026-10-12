@@ -22,8 +22,9 @@ public class SoilCraftingTable : GridPlaceable, IInteractable
     [SerializeField, Min(0)] private int soilPerCell = 1;
 
     [Header("Tepsi")]
-    [Tooltip("Tepsinin ortası, masanın uzayında (orta slotun üst yüzü). Scene'de kahverengi kareler.")]
-    [SerializeField] private Vector3 trayCenter = new Vector3(0f, 1.2f, 0f);
+    [Tooltip("Tepsinin ortası, masanın uzayında (orta slotun üst yüzü). Pivot 3×3 alanın köşedeki ilk hücresinde, alan +X ve +Z " +
+             "yönünde: ortası (1, y, 1). Scene'de kahverengi kareler.")]
+    [SerializeField] private Vector3 trayCenter = new Vector3(1f, 1.2f, 1f);
     [Tooltip("İki slotun ortası arası mesafe (birim)")]
     [SerializeField] private float slotSpacing = 1f;
     [Tooltip("Tepsideki blokların boyu (1 = tam hücre). Slotlar hücreden küçükse küçült.")]
@@ -131,7 +132,7 @@ public class SoilCraftingTable : GridPlaceable, IInteractable
         }
         else
         {
-            box.center = new Vector3(0f, trayCenter.y * 0.5f - 0.25f, 0f);
+            box.center = new Vector3(trayCenter.x, trayCenter.y * 0.5f - 0.25f, trayCenter.z);
             box.size = new Vector3(TraySize * slotSpacing, trayCenter.y + 0.5f, TraySize * slotSpacing);
         }
     }
