@@ -100,6 +100,7 @@ public class FarmPiece : GridPlaceable, IInteractable
             else if (offset != Vector3Int.zero) // pivot hücresinde prefab'taki model zaten duruyor
             {
                 Transform tile = Instantiate(template.gameObject, transform).transform;
+                tile.gameObject.SetActive(true); // şablon gizliyse (şekil pivot hücresini içermiyor) kopya da gizli doğar
                 tile.localPosition = template.localPosition + cell;
                 tile.localRotation = template.localRotation;
                 tile.localScale = template.localScale;
