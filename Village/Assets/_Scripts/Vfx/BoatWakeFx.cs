@@ -3,9 +3,8 @@ using UnityEngine;
 
 // Botun su efektleri (asset'siz, kodla kurulur; hepsi "Village/Water Foam" shader'ıyla):
 //   köpük izi: kıçta su yüzeyine yatık TrailRenderer; geride kaldıkça genişleyip söner (bot giderken)
-//   kürek sıçraması: kürek suya girerken damlalar fırlar + suda halka yayılır, çıkarken birkaç damla düşer
 //   burun dalgası: giderken burunda arada bir halka
-// Boat sürer: Setup bir kez, Tick her kare, OarSplash kürek suya girip çıkarken.
+// Boat sürer: Setup bir kez, Tick her kare.
 [Serializable]
 public class BoatWakeFx
 {
@@ -19,17 +18,6 @@ public class BoatWakeFx
     [SerializeField] private float wakeWidthEnd = 1.6f;
     [SerializeField] private Color wakeColor = new Color(1f, 1f, 1f, 0.7f);
 
-    [Header("Kürek sıçraması")]
-    [Tooltip("Kürek suya girerken fırlayan damla sayısı (çıkarken yarısı)")]
-    [SerializeField] private int splashDrops = 10;
-    [SerializeField] private float splashSpeed = 1.6f;
-    [SerializeField] private float splashSize = 0.07f;
-    [Tooltip("Küreğin suya girdiği yer: tutturulduğu yerden yana (birim)")]
-    [SerializeField] private float splashReach = 0.55f;
-    [Tooltip("Küreğin suya girdiği yer: tutturulduğu yerden ileri (girerken) / geri (çıkarken) (birim)")]
-    [SerializeField] private float splashSweep = 0.25f;
-    [SerializeField] private Color splashColor = new Color(0.92f, 0.97f, 1f, 0.9f);
-
     [Header("Halkalar")]
     [SerializeField] private float rippleSize = 0.7f;
     [SerializeField] private float rippleLife = 0.9f;
@@ -42,7 +30,7 @@ public class BoatWakeFx
     private Transform boat;
     private float waterHeight; // botun köküne göre su seviyesi
     private TrailRenderer wake;
-    private ParticleSystem drops, ripples;
+    private ParticleSystem ripples;
     private float bowTimer;
     private bool ready;
 
@@ -60,8 +48,6 @@ public class BoatWakeFx
         waterHeight = waterLevel;
 
         wake = CreateWake(MakeMaterial(shader, 1f));
-        drops = CreateSystem("Splash Drops", MakeMaterial(shader, 0f), false, 1.6f,
-                             new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0.4f)));
         ripples = CreateSystem("Ripples", MakeMaterial(shader, 2f), true, 0f,
                                new AnimationCurve(new Keyframe(0f, 0.25f), new Keyframe(1f, 1f, 0.6f, 0f)));
         ready = true;
@@ -82,27 +68,6 @@ public class BoatWakeFx
         if (bowTimer < bowRippleEvery) return;
         bowTimer = 0f;
         Ripple(WaterPoint(boat.position + boat.forward * bowForward), rippleSize * 0.7f);
-    }
-
-    // Kürek suya giriyor (entering) ya da çıkıyor. pivot: küreğin tutturulduğu yer, side: sağ +1, sol -1
-    public void OarSplash(Vector3 pivot, float side, bool entering)
-    {
-        if (!ready) return;
-        Vector3 point = WaterPoint(pivot + boat.right * (side * splashReach) + boat.forward * (entering ? splashSweep : -splashSweep));
-
-        int count = entering ? splashDrops : Mathf.Max(1, splashDrops / 2);
-        float speed = entering ? splashSpeed : splashSpeed * 0.5f;
-        var emit = new ParticleSystem.EmitParams { applyShapeToPosition = false, startColor = splashColor };
-        for (int i = 0; i < count; i++)
-        {
-            Vector2 spread = UnityEngine.Random.insideUnitCircle * 0.7f;
-            emit.position = point + new Vector3(spread.x, 0f, spread.y) * 0.08f;
-            emit.velocity = new Vector3(spread.x, 1f, spread.y) * (speed * UnityEngine.Random.Range(0.6f, 1.1f));
-            emit.startSize = splashSize * UnityEngine.Random.Range(0.6f, 1.3f);
-            emit.startLifetime = UnityEngine.Random.Range(0.35f, 0.6f);
-            drops.Emit(emit, 1);
-        }
-        Ripple(point, entering ? rippleSize : rippleSize * 0.6f);
     }
 
     private void Ripple(Vector3 point, float size)

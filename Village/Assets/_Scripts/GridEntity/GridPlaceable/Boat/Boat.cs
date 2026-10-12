@@ -1,13 +1,17 @@
 using UnityEngine;
 
-// Su üstünde giden 2×1 bot (yürüyen placeable, kedi gibi): sadece suya konur (CanOccupy), su hücrelerinde
-// GridWalker ile gider (Medium = Water); grid'deki yerini GridWalker her adımda günceller.
+// Su üstünde giden gemi (yürüyen placeable): sadece suya konur (CanOccupy), su hücrelerinde GridWalker ile gider
+// (Medium = Water); grid'deki yerini GridWalker her adımda günceller. Hareket GridWalker'ın iki hücresiyle (kafa + gövde,
+// yılan gibi): gövde hücresi geminin ortası, kafa önü. Gemi gövdenin etrafında shipWidth × shipLength dikdörtgen kaplar
+// (IWalkerExtraCells; hepsi su ve boş olmalı, dönüşte de).
 // Binme: mouse botun gövdesinin üstüne gelince (uzaklık sınırı yok; tarla değil, oradaki parçalar tutulur) eldiven
 // kıyıdan zıplayıp koltuğa (Seat) oturur. Binmişken WASD botu kameranın
 // açısına göre hücre hücre sürer (W ileri, S geri, A/D sola/sağa; yol bulma yok), kamera botu takip eder.
 // WASD ile gidilecek hücre kara (base) ise eldiven oraya iner, mouse imleci de oraya taşınır. Binerken oyuncu girişi
 // kilitli (şimdilik sadece gezme).
-// Görsel: model kodla kurulur; giderken kürekler yol başına çekilir, bot suda hafif inip kalkar, yalpalar, dönüşte yatar.
+// Görsel: model kodla kurulur; giderken çarklar (adı wheelPrefix ile başlayan objeler) döner, gemi suda hafif inip
+// kalkar, yalpalar, dönüşte yatar. Toprak deposu: soil kadar torba (soilBagModel) soilStackAnchor'ın üstüne piramit
+// gibi dizilir (3×3, 2×2, 1).
 // Tarla: botun arkasında tek sayılı kare (3×3, 5×5...), çekme halatıyla botun izinden gelir (IWalkerExtraCells):
 // gövdenin geçtiği hücrelerin izi tutulur, tarla merkezi o izin FarmLag adım gerisindedir. Tek sayılı kare dönünce aynı
 // hücreleri kapladığı için köşeler sorun değil. Halat: iz köşede kıvrıldığı için tarla izde (yarıçap + 1) adım geride
@@ -24,8 +28,11 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     [SerializeField] private float modelScale = 1f;
     [Tooltip("Modelin origin'i su seviyesinin bu kadar üstünde (artı = daha az batar)")]
     [SerializeField] private float waterline = 0.15f;
-    [SerializeField] private string leftOarName = "KUREK-LEFT";
-    [SerializeField] private string rightOarName = "KUREK-RIGHT";
+    [Tooltip("Modelin kaydırılması (kökün uzayında). Kök kafa ile gövde hücresinin ortasında; gövde (geminin ortası) " +
+             "0.5 geride. Model ortası origin'deyse (0, 0, -0.5).")]
+    [SerializeField] private Vector3 modelOffset = new Vector3(0f, 0f, -0.5f);
+    [Tooltip("Scene görünümünde geminin tel kafes önizlemesi (prefab modunda da): halat ve toprak noktalarını yerleştirmek için")]
+    [SerializeField] private bool showModelGizmo = true;
     [Tooltip("Eldivenin oturduğu yer, modelin uzayında (botun tabanı)")]
     [SerializeField] private Vector3 seatOffset = new Vector3(0f, -0.2f, 0f);
 
@@ -45,6 +52,30 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     [Tooltip("Scene görünümünde maskeyi (sarı) göster; Play'e girmeden de, prefab modunda da")]
     [SerializeField] private bool showMaskGizmo = true;
 
+    [Header("Gemi (grid'de kapladığı alan)")]
+    [Tooltip("Gemi kaç hücre uzun (gidiş yönünde) ve kaç hücre geniş; tek sayı (gövde hücresi ortada)")]
+    [SerializeField] private int shipLength = 5;
+    [SerializeField] private int shipWidth = 3;
+
+    [Header("Çarklar")]
+    [Tooltip("Adı bununla başlayan model objeleri çark sayılır (göbek çivileri dahil), giderken döner")]
+    [SerializeField] private string wheelPrefix = "WHEEL";
+    [Tooltip("Çarkın döndüğü eksen (çark objesinin kendi uzayında) ve gidilen birim başına dönüş (derece). Ters dönüyorsa eksi yap.")]
+    [SerializeField] private Vector3 wheelAxis = Vector3.right;
+    [SerializeField] private float wheelDegreesPerUnit = 120f;
+
+    [Header("Toprak deposu")]
+    [Tooltip("Gemideki toprak miktarı (tarla parçası yapmak için). Şimdilik elle; ileride madencilik artıracak. Kaydedilir.")]
+    [SerializeField, Min(0)] private int soil = 0;
+    [Tooltip("Her toprak birimi için depoda görünen torba modeli")]
+    [SerializeField] private GameObject soilBagModel;
+    [Tooltip("Torbaların dizildiği yer: geminin child'ı boş bir obje, deponun üstünde. Alt kat (3×3) bunun ortasında, " +
+             "bu objenin eksenlerinde dizilir; üst katlar (2×2, 1) torba boyu kadar yukarıda.")]
+    [SerializeField] private Transform soilStackAnchor;
+    [Tooltip("Torbalar arası mesafe ve kat yüksekliği; 0 = torba modelinin boyundan")]
+    [SerializeField] private float soilBagSpacing = 0f;
+    [SerializeField] private float soilLayerHeight = 0f;
+
     [Header("Tarla (botun arkasından gelir)")]
     [Tooltip("Tarla alanının kenarı: hep tek sayı (3, 5, 7...), bot önde ortada. 0 = tarla yok.")]
     [SerializeField] private int farmSize = 3;
@@ -54,10 +85,15 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     [SerializeField] private Color deckColor = new Color(0.72f, 0.52f, 0.36f);
     [Tooltip("Tarlanın botu takip yumuşaklığı (küçük = daha gecikmeli)")]
     [SerializeField] private float deckFollow = 6f;
-    [Tooltip("Bot ile tarla arasındaki halat boşluğu (hücre, düz giderken). -1 = otomatik: köşede çakışmayan en kısa " +
-             "(yarıçap + 1). Daha kısa olursa dönüşlerde tarla botun altına girer.")]
+    [Tooltip("Gemi ile tarla arasındaki halat boşluğu (hücre, düz giderken). -1 = otomatik: dönüşlerde gemiyle çakışmayan " +
+             "(tarla yarıçapı + 1 + gemi yarı genişliği). Daha kısa olursa dönüşlerde tarla geminin altına girer (o adım atılmaz).")]
     [SerializeField] private int towCells = -1;
     [SerializeField] private Color ropeColor = new Color(0.55f, 0.42f, 0.3f);
+    [Tooltip("Halatın gemideki ucu (kökün uzayında; kök su seviyesinin 0.5 altında, kafa ile gövde hücresinin ortasında). " +
+             "Scene'de turuncu top.")]
+    [SerializeField] private Vector3 ropeStart = new Vector3(0f, 0.65f, -3f);
+    [Tooltip("Halatın tarladaki ucu: güvertenin ön kenarının ortasına göre kaydırma (güvertenin uzayında). Scene'de turuncu top.")]
+    [SerializeField] private Vector3 ropeEndOffset = Vector3.zero;
     [Tooltip("Bot bir adımı atamazsa nedenini konsola yaz (sıkışmaları anlamak için)")]
     [SerializeField] private bool logBlockedSteps = true;
     [SerializeField] private float ropeWidth = 0.04f;
@@ -80,14 +116,6 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     [Tooltip("İndikten sonra tekrar binmek için en az bekleme (saniye)")]
     [SerializeField] private float boardCooldown = 0.8f;
 
-    [Header("Kürek")]
-    [Tooltip("Bir kürek çekişinde alınan yol (birim)")]
-    [SerializeField] private float strokeLength = 1.2f;
-    [Tooltip("Küreğin öne-arkaya süpürmesi (derece)")]
-    [SerializeField] private float oarSweep = 28f;
-    [Tooltip("Geri dönüşte küreğin sudan kalkması (derece)")]
-    [SerializeField] private float oarLift = 14f;
-
     [Header("Suda sallanma")]
     [SerializeField] private float bobAmount = 0.025f;
     [Tooltip("Sallanma hızı (salınım/sn)")]
@@ -97,17 +125,18 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     [SerializeField] private float turnLean = 0.09f;
     [Tooltip("Giderken burnun kalkması (derece)")]
     [SerializeField] private float surgePitch = 2f;
-    [Tooltip("Her kürek çekişinde botun ileri atılması (birim) ve burnunun kalkması (derece); dönüşte geri süzülür")]
-    [SerializeField] private float strokeLunge = 0.08f;
-    [SerializeField] private float strokePitch = 3f;
 
     private GridWalker walker;
     private GloveCursor glove;
-    private Transform visual, seat, leftOar, rightOar;
-    private Quaternion leftOarRest, rightOarRest;
+    private Transform visual, seat;
+    private readonly System.Collections.Generic.List<(Transform t, Quaternion rest)> wheels =
+        new System.Collections.Generic.List<(Transform, Quaternion)>();
+    private float wheelAngle;
+    private readonly System.Collections.Generic.List<Transform> soilBags = new System.Collections.Generic.List<Transform>();
+    private bool restoredSoil;
     private Vector3 visualRest;
     private Vector3 lastPosition;
-    private float lastYaw, rowWeight, rowPhase, lean;
+    private float lastYaw, moveWeight, lean;
     private bool riding;
     private float lastRideEnd = float.MinValue;
     private Transform maskTransform;
@@ -128,8 +157,24 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     private bool hasHome;
 
     private int FarmRadius => Mathf.Max(0, farmSize) / 2;
-    // Gövdeden tarla merkezine iz üzerinde adım: tarlanın ön kenarı (yarıçap + 1) + halat
-    private int FarmLag => FarmRadius + 1 + (towCells < 0 ? FarmRadius + 1 : towCells);
+    private int ShipBack => Mathf.Max(1, shipLength) / 2;     // gövde hücresinden öne / arkaya
+    private int ShipHalfWidth => Mathf.Max(1, shipWidth) / 2;
+    // Gövdeden tarla merkezine iz üzerinde adım: geminin kıçı + tarlanın ön kenarı (yarıçap + 1) + halat
+    private int FarmLag => ShipBack + FarmRadius + 1 + (towCells < 0 ? FarmRadius + 1 + ShipHalfWidth : towCells);
+
+    // Toprak (tarla parçası yapımı; ileride madencilik artırır)
+    public int Soil
+    {
+        get => soil;
+        set => soil = Mathf.Max(0, value);
+    }
+    public void AddSoil(int amount) => Soil = soil + amount;
+    public bool TrySpendSoil(int amount)
+    {
+        if (amount > soil) return false;
+        Soil = soil - amount;
+        return true;
+    }
     private LineRenderer rope;
     private string lastBlockLog;
     private bool HasFarm => farmSize > 0;
@@ -143,6 +188,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         walker = GetComponent<GridWalker>();
         walker.WalkMedium = GridWalker.Medium.Water; // bot hep suda gider (hız/dönüş ayarları GridWalker'da)
         if (modelPrefab != null) BuildModel();
+        // İşaret geminin görseliyle sallansın (prefab'ta kökün child'ı)
+        if (soilStackAnchor != null && visual != null) soilStackAnchor.SetParent(visual, true);
     }
 
     // --- Grid ve kayıt ---
@@ -150,14 +197,16 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     // Sadece su hücreleri
     public override bool CanOccupy(Vector3Int worldCell) => GridManager.Instance != null && GridManager.Instance.IsWater(worldCell);
 
-    // Arka hücre (origin) + ön hücre + arkadaki tarla karesi. Yerleşikken yürüyüşten, yerleşmeden önce kayıttan ya da
-    // rotasyondan (Deg0'da ön +Z; tarla düz arkada). Sıra önemli: [1] ön hücre (OnPlaced kafayı oradan alır).
+    // Gövde hücresi (origin) + ön hücre + geminin dikdörtgeni + arkadaki tarla karesi. Yerleşikken yürüyüşten, yerleşmeden
+    // önce kayıttan ya da rotasyondan (Deg0'da ön +Z; tarla düz arkada). Sıra önemli: [1] ön hücre (OnPlaced kafayı oradan alır).
     public override GridFootprint GetFootprint()
     {
         bool placed = walker != null && walker.IsPlaced;
         Vector3Int front = placed ? walker.HeadCell - walker.BodyCell
                          : restoredHeadOffset ?? GridMaskRotator.RotateOffset(Vector3Int.forward, Rotation);
         var cells = new System.Collections.Generic.List<Vector3Int> { Vector3Int.zero, front };
+        foreach (Vector3Int cell in ShipCells(front, Vector3Int.zero))
+            if (cell != Vector3Int.zero && cell != front) cells.Add(cell);
         if (HasFarm)
         {
             Vector3Int center = placed ? farmCenter - walker.BodyCell : -front * FarmLag;
@@ -165,6 +214,16 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
                 if (cell != Vector3Int.zero && cell != front) cells.Add(cell);
         }
         return new GridFootprint(cells.ToArray());
+    }
+
+    // Geminin kapladığı dikdörtgen: gövde hücresinin etrafında, gidiş yönünde ±ShipBack, yanlara ±ShipHalfWidth
+    private System.Collections.Generic.IEnumerable<Vector3Int> ShipCells(Vector3Int head, Vector3Int body)
+    {
+        Vector3Int forward = head - body;
+        var side = new Vector3Int(forward.z, 0, -forward.x);
+        for (int l = -ShipBack; l <= ShipBack; l++)
+            for (int w = -ShipHalfWidth; w <= ShipHalfWidth; w++)
+                yield return body + forward * l + side * w;
     }
 
     private System.Collections.Generic.IEnumerable<Vector3Int> FarmSquare(Vector3Int center)
@@ -177,11 +236,12 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
 
     // --- Tarla treni (GridWalker her adımda sorar) ---
 
-    // Bu adım atılırsa tarlanın kaplayacağı hücreler (dünya)
+    // Bu adım atılırsa geminin ve tarlanın kaplayacağı hücreler (dünya)
     public System.Collections.Generic.IEnumerable<Vector3Int> CellsFor(Vector3Int head, Vector3Int body)
     {
-        if (!HasFarm) return System.Array.Empty<Vector3Int>();
-        return FarmSquare(FarmCenterFor(head, body, out _));
+        foreach (Vector3Int cell in ShipCells(head, body)) yield return cell;
+        if (!HasFarm) yield break;
+        foreach (Vector3Int cell in FarmSquare(FarmCenterFor(head, body, out _))) yield return cell;
     }
 
     // Adım atıldı: iz güncellenir, tarlanın yeni merkezi
@@ -238,14 +298,15 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         return At(index);
     }
 
-    // Kafa / gövde bu hücrelere giderse, tarlanın gideceği karenin içine düşer mi
+    // Gemi bu kafa / gövdeyle giderse, tarlanın gideceği karenin içine düşer mi
     private bool HitsOwnFarm(Vector3Int newHead, Vector3Int newBody)
     {
         if (!HasFarm || !walker.IsPlaced) return false;
         Vector3Int center = FarmCenterFor(newHead, newBody, out _);
         int r = FarmRadius;
-        bool Inside(Vector3Int cell) => Mathf.Abs(cell.x - center.x) <= r && Mathf.Abs(cell.z - center.z) <= r;
-        return Inside(newHead) || Inside(newBody);
+        foreach (Vector3Int cell in ShipCells(newHead, newBody))
+            if (Mathf.Abs(cell.x - center.x) <= r && Mathf.Abs(cell.z - center.z) <= r) return true;
+        return false;
     }
 
     // Limana dön (sıkışınca): bütün tarlasıyla ilk konduğu yere ışınlanır. Liman doluysa olmaz.
@@ -285,6 +346,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         public bool hasHome;
         public Vector3Int homeHead, homeBody; // liman
         public int farmSize;                  // 0 = prefab'taki
+        public bool hasSoil;
+        public int soil;
         public System.Collections.Generic.List<FarmPieceSave> pieces = new System.Collections.Generic.List<FarmPieceSave>();
     }
 
@@ -306,6 +369,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
             homeHead = homeHead,
             homeBody = homeBody,
             farmSize = farmSize,
+            hasSoil = true,
+            soil = soil,
         };
         if (farmGrid != null)
             foreach (FarmPiece piece in farmGrid.Pieces)
@@ -319,6 +384,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         if (saved == null) return;
         if (saved.front != Vector3Int.zero) restoredHeadOffset = saved.front;
         if (saved.farmSize > 0) farmSize = saved.farmSize;
+        if (saved.hasSoil) soil = Mathf.Max(0, saved.soil);
         if (saved.hasHome)
         {
             hasHome = true;
@@ -365,6 +431,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         else TryBoard();
         Animate(Time.deltaTime);
         UpdateDeck(Time.deltaTime);
+        UpdateSoilStack();
     }
 
     private void TryBoard()
@@ -401,13 +468,15 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         facing.y = 0;
         if (direction == -facing) return; // geri gitme yok (arkada tarla var): U çizerek dönülür
 
-        // Gidilecek yer kara: eldiven o karonun üstüne iner (mouse da oraya taşınır), bot kalır
-        Vector3Int ahead = walker.HeadCell + direction;
-        if (GridManager.Instance != null && GridManager.Instance.TryGetTopBase(ahead.x, ahead.z, out GridData land))
+        // Geminin o yöndeki kenarının hemen ötesi kara: eldiven o karonun üstüne iner (mouse da oraya taşınır), gemi kalır
+        int reach = direction == facing ? ShipBack + 1 : ShipHalfWidth + 1;
+        Vector3Int shore = walker.BodyCell + direction * reach;
+        if (GridManager.Instance != null && GridManager.Instance.TryGetTopBase(shore.x, shore.z, out GridData land))
         {
             EndRide(land.WorldPosition + Vector3.up * 0.5f);
             return;
         }
+        Vector3Int ahead = walker.HeadCell + direction;
 
         if (direction != facing)
         {
@@ -429,7 +498,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         else LogBlocked("ileri: " + block);
     }
 
-    // Kafa / gövde bu hücrelere giderse neden gidemez (null = gidebilir): kafanın hücresi ve tarlanın gideceği hücreler
+    // Kafa / gövde bu hücrelere giderse neden gidemez (null = gidebilir): geminin ve tarlanın gideceği hücreler
     private string BlockReason(Vector3Int newHead, Vector3Int newBody)
     {
         GridManager grid = GridManager.Instance;
@@ -444,8 +513,11 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
             return null;
         }
 
-        string head = Cell(newHead);
-        if (head != null) return "kafa: " + head;
+        foreach (Vector3Int cell in ShipCells(newHead, newBody))
+        {
+            string ship = Cell(cell);
+            if (ship != null) return "gemi: " + ship;
+        }
         if (!HasFarm) return null;
         foreach (Vector3Int cell in FarmSquare(FarmCenterFor(newHead, newBody, out _)))
         {
@@ -513,25 +585,23 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         visual.localPosition = visualRest;
 
         Transform model = Instantiate(modelPrefab, visual).transform;
-        model.localPosition = Vector3.zero;
+        model.localPosition = modelOffset;
         model.localRotation = Quaternion.Euler(modelRotation);
         model.localScale = Vector3.one * modelScale;
 
-        leftOar = Find(model, leftOarName);
-        rightOar = Find(model, rightOarName);
-        if (leftOar != null) leftOarRest = leftOar.localRotation;
-        if (rightOar != null) rightOarRest = rightOar.localRotation;
+        if (!string.IsNullOrEmpty(wheelPrefix))
+            foreach (Transform t in model.GetComponentsInChildren<Transform>(true))
+                if (t != model && t.name.StartsWith(wheelPrefix)) wheels.Add((t, t.localRotation));
 
         seat = new GameObject("Seat").transform;
         seat.SetParent(model, false);
         seat.localPosition = seatOffset;
 
-        // Tıklama / build mode'da silme için gövdeyi saran kutu (kürekler hariç)
+        // Tıklama / build mode'da silme için gövdeyi saran kutu
         bool any = false;
         Bounds bounds = default;
         foreach (Renderer renderer in model.GetComponentsInChildren<Renderer>())
         {
-            if (renderer.transform == leftOar || renderer.transform == rightOar) continue;
             if (!any) bounds = renderer.bounds;
             else bounds.Encapsulate(renderer.bounds);
             any = true;
@@ -577,6 +647,56 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     }
 
 #if UNITY_EDITOR
+    // Çalışırken kurulacak hiyerarşinin aynısı: kök → Visual (su çizgisi) → model (kaydırma, dönüş, ölçek)
+    private Matrix4x4 ModelMatrix() => transform.localToWorldMatrix
+                                       * Matrix4x4.Translate(Vector3.up * (0.5f + waterline))
+                                       * Matrix4x4.TRS(modelOffset, Quaternion.Euler(modelRotation), Vector3.one * modelScale);
+
+    // Prefab modunda gemi görünmüyor (model çalışırken kurulur): tel kafes önizleme, halatın iki ucu (turuncu) ve toprak
+    // torbalarının yerleri (kahverengi)
+    private void OnDrawGizmosSelected()
+    {
+        if (showModelGizmo && !Application.isPlaying && modelPrefab != null)
+        {
+            Matrix4x4 model = ModelMatrix();
+            Matrix4x4 toRoot = modelPrefab.transform.worldToLocalMatrix;
+            Gizmos.color = new Color(0.8f, 0.85f, 0.9f, 0.35f);
+            foreach (MeshFilter filter in modelPrefab.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter.sharedMesh == null) continue;
+                Gizmos.matrix = model * toRoot * filter.transform.localToWorldMatrix;
+                Gizmos.DrawWireMesh(filter.sharedMesh);
+            }
+            Gizmos.matrix = Matrix4x4.identity;
+        }
+
+        // Halat: gemideki uç ve (yaklaşık) tarladaki uç: tarla düz arkada, merkezi gövdeden FarmLag geride
+        Gizmos.color = new Color(1f, 0.55f, 0.1f);
+        Vector3 start = transform.TransformPoint(ropeStart);
+        Gizmos.DrawSphere(start, 0.08f);
+        if (HasFarm)
+        {
+            Vector3 farmFront = transform.TransformPoint(new Vector3(0f, 0.5f + deckHeight, -0.5f - FarmLag + farmSize * 0.5f));
+            Vector3 end = farmFront + transform.rotation * ropeEndOffset;
+            Gizmos.DrawSphere(end, 0.08f);
+            Gizmos.DrawLine(start, end);
+            Gizmos.DrawWireCube(transform.TransformPoint(new Vector3(0f, 0.5f + deckHeight, -0.5f - FarmLag)),
+                                new Vector3(farmSize, 0.02f, farmSize));
+        }
+
+        if (soilStackAnchor != null)
+        {
+            Gizmos.color = new Color(0.55f, 0.35f, 0.2f, 0.8f);
+            Vector3 size = SoilBagSize();
+            foreach (Vector3 slot in SoilSlots(14))
+            {
+                Gizmos.matrix = soilStackAnchor.localToWorldMatrix;
+                Gizmos.DrawWireCube(slot + Vector3.up * size.y * 0.5f, size);
+            }
+            Gizmos.matrix = Matrix4x4.identity;
+        }
+    }
+
     // Maske Scene görünümünde (Play'e girmeden de, prefab modunda da): sarı yarı saydam + tel kafes
     private void OnDrawGizmos()
     {
@@ -592,9 +712,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         if (maskModel == null) return;
 
         // Çalışırken kurulacak hiyerarşinin aynısı: kök → Visual (su çizgisi) → model (dönüş, ölçek) → maske
-        Matrix4x4 model = transform.localToWorldMatrix
-                          * Matrix4x4.Translate(Vector3.up * (0.5f + waterline))
-                          * Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(modelRotation), Vector3.one * modelScale);
+        Matrix4x4 model = ModelMatrix();
         Matrix4x4 toRoot = maskModel.transform.worldToLocalMatrix;
         foreach (MeshFilter filter in maskModel.GetComponentsInChildren<MeshFilter>(true))
             DrawMaskMesh(filter.sharedMesh, model * toRoot * filter.transform.localToWorldMatrix);
@@ -645,7 +763,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
 
         Renderer hull = null;
         foreach (Renderer candidate in model.GetComponentsInChildren<Renderer>())
-            if (candidate.transform != leftOar && candidate.transform != rightOar) { hull = candidate; break; }
+            { hull = candidate; break; }
         var renderer = plank.GetComponent<Renderer>();
         if (hull != null)
         {
@@ -703,11 +821,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     private void UpdateRope()
     {
         if (rope == null) return;
-        float water = transform.position.y + 0.5f;
-        Vector3 from = transform.position - transform.forward * 0.95f; // botun kıçı
-        from.y = water + 0.15f;
-        Vector3 to = deck.position + deck.forward * (farmSize * 0.5f);   // güvertenin ön kenarı
-        to.y = water + deckHeight;
+        Vector3 from = transform.TransformPoint(ropeStart);                                  // geminin kıçı (ayar)
+        Vector3 to = deck.TransformPoint(new Vector3(0f, 0f, farmSize * 0.5f) + ropeEndOffset); // güvertenin ön kenarı
         float sag = Mathf.Min(0.12f, Vector3.Distance(from, to) * 0.05f);
         for (int i = 0; i < rope.positionCount; i++)
         {
@@ -719,6 +834,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     private void OnValidate()
     {
         if (farmSize > 0 && farmSize % 2 == 0) farmSize++; // hep tek sayı: bot ortada
+        shipLength = Mathf.Max(3, shipLength | 1);           // tek sayı, en az 3 (kafa hücresi gemide)
+        shipWidth = Mathf.Max(1, shipWidth | 1);
     }
 
     private void Animate(float dt)
@@ -732,62 +849,98 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         float yawRate = Mathf.DeltaAngle(lastYaw, yaw) / Mathf.Max(dt, 0.0001f);
         lastYaw = yaw;
 
-        rowWeight = Mathf.MoveTowards(rowWeight, distance > 0.0001f ? 1f : 0f, dt * 5f);
-        float previousPhase = rowPhase;
-        rowPhase += distance / Mathf.Max(strokeLength, 0.01f);
-
-        // Kürek suya giriyor (tur başı) / çıkıyor (yarım tur): sıçrama
-        if (rowWeight > 0.5f)
-        {
-            bool entered = Mathf.Floor(rowPhase) > Mathf.Floor(previousPhase);
-            bool exited = Mathf.Floor(rowPhase - 0.5f) > Mathf.Floor(previousPhase - 0.5f);
-            if (entered || exited)
-            {
-                if (leftOar != null) waterFx.OarSplash(leftOar.position, -1f, entered);
-                if (rightOar != null) waterFx.OarSplash(rightOar.position, 1f, entered);
-            }
-        }
-        waterFx.Tick(dt, rowWeight > 0.3f);
+        moveWeight = Mathf.MoveTowards(moveWeight, distance > 0.0001f ? 1f : 0f, dt * 5f);
+        waterFx.Tick(dt, moveWeight > 0.3f);
         lean = Mathf.Lerp(lean, Mathf.Clamp(-yawRate * turnLean, -14f, 14f), 1f - Mathf.Exp(-6f * dt));
 
-        // Kürek çekişinin itişi: çekiş yarısında bot ileri atılır, burnu kalkar; dönüş yarısında geri süzülür
-        float stroke = Mathf.Repeat(rowPhase, 1f);
-        float drive = (stroke < 0.5f ? Mathf.Sin(stroke / 0.5f * Mathf.PI) : -0.35f * Mathf.Sin((stroke - 0.5f) / 0.5f * Mathf.PI))
-                      * Mathf.SmoothStep(0f, 1f, rowWeight);
+        // Çarklar: gidilen yol kadar döner (yerinde dönüşte de)
+        wheelAngle += distance * wheelDegreesPerUnit;
+        foreach ((Transform wheel, Quaternion rest) in wheels)
+            if (wheel != null) wheel.localRotation = rest * Quaternion.AngleAxis(wheelAngle, wheelAxis);
 
         // Suda inip kalkma ve yalpalama (farklı hızlarda: tekrar eden bir döngü gibi görünmesin)
         float t = Time.time * bobSpeed * Mathf.PI * 2f;
-        visual.localPosition = visualRest + Vector3.up * (Mathf.Sin(t) * bobAmount) + Vector3.forward * (drive * strokeLunge);
+        visual.localPosition = visualRest + Vector3.up * (Mathf.Sin(t) * bobAmount);
         float roll = Mathf.Sin(t * 0.8f) * rockAngle + lean;
-        float pitch = Mathf.Sin(t * 0.6f + 1f) * rockAngle * 0.6f - surgePitch * rowWeight - strokePitch * Mathf.Max(0f, drive); // eksi = burun yukarı
+        float pitch = Mathf.Sin(t * 0.6f + 1f) * rockAngle * 0.6f - surgePitch * moveWeight; // eksi = burun yukarı
         visual.localRotation = Quaternion.Euler(pitch, 0f, roll);
-
-        AnimateOar(leftOar, leftOarRest, -1f);
-        AnimateOar(rightOar, rightOarRest, 1f);
     }
 
-    // Kürek çekişi: ilk yarı kürek suda önden arkaya süpürür (çekiş), ikinci yarı sudan kalkıp öne döner.
-    // Dönüşler modelin eksenlerinde (modelin uzayında yukarı ve ileri); sol kürek aynalanır (side = -1).
-    private void AnimateOar(Transform oar, Quaternion rest, float side)
+    // --- Toprak deposu ---
+
+    // Torbanın boyu (dizilim aralığı) ve kat yüksekliği: ayardan ya da modelin sınırlarından
+    private Vector3 SoilBagSize()
     {
-        if (oar == null) return;
-        float s = Mathf.Repeat(rowPhase, 1f);
-        float sweep, lift;
-        if (s < 0.5f)
+        Vector3 size = new Vector3(0.3f, 0.3f, 0.3f);
+        if (soilBagModel != null)
         {
-            sweep = Mathf.Lerp(-oarSweep, oarSweep, Mathf.SmoothStep(0f, 1f, s / 0.5f));
-            lift = 0f;
+            var filter = soilBagModel.GetComponentInChildren<MeshFilter>();
+            if (filter != null && filter.sharedMesh != null)
+                size = Vector3.Scale(filter.sharedMesh.bounds.size, filter.transform.lossyScale);
         }
-        else
+        float spacing = soilBagSpacing > 0f ? soilBagSpacing : Mathf.Max(size.x, size.z);
+        float height = soilLayerHeight > 0f ? soilLayerHeight : size.y;
+        return new Vector3(spacing, height, spacing);
+    }
+
+    // Torbaların yerleri (işaretin uzayında, torbanın tabanı): alt kat 3×3, sonra 2×2 (yarım aralık kaydırılmış), en üstte 1
+    private System.Collections.Generic.IEnumerable<Vector3> SoilSlots(int count)
+    {
+        Vector3 size = SoilBagSize();
+        int placed = 0;
+        for (int layer = 0, n = 3; n >= 1 && placed < count; layer++, n--)
+            for (int z = 0; z < n && placed < count; z++)
+                for (int x = 0; x < n && placed < count; x++, placed++)
+                    yield return new Vector3((x - (n - 1) * 0.5f) * size.x, layer * size.y, (z - (n - 1) * 0.5f) * size.z);
+    }
+
+    private const int MaxSoilBags = 14; // 9 + 4 + 1
+
+    // Toprak değiştikçe torbalar eklenir (küçükten büyüyerek) ya da kaldırılır
+    private void UpdateSoilStack()
+    {
+        if (soilBagModel == null || soilStackAnchor == null) return;
+        int target = Mathf.Min(soil, MaxSoilBags);
+        if (target == soilBags.Count) return;
+
+        while (soilBags.Count > target)
         {
-            float k = (s - 0.5f) / 0.5f;
-            sweep = Mathf.Lerp(oarSweep, -oarSweep, Mathf.SmoothStep(0f, 1f, k));
-            lift = Mathf.Sin(k * Mathf.PI) * oarLift;
+            Transform last = soilBags[soilBags.Count - 1];
+            soilBags.RemoveAt(soilBags.Count - 1);
+            if (last != null) Destroy(last.gameObject);
         }
-        float w = Mathf.SmoothStep(0f, 1f, rowWeight);
-        // Sağ kürekte yukarı ekseni etrafında artı açı ucu geriye, ileri ekseni etrafında artı açı ucu yukarı götürür
-        oar.localRotation = Quaternion.AngleAxis(side * sweep * w, Vector3.up)
-                          * Quaternion.AngleAxis(side * lift * w, Vector3.forward)
-                          * rest;
+        if (soilBags.Count == target) return;
+
+        // Torbanın tabanı yuvanın tabanına otursun (model origin'i ortada olabilir)
+        float bottom = 0f;
+        var filter = soilBagModel.GetComponentInChildren<MeshFilter>();
+        if (filter != null && filter.sharedMesh != null) bottom = filter.sharedMesh.bounds.min.y * filter.transform.lossyScale.y;
+
+        int index = 0;
+        foreach (Vector3 slot in SoilSlots(target))
+        {
+            if (index++ < soilBags.Count) continue;
+            Transform bag = Instantiate(soilBagModel, soilStackAnchor).transform;
+            bag.localPosition = slot - Vector3.up * bottom;
+            bag.localRotation = Quaternion.Euler(0f, Random.Range(-12f, 12f), 0f); // hepsi aynı açıda durmasın
+            foreach (Collider collider in bag.GetComponentsInChildren<Collider>()) Destroy(collider);
+            soilBags.Add(bag);
+            StartCoroutine(PopIn(bag, (soilBags.Count - 1) * 0.04f));
+        }
+    }
+
+    private static System.Collections.IEnumerator PopIn(Transform target, float delay)
+    {
+        Vector3 rest = target.localScale;
+        target.localScale = Vector3.zero;
+        for (float wait = 0f; wait < delay; wait += Time.deltaTime) yield return null;
+        for (float t = 0f; t < 1f; t += Time.deltaTime / 0.25f)
+        {
+            if (target == null) yield break;
+            float overshoot = 1f + Mathf.Sin(t * Mathf.PI) * 0.2f * (1f - t);
+            target.localScale = rest * (Mathf.SmoothStep(0f, 1f, t) * overshoot);
+            yield return null;
+        }
+        if (target != null) target.localScale = rest;
     }
 }
