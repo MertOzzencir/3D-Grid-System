@@ -187,8 +187,10 @@ public class InteractableController : MonoBehaviour
     // Elde tutulan grid objesini 90° döndürür. Görsel dönüşü GridDragMotor her karede takip eder.
     private void RotateHeld()
     {
-        if (currentInteracted is GridEntity entity)
-            entity.RotateFootprint();
+        // Tutulan bir grid objesi ya da onun bir parçası (örn. çalışma masasının slotu masayı taşır)
+        GridEntity entity = currentInteracted as GridEntity;
+        if (entity == null && currentInteracted is Component part && part != null) entity = part.GetComponentInParent<GridEntity>();
+        if (entity != null) entity.RotateFootprint();
     }
 
     void OnEnable()

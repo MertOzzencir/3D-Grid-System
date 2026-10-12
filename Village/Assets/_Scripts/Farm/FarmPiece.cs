@@ -39,6 +39,11 @@ public class FarmPiece : GridPlaceable, IInteractable
     private Vector2Int liftedCell;
     private GridMaskRotator.Rotation liftedRotation;
     private bool grabRefused;      // tarla büyürken (kapalı) tutulmaya çalışıldı: hiç kalkmadı
+    private SoilCraftingTable liftedTable; // çalışma masasından alındıysa: konacak yer yoksa masaya döner
+
+    // Çalışma masasında bekliyorsa (yeni yapıldı, henüz alınmadı)
+    public SoilCraftingTable Table { get; private set; }
+    public void OnPlacedOnTable(SoilCraftingTable table) => Table = table;
 
     private void Awake()
     {
@@ -274,6 +279,14 @@ public class FarmPiece : GridPlaceable, IInteractable
     public void InteractContractBeginnig()
     {
         liftedFrom = null;
+        liftedTable = null;
+        if (Table != null)
+        {
+            // Masadan al: tam boyuna döner, masa yeni parça için hazırlanır
+            liftedTable = Table;
+            Table = null;
+            liftedTable.OnPieceTaken(this);
+        }
         grabRefused = Farm != null && Farm.Locked; // tarla büyürken kapalı: parçalar yerinde kalır
         if (grabRefused) return;
         if (Farm != null)
@@ -327,6 +340,12 @@ public class FarmPiece : GridPlaceable, IInteractable
             drag.Abort();
             Rotation = liftedRotation;
             liftedFrom.Attach(this, liftedCell);
+            return;
+        }
+        if (liftedTable != null && !CanDropOnWorld())
+        {
+            drag.Abort();
+            liftedTable.ReturnPiece(this);
             return;
         }
         drag.Cancel();
