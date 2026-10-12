@@ -127,7 +127,7 @@ code { font: 12px var(--mono); background: var(--bg); padding: 1px 5px; border-r
     </div>
     <aside id="panel" aria-live="polite"></aside>
   </div>
-  <p class="foot">Son güncelleme: 9 Ekim 2026 · Kaynak: repodaki <code>DESIGN.md</code> ve <code>CLAUDE.md</code>. Sistem eklendikçe ya da durum değiştikçe bu sayfa güncellenir.</p>
+  <p class="foot">Son güncelleme: 13 Ekim 2026 · Kaynak: repodaki <code>DESIGN.md</code> ve <code>CLAUDE.md</code>. Sistem eklendikçe ya da durum değiştikçe bu sayfa güncellenir.</p>
 </div>
 
 <script>
@@ -141,11 +141,11 @@ const STATUS = {
 // x, y: kutunun ortası (viewBox 1200 × 800)
 const NODES = [
   // --- Yüzen tarla (sol sütun) ---
-  { id: "boat", name: "Bot + tarla treni", status: "done", x: 125, y: 95, tag: "Boat",
-    what: "Bota binip WASD ile suda gezersin. Arkasında halatla çekilen tek sayılı kare bir tarla var (3×3 → 5×5 → 7×7). Tarla botun izinden gecikmeli gelir, dar kanaldan geçemez.",
-    how: ["Mouse botun gövdesine gelince eldiven zıplayıp biner", "Geri gitme yok; yana basınca yerinde döner", "Sıkışınca H: limana dön (şimdilik)", "Kara hücresine sürünce eldiven iner"],
+  { id: "boat", name: "Gemi + tarla treni", status: "done", x: 125, y: 95, tag: "Boat",
+    what: "Gemiye binip WASD ile suda gezersin. Gemi 3×5 hücre kaplar. Arkasında halatla çekilen tek sayılı kare bir tarla var (3×3 → 5×5 → 7×7); tarla geminin adımıyla birlikte, izinden gelir. Gemide toprak deposu var: her toprak birimi bir torba.",
+    how: ["Mouse geminin gövdesine gelince eldiven zıplayıp biner", "Geri gitme yok; yana basınca dönerken bir kare ilerler", "Sıkışınca H: limana dön (şimdilik)", "Kenarın ötesi karaysa eldiven iner", "Toprak: şimdilik elle; torbalar depoda piramit gibi dizilir"],
     files: ["Boat/Boat.cs", "Creatures/Movement/GridWalker.cs"],
-    next: "Limana dönüş H tuşu yerine dünyada iskele ya da UI." },
+    next: "Toprak + tarla parçası yapımı (çalışma masası, yapım platformu). Ada ile gemi arası geçiş cilası. Limana dönüş için iskele / UI." },
   { id: "pieces", name: "Tarla parçaları", status: "done", x: 125, y: 190, tag: "FarmPiece",
     what: "Toprak blokları dünyada normal placeable. Tutup botun tarlasına bırakınca oraya oturur, botla gider. Sadece yan yana birleşir, üst üste konmaz.",
     how: ["Sağ tık basılı tut, R ile döndür", "Tarlanın üstüne bırakınca oturur, tarladan alıp yerini değiştirebilirsin", "Her yerden düzenlenir (ayrı mod yok)"],
