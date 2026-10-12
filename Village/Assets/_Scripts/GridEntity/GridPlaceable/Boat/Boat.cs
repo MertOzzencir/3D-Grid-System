@@ -194,6 +194,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         if (modelPrefab != null) BuildModel();
         // İşaret geminin görseliyle sallansın (prefab'ta kökün child'ı)
         if (soilStackAnchor != null && visual != null) soilStackAnchor.SetParent(visual, true);
+        if (soilBagModel != null && soilStackAnchor == null)
+            Debug.LogWarning("Boat: Soil Stack Anchor atanmamış; toprak torbaları görünmez (prefab'taki SoilStack objesini ata).", this);
     }
 
     // --- Grid ve kayıt ---
