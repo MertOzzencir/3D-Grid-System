@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fca9e232c77ebe1449c1bbd8e3cfff7c, type: 3}
+  m_Name: CraftingTable
+  m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
+  Name: CraftingTable
+  Icon: {fileID: 21300000, guid: 8b32b34c806b4de4cb7f04b3344b6966, type: 3}
+  saveId: 
+  size: {x: 3, y: 2, z: 3}
+  layers:
+  - cells: 010101010101010101
+  - cells: 010101010101010101
+  layoutSize: {x: 3, y: 2, z: 3}
+  legacySize: {x: 0, y: 0}
+  legacyMask: 
+  Prefab: {fileID: 5053209123851743695, guid: 2b0dc6cd135a7df498ed1c41b5bdd0b0, type: 3}
