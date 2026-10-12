@@ -274,6 +274,8 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
 
         if (!(interacted is FarmPiece piece) || Locked) return Vector3.zero;
         Hovered = this;
+        // Mouse şeklin ortasını gösterir (pivot = sol alt köşe; büyük şekiller pivot mouse'tayken tarladan taşıyordu)
+        cell -= ShapeCenter(piece);
         if (!Fits(piece, cell)) return Vector3.zero;
 
         pendingValid = true;
@@ -281,6 +283,20 @@ public class FarmGrid : MonoBehaviour, IToolTarget, IGloveWalkable
         pendingRotation = transform.rotation * piece.GridRotation;
         accept = true;
         return transform.TransformPoint(CellLocal(cell));
+    }
+
+    // Şeklin (o anki dönüşüyle) ortasının pivot'a göre hücresi
+    private static Vector2Int ShapeCenter(FarmPiece piece)
+    {
+        int minX = int.MaxValue, maxX = int.MinValue, minZ = int.MaxValue, maxZ = int.MinValue;
+        foreach (Vector3Int offset in piece.GetFootprint().FilledCells())
+        {
+            if (offset.y != 0) continue;
+            minX = Mathf.Min(minX, offset.x); maxX = Mathf.Max(maxX, offset.x);
+            minZ = Mathf.Min(minZ, offset.z); maxZ = Mathf.Max(maxZ, offset.z);
+        }
+        if (minX > maxX) return Vector2Int.zero;
+        return new Vector2Int(Mathf.FloorToInt((minX + maxX) * 0.5f), Mathf.FloorToInt((minZ + maxZ) * 0.5f));
     }
 
     public Quaternion GetToolTargetRotation() => pendingRotation;
