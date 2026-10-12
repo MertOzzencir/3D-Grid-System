@@ -101,10 +101,9 @@ MonoBehaviour:
   deckHeight: 0.12
   deckThickness: 0.3
   deckColor: {r: 0.72, g: 0.52, b: 0.36, a: 1}
-  deckFollow: 6
   towCells: -1
   ropeColor: {r: 0.55, g: 0.42, b: 0.3, a: 1}
-  ropeStart: {x: 0, y: 1.14, z: -2.87}
+  ropeStart: {x: 0, y: 1.53, z: -2.87}
   ropeEndOffset: {x: 0, y: 0, z: 0}
   logBlockedSteps: 1
   ropeWidth: 0.04
