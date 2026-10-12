@@ -9,8 +9,8 @@ using UnityEngine;
 // açısına göre hücre hücre sürer (W ileri, S geri, A/D sola/sağa; yol bulma yok), kamera botu takip eder.
 // WASD ile gidilecek hücre kara (base) ise eldiven oraya iner, mouse imleci de oraya taşınır. Binerken oyuncu girişi
 // kilitli (şimdilik sadece gezme).
-// Görsel: model kodla kurulur; giderken çarklar (adı wheelPrefix ile başlayan objeler) döner, gemi suda hafif inip
-// kalkar, yalpalar, dönüşte yatar. Toprak deposu: soil kadar torba (soilBagModel) soilStackAnchor'ın üstüne piramit
+// Görsel: model kodla kurulur; gemi suda hafif inip kalkar, yalpalar, dönüşte yatar; yandaki usturmaçalar (darbe
+// lastikleri, adı wheelPrefix ile başlayan objeler) bağlandıkları yerden sarkaç gibi sallanır. Toprak deposu: soil kadar torba (soilBagModel) soilStackAnchor'ın üstüne piramit
 // gibi dizilir (3×3, 2×2, 1).
 // Tarla: botun arkasında tek sayılı kare (3×3, 5×5...), çekme halatıyla botun izinden gelir (IWalkerExtraCells):
 // gövdenin geçtiği hücrelerin izi tutulur, tarla merkezi o izin FarmLag adım gerisindedir. Tek sayılı kare dönünce aynı
@@ -57,12 +57,15 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     [SerializeField] private int shipLength = 5;
     [SerializeField] private int shipWidth = 3;
 
-    [Header("Çarklar")]
-    [Tooltip("Adı bununla başlayan model objeleri çark sayılır (göbek çivileri dahil), giderken döner")]
+    [Header("Usturmaçalar (yandaki darbe lastikleri)")]
+    [Tooltip("Adı bununla başlayan model objeleri usturmaça sayılır (çiviler dahil). Pivot'ları bağlandıkları yerde (üstte) olmalı: " +
+             "oradan sarkaç gibi sallanırlar.")]
     [SerializeField] private string wheelPrefix = "WHEEL";
-    [Tooltip("Çarkın döndüğü eksen (çark objesinin kendi uzayında) ve gidilen birim başına dönüş (derece). Ters dönüyorsa eksi yap.")]
-    [SerializeField] private Vector3 wheelAxis = Vector3.right;
-    [SerializeField] private float wheelDegreesPerUnit = 120f;
+    [Tooltip("Giderken hız (birim/sn) başına geriye savrulma (derece) ve en fazla açı. Ters yöne savruluyorsa eksi yap.")]
+    [SerializeField] private float fenderSwing = 10f;
+    [SerializeField] private float fenderMaxSwing = 18f;
+    [Tooltip("Beklerken hafif sallanma (derece)")]
+    [SerializeField] private float fenderIdleSway = 2.5f;
 
     [Header("Toprak deposu")]
     [Tooltip("Gemideki toprak miktarı (tarla parçası yapmak için). Şimdilik elle; ileride madencilik artıracak. Kaydedilir.")]
@@ -129,9 +132,9 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     private GridWalker walker;
     private GloveCursor glove;
     private Transform visual, seat;
-    private readonly System.Collections.Generic.List<(Transform t, Quaternion rest)> wheels =
-        new System.Collections.Generic.List<(Transform, Quaternion)>();
-    private float wheelAngle;
+    private readonly System.Collections.Generic.List<(Transform t, Quaternion rest, float phase)> fenders =
+        new System.Collections.Generic.List<(Transform, Quaternion, float)>();
+    private float fenderAngle, fenderVelocity; // yaylı savrulma (derece, geminin yan ekseni etrafında)
     private readonly System.Collections.Generic.List<Transform> soilBags = new System.Collections.Generic.List<Transform>();
     private bool restoredSoil;
     private Vector3 visualRest;
@@ -593,7 +596,7 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
 
         if (!string.IsNullOrEmpty(wheelPrefix))
             foreach (Transform t in model.GetComponentsInChildren<Transform>(true))
-                if (t != model && t.name.StartsWith(wheelPrefix)) wheels.Add((t, t.localRotation));
+                if (t != model && t.name.StartsWith(wheelPrefix)) fenders.Add((t, t.localRotation, Random.Range(0f, 6.28f)));
 
         seat = new GameObject("Seat").transform;
         seat.SetParent(model, false);
@@ -857,10 +860,19 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         waterFx.Tick(dt, moveWeight > 0.3f);
         lean = Mathf.Lerp(lean, Mathf.Clamp(-yawRate * turnLean, -14f, 14f), 1f - Mathf.Exp(-6f * dt));
 
-        // Çarklar: gidilen yol kadar döner (yerinde dönüşte de)
-        wheelAngle += distance * wheelDegreesPerUnit;
-        foreach ((Transform wheel, Quaternion rest) in wheels)
-            if (wheel != null) wheel.localRotation = rest * Quaternion.AngleAxis(wheelAngle, wheelAxis);
+        // Usturmaçalar: giderken hareketin gerisinde kalır (yan eksen etrafında geriye), durunca ileri seker (yay);
+        // beklerken her biri kendi zamanlamasıyla hafif sallanır
+        float forwardSpeed = Vector3.Dot(delta, transform.forward) / Mathf.Max(dt, 0.0001f);
+        float swingTarget = Mathf.Clamp(-forwardSpeed * fenderSwing, -fenderMaxSwing, fenderMaxSwing);
+        fenderVelocity += (40f * (swingTarget - fenderAngle) - 3.5f * fenderVelocity) * dt;
+        fenderAngle += fenderVelocity * dt;
+        foreach ((Transform fender, Quaternion rest, float phase) in fenders)
+        {
+            if (fender == null) continue;
+            Vector3 side = fender.parent != null ? fender.parent.InverseTransformDirection(transform.right) : transform.right;
+            float idle = Mathf.Sin(Time.time * bobSpeed * Mathf.PI * 2f * 1.3f + phase) * fenderIdleSway;
+            fender.localRotation = Quaternion.AngleAxis(fenderAngle + idle, side) * rest;
+        }
 
         // Suda inip kalkma ve yalpalama (farklı hızlarda: tekrar eden bir döngü gibi görünmesin)
         float t = Time.time * bobSpeed * Mathf.PI * 2f;
