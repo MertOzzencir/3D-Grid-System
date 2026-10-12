@@ -480,12 +480,14 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
 
         if (direction != facing)
         {
-            // Sert dönüş: kıçının (gövde hücresi) etrafında yerinde 90°; gövde kıpırdamadığı için tarla da yerinde kalır
+            // Dönüş: yeni yöne dönerken bir kare ilerler (geminin ortası o yönde bir kare kayar). Kontrol sadece bu son
+            // hal: yeni yöndeki 3×5 alan (yerinde dönseydi kıçı yandaki karaya girerdi)
             if (walker.IsMoving) return; // o anki adım bitsin
-            Vector3Int pivotHead = walker.BodyCell + direction;
-            string pivotBlock = HitsOwnFarm(pivotHead, walker.BodyCell) ? "kendi tarlasına çarpar" : BlockReason(pivotHead, walker.BodyCell);
-            if (pivotBlock == null && walker.PivotTo(pivotHead)) lastBlockLog = null;
-            else LogBlocked("dönüş: " + (pivotBlock ?? "o an dönülemedi"));
+            Vector3Int turnBody = walker.BodyCell + direction;
+            Vector3Int turnHead = turnBody + direction;
+            string turnBlock = HitsOwnFarm(turnHead, turnBody) ? "kendi tarlasına çarpar" : BlockReason(turnHead, turnBody);
+            if (turnBlock == null && walker.TurnStepTo(turnHead, turnBody)) lastBlockLog = null;
+            else LogBlocked("dönüş: " + (turnBlock ?? "o an dönülemedi"));
             return;
         }
 

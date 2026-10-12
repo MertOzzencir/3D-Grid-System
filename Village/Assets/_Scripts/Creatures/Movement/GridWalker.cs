@@ -202,6 +202,23 @@ public class GridWalker : MonoBehaviour
         return true;
     }
 
+    // Dönerek ilerleme: kafa ve gövde birlikte yeni hücrelerine kayar (örn. gemi yeni yöne dönüp bir kare ilerler);
+    // yön kafa - gövde vektörünü yumuşakça takip eder, kök hafif bir yay çizer. Hücreler doluysa ya da o an adım
+    // atılıyorsa false.
+    public bool TurnStepTo(Vector3Int head, Vector3Int body)
+    {
+        if (!IsPlaced || IsMoving || !Occupy(head, body)) return false;
+        path.Clear();
+        turningAround = false;
+        Vector3 from = (FeetPosition(HeadCell) + FeetPosition(BodyCell)) * 0.5f;
+        Vector3 to = (FeetPosition(head) + FeetPosition(body)) * 0.5f;
+        HeadCell = head;
+        BodyCell = body;
+        StartStep(FeetPosition(head), FeetPosition(body),
+                  Mathf.Max(turnAroundDuration, Vector3.Distance(from, to) / Mathf.Max(speed, 0.01f)));
+        return true;
+    }
+
     public void Stop() => path.Clear(); // o anki adım tamamlanır (zıplama da yarıda kesilmez)
 
     // Yay çizerek yeni iki hücreye zıplar (yol bulmadan, aradakilerin üstünden). İniş hücreleri kalkıştan ÖNCE grid'de
