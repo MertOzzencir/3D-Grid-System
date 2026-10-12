@@ -33,6 +33,8 @@ public class SoilCraftingTable : GridPlaceable, IInteractable, IClickable
     [SerializeField] private float ghostScale = 0.35f;
     [Tooltip("Tepsideki blokların modeli: 1×1 toprak bloğu (pivot hücrenin ortasında, dibi -0.5'te; tarla parçasıyla aynı)")]
     [SerializeField] private GameObject tileModel;
+    [Tooltip("Doldurulmamış hücrelerdeki bloğun malzemesi (saydam). Boşsa bloğun kendi malzemesi kullanılır.")]
+    [SerializeField] private Material ghostMaterial;
 
     [Header("Taşıma")]
     [SerializeField] private float followSpeed = 15f;
@@ -199,13 +201,28 @@ public class SoilCraftingTable : GridPlaceable, IInteractable, IClickable
         }
         foreach (Vector2Int cell in blueprintCells)
         {
-            Transform tile = Instantiate(tileModel, transform).transform;
-            foreach (Collider collider in tile.GetComponentsInChildren<Collider>()) Destroy(collider);
-            tile.localRotation = Quaternion.identity;
-            tile.localPosition = TilePosition(cell, ghostScale);
-            tile.localScale = Vector3.one * (tileScale * ghostScale);
+            Transform tile = CreateTile(cell, ghostScale);
+            if (ghostMaterial != null)
+                foreach (Renderer renderer in tile.GetComponentsInChildren<Renderer>())
+                {
+                    var materials = new Material[renderer.sharedMaterials.Length];
+                    for (int i = 0; i < materials.Length; i++) materials[i] = ghostMaterial;
+                    renderer.sharedMaterials = materials;
+                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
             tiles[cell] = tile;
         }
+    }
+
+    // Tepsiye bir blok (collider'sız)
+    private Transform CreateTile(Vector2Int cell, float scale)
+    {
+        Transform tile = Instantiate(tileModel, transform).transform;
+        foreach (Collider collider in tile.GetComponentsInChildren<Collider>()) Destroy(collider);
+        tile.localRotation = Quaternion.identity;
+        tile.localPosition = TilePosition(cell, scale);
+        tile.localScale = Vector3.one * (tileScale * scale);
+        return tile;
     }
 
     // Bloğun yeri: slotun üst yüzü + bloğun yarı boyu (pivot ortada, dibi -0.5'te)
@@ -249,7 +266,14 @@ public class SoilCraftingTable : GridPlaceable, IInteractable, IClickable
         }
 
         filled.Add(cell);
-        if (tiles.TryGetValue(cell, out Transform tile)) StartCoroutine(GrowTile(tile, cell));
+        if (tiles.TryGetValue(cell, out Transform ghost))
+        {
+            // Saydam blok gider, yerine bloğun kendi malzemesiyle bir blok büyür
+            if (ghost != null) Destroy(ghost.gameObject);
+            Transform tile = CreateTile(cell, ghostScale);
+            tiles[cell] = tile;
+            StartCoroutine(GrowTile(tile, cell));
+        }
         if (filled.Count == blueprintCells.Count) StartCoroutine(CompleteAfter(0.25f));
     }
 
