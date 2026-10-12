@@ -122,6 +122,7 @@ public class SaveManager : MonoBehaviour
         }
 
         T entity = Instantiate(prefab);
+        entity.AssignData(data); // prefab'ı paylaşan SO'lar: şekil kayıttaki SO'dan
         entity.Rotation = save.rotation; // footprint rotasyona bağlı: yerleştirmeden önce
 
         if (entity is ISaveState saveState && !string.IsNullOrEmpty(save.state))

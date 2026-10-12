@@ -41,6 +41,16 @@ public abstract class GridEntitySOBase : ScriptableObject
     public Vector3Int Size => size;
     public abstract GridEntity GetPrefabBase();
 
+    // Prefab'tan bir kopya yaratır ve verisini bu SO yapar (aynı prefab'ı paylaşan SO'lar için şart)
+    public GridEntity Spawn()
+    {
+        GridEntity prefab = GetPrefabBase();
+        if (prefab == null) return null;
+        GridEntity entity = Instantiate(prefab);
+        entity.AssignData(this);
+        return entity;
+    }
+
     public GridFootprint GetFootprint(GridMaskRotator.Rotation rotation = GridMaskRotator.Rotation.Deg0)
     {
         if (cachedFootprints == null)

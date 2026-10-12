@@ -40,4 +40,16 @@ public abstract class GridEntity : MonoBehaviour
     public void RotateFootprint() => rotation = GridMaskRotator.Next(rotation);
 
     public GridEntitySOBase GetData() => data;
+
+    // Bu obje hangi SO'dan yaratıldıysa onun verisi (aynı prefab'ı birden çok SO paylaşabilir: örn. bütün tarla parçası
+    // şekilleri tek 1×1 prefab'tan). Yaratan her yer çağırır (GridEntitySOBase.Spawn); veri değişirse OnDataAssigned.
+    public void AssignData(GridEntitySOBase so)
+    {
+        if (so == null || so == data) return;
+        data = so;
+        OnDataAssigned();
+    }
+
+    // Şekli / görseli veriye bağlı olanlar kendini yeniden kurar (örn. FarmPiece)
+    protected virtual void OnDataAssigned() { }
 }

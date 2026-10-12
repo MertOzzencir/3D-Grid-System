@@ -45,24 +45,56 @@ public class FarmPiece : GridPlaceable, IInteractable
     public SoilCraftingTable Table { get; private set; }
     public void OnPlacedOnTable(SoilCraftingTable table) => Table = table;
 
+    // Hücre görselleri: tileModel'in kopyaları ya da (tileModel yoksa) prefab'taki modelin kendisi + kopyaları
+    private readonly System.Collections.Generic.List<GameObject> tileCopies = new System.Collections.Generic.List<GameObject>();
+    private Transform template;   // tileModel yoksa: prefab'taki 1×1 model (pivot hücresinde durur, diğer hücrelere kopyalanır)
+    private BoxCollider autoBox;  // kodun eklediği tutma kutusu (şekil değişince yeniden boyutlanır)
+
     private void Awake()
     {
         drag = new GridDragMotor(this, followSpeed);
-        if (tileModel != null) BuildTiles();
+        if (tileModel == null)
+            foreach (Transform child in transform)
+                if (child.GetComponentInChildren<Renderer>() != null) { template = child; break; }
+        BuildTiles();
         EnsureCollider();
+    }
+
+    // Veri (şekil) değişti: hücre görselleri ve tutma kutusu yeni şekle göre (aynı prefab her şekil için)
+    protected override void OnDataAssigned()
+    {
+        BuildTiles();
+        if (autoBox != null) FitAutoBox();
     }
 
     // Footprint'in her hücresine 1×1 model (pivot'a göre, Deg0; kök döndükçe hepsi döner)
     private void BuildTiles()
     {
+        foreach (GameObject copy in tileCopies)
+            if (copy != null) Destroy(copy);
+        tileCopies.Clear();
+
         GridEntitySOBase data = GetData();
-        if (data == null) return;
+        if (data == null || (tileModel == null && template == null)) return;
         foreach (Vector3Int offset in data.GetFootprint().FilledCells())
         {
             if (offset.y != 0) continue; // tarla tek kat
-            Transform tile = Instantiate(tileModel, transform).transform;
-            tile.localPosition = new Vector3(offset.x, 0f, offset.z);
-            tile.localRotation = Quaternion.identity;
+            var cell = new Vector3(offset.x, 0f, offset.z);
+            if (tileModel != null)
+            {
+                Transform tile = Instantiate(tileModel, transform).transform;
+                tile.localPosition = cell;
+                tile.localRotation = Quaternion.identity;
+                tileCopies.Add(tile.gameObject);
+            }
+            else if (offset != Vector3Int.zero) // pivot hücresinde prefab'taki model zaten duruyor
+            {
+                Transform tile = Instantiate(template.gameObject, transform).transform;
+                tile.localPosition = template.localPosition + cell;
+                tile.localRotation = template.localRotation;
+                tile.localScale = template.localScale;
+                tileCopies.Add(tile.gameObject);
+            }
         }
     }
 
@@ -72,7 +104,13 @@ public class FarmPiece : GridPlaceable, IInteractable
     private void EnsureCollider()
     {
         if (GetComponent<Collider>() != null) return;
-        var box = gameObject.AddComponent<BoxCollider>();
+        autoBox = gameObject.AddComponent<BoxCollider>();
+        FitAutoBox();
+    }
+
+    private void FitAutoBox()
+    {
+        BoxCollider box = autoBox;
         if (TryGetModelBounds(out Bounds bounds))
         {
             box.center = bounds.center;

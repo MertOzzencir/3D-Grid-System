@@ -21,6 +21,15 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
     }
 
     protected abstract TEntity GetPrefab(int index);
+    // Menüdeki SO (yaratılan kopyaya verisi atanır)
+    protected abstract GridEntitySOBase GetEntityData(int index);
+
+    private TEntity CreateInstance(int index)
+    {
+        TEntity instance = Instantiate(GetPrefab(index));
+        instance.AssignData(GetEntityData(index));
+        return instance;
+    }
     protected abstract bool CanPlace(TEntity entity, Vector3 position);
     protected abstract bool PlaceEntity(TEntity entity, Vector3 position);
     protected abstract bool RemoveEntity(TEntity entity);
@@ -74,7 +83,9 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
         TEntity prefab = GetPrefab(obj - 1);
         if (prefab == null) return;
 
-        float step = Mathf.Max(1, prefab.GetFootprint().Size.x); // her entity arası boşluk, footprint genişliğine göre
+        // Şekil SO'dan gelir (prefab'ı paylaşan SO'lar olabilir): kontrol ve aralık yaratılan kopyayla
+        TEntity instance = CreateInstance(obj - 1);
+        float step = Mathf.Max(1, instance.GetFootprint().Size.x); // her entity arası boşluk, footprint genişliğine göre
 
         Vector3 delta = end - start;
 
@@ -92,11 +103,11 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
         {
             Vector3 pos = start + direction * (step * i);
 
-            if (!CanPlace(prefab, pos)) continue;
-
-            TEntity instance = Instantiate(prefab);
-            PlaceEntity(instance, pos);
+            if (instance == null) instance = CreateInstance(obj - 1);
+            if (!CanPlace(instance, pos)) continue;
+            if (PlaceEntity(instance, pos)) instance = null;
         }
+        if (instance != null) Destroy(instance.gameObject); // hiçbir yere konmayan son kopya
     }
 
     // Build mode'da sağ tık basılı tutulurken mouse'un altından geçen entity'ler silinir (tutma build mode'da kapalı).

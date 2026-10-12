@@ -315,6 +315,7 @@ public class SoilCraftingTable : GridPlaceable, IInteractable, IClickable
         ClearTiles();
         filled.Clear();
         FarmPiece piece = Instantiate(prefab);
+        piece.AssignData(data); // bütün şekiller tek prefab'ı paylaşabilir: şekil blueprint'ten
         PutOnTable(piece);
         StartCoroutine(Pop(piece.transform));
     }

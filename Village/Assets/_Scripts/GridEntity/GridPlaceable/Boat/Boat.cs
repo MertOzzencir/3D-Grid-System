@@ -420,12 +420,14 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         if (restoredPieces == null || SaveManager.Registry == null) return;
         foreach (FarmPieceSave save in restoredPieces)
         {
-            if (!(SaveManager.Registry.GetEntity(save.id)?.GetPrefabBase() is FarmPiece prefab))
+            GridEntitySOBase pieceData = SaveManager.Registry.GetEntity(save.id);
+            if (!(pieceData?.GetPrefabBase() is FarmPiece prefab))
             {
                 Debug.LogWarning($"Boat: tarla parçası '{save.id}' bulunamadı (SaveRegistry), atlandı.", this);
                 continue;
             }
             FarmPiece piece = Instantiate(prefab);
+            piece.AssignData(pieceData);
             piece.Rotation = save.rotation;
             if (!farmGrid.Attach(piece, new Vector2Int(save.x, save.z))) Destroy(piece.gameObject);
         }
