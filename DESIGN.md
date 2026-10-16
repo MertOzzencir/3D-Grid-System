@@ -163,6 +163,14 @@ Tarlayı madenciliğe bağlayan halka. Önce gemi modeli (kullanıcı yapıyor),
 - **Bilinen sorunlar (2026-10-17, kullanıcı):** tarla sistemi büyük bir refactor istiyor: parça yerleştirmesi stabil değil, bazı parçaların tutma kutuları (box collider) sorunlu. Temel atıldı, refactor sonra.
 - **Güncelleme (2026-10-13):** gemi 3×5 oldu. Çalışma masası gemide değil, adada ayrı 3×3 placeable (taşınabilir); üstündeki 3×3 tepside gerçek boyutta yapılır. Blueprint = tarla parçasının SO'su (şekil oradan). Seçim şimdilik basit ekran UI'ı (sonra değiştirilebilir). Toprak şimdilik gemiden otomatik çekilir; ileride matkap / masa kablo (verlet) ile bağlanabilir.
 
+## Taslak: derin build sistemi (2026-10-17, konuşuldu, kod yok)
+Sorun: bugünkü grid her hücrede tek placeable varsayıyor; yarım odun, süs eşyası (ışık, bank, pencere) konamıyor. Üç katman:
+1. **Kaba grid** (bugünkü 1×1): zemin, büyük yapılar, gemi, tarla. Diğer iki katmanın taşıyıcısı.
+2. **İnce grid:** her hücre 2×2×2 = 8 küçük küpe bölünür (0.5 birim; bölme sayısı ayar, ileride 4'e çıkabilir). Her hücrede doluluk maskesi (8 bit). Obje kapladığı küçük küpleri söyler: tam odun 8, yarım odun 4, çeyrek eşya 1-2, yassı eşya alt kat. Mouse yüzeyin 4 çeyreğinden birini gösterir, eşya boyuna göre yerleşir (yarım odunun yönü R ile). Bugünkü objeler "tam dolu" sayılır, sistem bozulmaz. Yerden / bir şeyin üstüne konanlar için.
+3. **Yuvalar (socket):** duvara / tavana / direğe takılanlar (pencere, kapı, lamba, raf, çatı). Parça kendi yuvalarını tanımlar (tür: yüz, yan, üst...), eşya hangi türe takılacağını söyler; elde tutarken uyan yuvalar parlar. Süs takıldığı parçaya bağlı yaşar (taşınır, kaydedilir: parça + yuva). Odun birleştirmesi (WoodSlot) zaten bir yuva sistemi: genelleştirilecek.
+- **Sıra:** ince grid altyapısı (maske) → yarım odun → yuva sistemi (odundan genelleştir) + pencere → serbest küçük eşyalar.
+- **Açık:** süslerin dönüşü (90° mi 45° mi), yuva mı serbest mi (öneri: yuva).
+
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.
 
