@@ -160,6 +160,7 @@ Tarlayı madenciliğe bağlayan halka. Önce gemi modeli (kullanıcı yapıyor),
 - **Biten parça:** platformun üstünde kalır, oyuncu alana kadar orada durur. O sırada gemi ve başka şeyler kullanılamaz.
 - **Doldurma:** her hücreye ayrı tık, çok kısa (bir saniyeden az). Amaç tatmin: doldurma / tamamlama hissi.
 - **Bilinen sorun:** gemi ile adalar arasındaki geçiş karışık; oyuncu eldivenin gemide mi adada mı olduğunu anlamıyor. Geçiş sistemi sonra (cila).
+- **Bilinen sorunlar (2026-10-17, kullanıcı):** tarla sistemi büyük bir refactor istiyor: parça yerleştirmesi stabil değil, bazı parçaların tutma kutuları (box collider) sorunlu. Temel atıldı, refactor sonra.
 - **Güncelleme (2026-10-13):** gemi 3×5 oldu. Çalışma masası gemide değil, adada ayrı 3×3 placeable (taşınabilir); üstündeki 3×3 tepside gerçek boyutta yapılır. Blueprint = tarla parçasının SO'su (şekil oradan). Seçim şimdilik basit ekran UI'ı (sonra değiştirilebilir). Toprak şimdilik gemiden otomatik çekilir; ileride matkap / masa kablo (verlet) ile bağlanabilir.
 
 ## Sonraya bırakılanlar

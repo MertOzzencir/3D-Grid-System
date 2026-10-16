@@ -97,7 +97,7 @@ MonoBehaviour:
   soilStackAnchor: {fileID: 132954020359127902}
   soilBagSpacing: 0
   soilLayerHeight: 0
-  farmSize: 3
+  farmSize: 5
   deckHeight: 0.12
   deckThickness: 0.3
   deckColor: {r: 0.72, g: 0.52, b: 0.36, a: 1}
