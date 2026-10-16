@@ -170,6 +170,8 @@ Sorun: bugünkü grid her hücrede tek placeable varsayıyor; yarım odun, süs 
 3. **Yuvalar (socket):** duvara / tavana / direğe takılanlar (pencere, kapı, lamba, raf, çatı). Parça kendi yuvalarını tanımlar (tür: yüz, yan, üst...), eşya hangi türe takılacağını söyler; elde tutarken uyan yuvalar parlar. Süs takıldığı parçaya bağlı yaşar (taşınır, kaydedilir: parça + yuva). Odun birleştirmesi (WoodSlot) zaten bir yuva sistemi: genelleştirilecek.
 - **Sıra:** ince grid altyapısı (maske) → yarım odun → yuva sistemi (odundan genelleştir) + pencere → serbest küçük eşyalar.
 - **Açık:** süslerin dönüşü (90° mi 45° mi), yuva mı serbest mi (öneri: yuva).
+- **Karar (2026-10-17):** build sistemi 2'lik ince grid. Yapının iskeleti (duvar, zemin, direk, çatı) elle kurulur; küçük dekorasyonlar (lamba, bank, pencere...) üretim masalarında ("printer") yapılıp yapının üstüne / yuvalarına yerleştirilir. Dekorasyonlar da diğer placeable'lar gibi sonradan tutulup grid'de / yuvalar arasında istenen yere taşınabilmeli.
+- **Üretim masaları:** farklı masalar olacak (ör. marangoz tezgahı, cam fırını; adalarla açılabilir). Üretim: gerekli malzemeler masanın üstüne konur, masa eşyayı verir (detayı sonra).
 - **Madencilikle ortak:** aynı 8 bitlik maske madende "kazılmamış küçük küp" demek; matkap değdiği küçük küpü kazar, maske 0 olunca blok kırılır. Tek sistem, iki kullanım.
 
 ## Sonraya bırakılanlar
