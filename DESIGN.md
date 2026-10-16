@@ -170,6 +170,7 @@ Sorun: bugünkü grid her hücrede tek placeable varsayıyor; yarım odun, süs 
 3. **Yuvalar (socket):** duvara / tavana / direğe takılanlar (pencere, kapı, lamba, raf, çatı). Parça kendi yuvalarını tanımlar (tür: yüz, yan, üst...), eşya hangi türe takılacağını söyler; elde tutarken uyan yuvalar parlar. Süs takıldığı parçaya bağlı yaşar (taşınır, kaydedilir: parça + yuva). Odun birleştirmesi (WoodSlot) zaten bir yuva sistemi: genelleştirilecek.
 - **Sıra:** ince grid altyapısı (maske) → yarım odun → yuva sistemi (odundan genelleştir) + pencere → serbest küçük eşyalar.
 - **Açık:** süslerin dönüşü (90° mi 45° mi), yuva mı serbest mi (öneri: yuva).
+- **Madencilikle ortak:** aynı 8 bitlik maske madende "kazılmamış küçük küp" demek; matkap değdiği küçük küpü kazar, maske 0 olunca blok kırılır. Tek sistem, iki kullanım.
 
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.
