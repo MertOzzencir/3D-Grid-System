@@ -6,6 +6,8 @@ public class GridManager : MonoBehaviour
 {
     [SerializeField] private int HeightDebugDistance;
     [SerializeField] private bool showBaseGizmos = true;
+    [Tooltip("İnce grid'i göster: ince objeli hücrelerin 8 küçük küpü (dolu = turkuaz, boş = tel kafes)")]
+    [SerializeField] private bool showFineGizmos = true;
     public static GridManager Instance;
     public Vector3 GridSize;
     public Dictionary<Vector3Int, GridData> Grids = new Dictionary<Vector3Int, GridData>();
@@ -378,11 +380,23 @@ public class GridManager : MonoBehaviour
                 Gizmos.DrawCube(worldPos, Vector3.one * 0.9f);
             }
 
+            // Tam obje: bütün hücre (yarı saydam mavi)
             if (kvp.Value.Placeable != null)
             {
-                Gizmos.color = Color.blue;
-                Gizmos.DrawCube(worldPos + Vector3.up * 0.3f, Vector3.one * 0.4f);
+                Gizmos.color = new Color(0.2f, 0.4f, 1f, 0.35f);
+                Gizmos.DrawCube(worldPos, Vector3.one * 0.95f);
             }
+
+            // İnce grid (2×2×2): dolu küçük küpler turkuaz dolu, boşlar ince tel kafes
+            if (showFineGizmos && kvp.Value.HasFine)
+                for (int bit = 0; bit < 8; bit++)
+                {
+                    var sub = new Vector3((bit & 1) * 0.5f - 0.25f, ((bit >> 2) & 1) * 0.5f - 0.25f, ((bit >> 1) & 1) * 0.5f - 0.25f);
+                    bool filled = (kvp.Value.FineMask & (1 << bit)) != 0;
+                    Gizmos.color = filled ? new Color(0.1f, 0.8f, 0.75f, 0.55f) : new Color(0.1f, 0.8f, 0.75f, 0.35f);
+                    if (filled) Gizmos.DrawCube(worldPos + sub, Vector3.one * 0.45f);
+                    else Gizmos.DrawWireCube(worldPos + sub, Vector3.one * 0.45f);
+                }
         }
     }
 }
