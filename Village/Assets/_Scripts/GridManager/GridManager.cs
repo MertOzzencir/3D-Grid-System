@@ -23,7 +23,7 @@ public class GridManager : MonoBehaviour
     // Base eklenip silinince (örn. ada eteği yeniden kurulsun diye)
     public event Action BasesChanged;
 
-    public bool CanPlaceBase(GridBase entity, Vector3 position) => CanPlaceGeneric(entity, position, d => d.Base);
+    public bool CanPlaceBase(GridBase entity, Vector3 position) => CanPlaceGeneric(entity, position, d => d.Base) && NoFineIn(entity, position);
 
     public bool PlaceBase(GridBase entity, Vector3 position)
     {
@@ -40,9 +40,26 @@ public class GridManager : MonoBehaviour
     }
 
     public bool CanPlaceablePlaceOn(GridPlaceable entity, Vector3 position)
-        => CanPlaceGeneric(entity, position, d => d.Placeable) && PlaceableAllowsCells(entity, position);
+    {
+        if (entity is FinePlaceable fine) return fine.CanPlaceAt(position);
+        return CanPlaceGeneric(entity, position, d => d.Placeable) && PlaceableAllowsCells(entity, position) && NoFineIn(entity, position);
+    }
+
     public bool PlaceablePlaceOn(GridPlaceable entity, Vector3 position)
-        => PlaceableAllowsCells(entity, position) && PlaceGeneric(entity, position, d => d.Placeable, (d, e) => d.Placeable = e);
+    {
+        if (entity is FinePlaceable fine) return fine.PlaceAt(position);
+        return PlaceableAllowsCells(entity, position) && NoFineIn(entity, position) &&
+               PlaceGeneric(entity, position, d => d.Placeable, (d, e) => d.Placeable = e);
+    }
+
+    // Tam objenin hücrelerinde ince obje yok
+    private bool NoFineIn(GridEntity entity, Vector3 position)
+    {
+        Vector3Int origin = GetIndexFromWorldPosition(position);
+        foreach (Vector3Int offset in entity.GetFootprint().FilledCells())
+            if (Grids.TryGetValue(origin + offset, out GridData data) && data.HasFine) return false;
+        return true;
+    }
 
     // Su: en alt kattaki base'siz hücre. Ayrıca tutulmaz/kaydedilmez; base konup silindikçe kendiliğinden değişir.
     // (İleride başka katlarda su gerekirse ayrı bir parametreyle.)
@@ -70,7 +87,16 @@ public class GridManager : MonoBehaviour
             if (!entity.CanOccupy(origin + offset)) return false;
         return true;
     }
-    public bool PlaceableRemoveOn(GridPlaceable entity, bool destroy = true) => RemoveGeneric(entity, d => d.Placeable, d => d.Placeable = null, destroy);
+    public bool PlaceableRemoveOn(GridPlaceable entity, bool destroy = true)
+    {
+        if (entity is FinePlaceable fine)
+        {
+            bool removed = fine.ReleaseCells();
+            if (removed && destroy) Destroy(fine.gameObject);
+            return removed;
+        }
+        return RemoveGeneric(entity, d => d.Placeable, d => d.Placeable = null, destroy);
+    }
 
     // Yürüyen placeable'lar (canlılar): eski hücreleri bırakıp yenilerini kaplar, transform'a dokunmaz.
     // Yeni hücrelerden biri grid dışındaysa ya da başka bir placeable'la doluysa hiçbir şey değişmez (false).
@@ -81,6 +107,7 @@ public class GridManager : MonoBehaviour
         {
             if (!Grids.TryGetValue(origin + offset, out GridData data)) return false;
             if (data.Placeable != null && data.Placeable != entity) return false;
+            if (data.HasFine) return false;
             if (!entity.CanOccupy(originWorld + offset)) return false;
         }
 
@@ -99,7 +126,109 @@ public class GridManager : MonoBehaviour
 
     // Grid'deki her obje bir kez (çok hücreli objeler tekrar etmez)
     public List<GridBase> GetAllBases() => GetPlacedEntities(d => d.Base);
-    public List<GridPlaceable> GetAllPlaceables() => GetPlacedEntities(d => d.Placeable);
+    public List<GridPlaceable> GetAllPlaceables()
+    {
+        List<GridPlaceable> list = GetPlacedEntities(d => d.Placeable);
+        var seen = new HashSet<GridPlaceable>(list);
+        foreach (GridData data in Grids.Values)
+        {
+            if (data.FineOccupants == null) continue;
+            foreach (FineOccupant occupant in data.FineOccupants)
+                if (occupant.Owner != null && seen.Add(occupant.Owner)) list.Add(occupant.Owner);
+        }
+        return list;
+    }
+
+    // ---------- İnce grid (hücre başına 2×2×2) ----------
+    // İnce indeks: f = floor((dünya - grid kökü + 0.5) * 2); hücre = f / 2 (aşağı yuvarlanır), küçük küp = f - hücre * 2.
+    // Küçük küpün ortası (dünya) = grid kökü + f * 0.5 - 0.25.
+
+    public Vector3Int WorldToFine(Vector3 world)
+    {
+        Vector3 local = (world - transform.position + Vector3.one * 0.5f) * 2f;
+        return new Vector3Int(Mathf.FloorToInt(local.x), Mathf.FloorToInt(local.y), Mathf.FloorToInt(local.z));
+    }
+
+    public Vector3 FineCenterWorld(Vector3Int fine) => transform.position + (Vector3)fine * 0.5f - Vector3.one * 0.25f;
+
+    private static int FloorDiv2(int value) => value >= 0 ? value / 2 : (value - 1) / 2;
+    private static Vector3Int FineToCell(Vector3Int fine) => new Vector3Int(FloorDiv2(fine.x), FloorDiv2(fine.y), FloorDiv2(fine.z));
+    private static byte FineBit(Vector3Int fine, Vector3Int cell)
+    {
+        Vector3Int sub = fine - cell * 2;
+        return (byte)(1 << (sub.x + sub.z * 2 + sub.y * 4));
+    }
+
+    // Küçük küp dolu mu (base, tam obje ya da başka bir ince obje); ignore'un kendi küpleri boş sayılır
+    public bool IsFineFilled(Vector3Int fine, FinePlaceable ignore = null)
+    {
+        Vector3Int cell = FineToCell(fine);
+        if (!Grids.TryGetValue(cell, out GridData data)) return true; // grid dışı
+        if (data.Base != null || data.Placeable != null) return true;
+        if (!data.HasFine) return false;
+        byte bit = FineBit(fine, cell);
+        foreach (FineOccupant occupant in data.FineOccupants)
+            if (occupant.Owner != ignore && (occupant.Mask & bit) != 0) return true;
+        return false;
+    }
+
+    // Kutuya (min köşe, boy: küçük küp) ince obje konabilir mi: hepsi boş, su değil, alttan en az bir yerden destekli
+    public bool CanFineOccupy(Vector3Int min, Vector3Int size, FinePlaceable ignore)
+    {
+        bool supported = false;
+        for (int y = 0; y < size.y; y++)
+            for (int z = 0; z < size.z; z++)
+                for (int x = 0; x < size.x; x++)
+                {
+                    Vector3Int fine = min + new Vector3Int(x, y, z);
+                    if (IsFineFilled(fine, ignore)) return false;
+                    Vector3Int cell = FineToCell(fine);
+                    if (IsWater(ManagerPosition + cell)) return false;
+                    if (y == 0 && IsFineFilled(fine + Vector3Int.down, ignore)) supported = true;
+                }
+        return supported;
+    }
+
+    // Kutunun küçük küplerini ince objeye yaz; kapladığı hücreleri döndürür
+    public List<Vector3Int> FineOccupy(FinePlaceable owner, Vector3Int min, Vector3Int size)
+    {
+        var masks = new Dictionary<Vector3Int, byte>();
+        for (int y = 0; y < size.y; y++)
+            for (int z = 0; z < size.z; z++)
+                for (int x = 0; x < size.x; x++)
+                {
+                    Vector3Int fine = min + new Vector3Int(x, y, z);
+                    Vector3Int cell = FineToCell(fine);
+                    masks.TryGetValue(cell, out byte mask);
+                    masks[cell] = (byte)(mask | FineBit(fine, cell));
+                }
+        var cells = new List<Vector3Int>();
+        foreach (KeyValuePair<Vector3Int, byte> pair in masks)
+        {
+            if (!Grids.TryGetValue(pair.Key, out GridData data)) continue;
+            data.FineOccupants ??= new List<FineOccupant>();
+            data.FineOccupants.Add(new FineOccupant { Owner = owner, Mask = pair.Value });
+            data.FineMask |= pair.Value;
+            cells.Add(pair.Key);
+        }
+        return cells;
+    }
+
+    // İnce objenin verilen hücrelerdeki küplerini boşalt
+    public void FineRelease(FinePlaceable owner, List<Vector3Int> cells)
+    {
+        foreach (Vector3Int cell in cells)
+        {
+            if (!Grids.TryGetValue(cell, out GridData data) || data.FineOccupants == null) continue;
+            data.FineOccupants.RemoveAll(o => o.Owner == owner);
+            byte mask = 0;
+            foreach (FineOccupant occupant in data.FineOccupants) mask |= occupant.Mask;
+            data.FineMask = mask;
+        }
+    }
+
+    // Grid indeksi (kayıt için): hücrenin dünya konumu
+    public Vector3Int FineCellWorld(Vector3Int fine) => ManagerPosition + FineToCell(fine);
 
     private List<T> GetPlacedEntities<T>(Func<GridData, T> slotGetter) where T : GridEntity
     {
@@ -264,8 +393,21 @@ public class GridData
     public GridBase Base;
     public GridPlaceable Placeable;
     public Vector3Int WorldPosition;
+
+    // İnce grid: hücre 2×2×2 küçük küpe bölünür; bit = (x + z*2 + y*4). Doluysa ince objeler var (FinePlaceable).
+    // Bir hücrede ya tam obje (Placeable) ya ince objeler olur, ikisi birden değil.
+    [NonSerialized] public byte FineMask;
+    [NonSerialized] public List<FineOccupant> FineOccupants;
+    public bool HasFine => FineMask != 0;
     public GridData(Vector3Int WorldPos)
     {
         WorldPosition = WorldPos;
     }
+}
+
+// Bir ince objenin bir hücrede kapladığı küçük küpler
+public struct FineOccupant
+{
+    public FinePlaceable Owner;
+    public byte Mask;
 }

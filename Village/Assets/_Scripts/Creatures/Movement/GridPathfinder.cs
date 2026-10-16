@@ -17,7 +17,7 @@ public static class GridPathfinder
     {
         GridManager grid = GridManager.Instance;
         if (grid == null || !grid.TryGetCell(cell, out GridData data)) return false;
-        if (data.Base != null || (data.Placeable != null && data.Placeable != ignore)) return false;
+        if (data.Base != null || (data.Placeable != null && data.Placeable != ignore) || data.HasFine) return false;
         return grid.TryGetCell(cell + Vector3Int.down, out GridData below) && below.Base != null;
     }
 
@@ -26,7 +26,7 @@ public static class GridPathfinder
     {
         GridManager grid = GridManager.Instance;
         return grid != null && grid.IsWater(cell) && grid.TryGetCell(cell, out GridData data) &&
-               (data.Placeable == null || data.Placeable == ignore);
+               (data.Placeable == null || data.Placeable == ignore) && !data.HasFine;
     }
 
     // start'tan goal'a yol (start hariç, goal dahil). Bulunamazsa null. maxNodes: arama sınırı (büyük grid'de takılmasın).
