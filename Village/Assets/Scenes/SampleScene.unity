@@ -1944,6 +1944,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridManager
   HeightDebugDistance: 0
   showBaseGizmos: 1
+  showFineGizmos: 1
   GridSize: {x: 35, y: 15, z: 35}
 --- !u!114 &1032872126
 MonoBehaviour:
