@@ -26,7 +26,6 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
 
     [SerializeField] private float followSpeed = 10f;
 
-
     [SerializeField] private int baseLength;
     [SerializeField] private Side[] sides = new Side[0];
 
@@ -36,8 +35,6 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     private string signature;           // şekil değişmedikçe aynı
     private int signatureSteps;
     private readonly List<Renderer>[] sideRenderers = NewSideRenderers();
-    private readonly List<ClayMesher.Piece> clayPieces = new List<ClayMesher.Piece>(); // parçalar (yerel), kil şekli için
-    private GameObject clay;
 
     public int BaseLength => baseLength;
 
@@ -98,26 +95,22 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
 
         foreach (List<Renderer> list in sideRenderers)
             list.Clear();
-        clayPieces.Clear();
 
         AddPiece(catalog.GetWood(baseLength), Vector3Int.zero, Quaternion.identity, baseLength);
         foreach ((WoodSlot slot, int length) in FilledSlots())
         {
             GameObject visual = AddPiece(catalog.GetWood(length), WoodLayout.PieceStart(baseLength, slot), WoodLayout.PieceRotation(slot), length);
-            if (visual != null)
-                sideRenderers[(int)slot.Side].AddRange(visual.GetComponentsInChildren<Renderer>());
+            if (visual == null) continue;
+            sideRenderers[(int)slot.Side].AddRange(visual.GetComponentsInChildren<Renderer>());
+
+            // Ana oduna bağlandığı yere ip (yan parçayla birlikte saydamlaşır)
+            Renderer woodRenderer = visual.GetComponentInChildren<Renderer>();
+            GameObject rope = WoodMerger.Instance != null
+                ? WoodMerger.Instance.Rope.Attach(visual.transform.parent, woodRenderer != null ? woodRenderer.sharedMaterial : null)
+                : null;
+            if (rope != null)
+                sideRenderers[(int)slot.Side].AddRange(rope.GetComponentsInChildren<Renderer>());
         }
-
-        BuildClay();
-    }
-
-    // Parçaların ayrı modelleri yerine kaynaşmış tek şekil (bir kez; yapı değişince MergedWood yeniden yaratılıyor).
-    // Ayarlar WoodMerger'da.
-    private void BuildClay()
-    {
-        if (clay != null) Destroy(clay);
-        if (WoodMerger.Instance != null)
-            clay = WoodMerger.Instance.AttachClay(transform, clayPieces, GetComponentsInChildren<Renderer>());
     }
 
     public override GridFootprint GetFootprint()
@@ -175,9 +168,6 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
             box.center = bounds.center;
             box.size = bounds.size;
         }
-        // Kil şekli için parçanın hücreleri
-        if (WoodMerger.Instance != null)
-            clayPieces.Add(WoodMerger.Instance.ClayPiece(start, rotation, length));
         else
         {
             Vector3 axis = rotation * Vector3.up;

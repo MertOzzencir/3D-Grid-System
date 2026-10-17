@@ -19,42 +19,10 @@ public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiec
     private GridDragMotor drag;
     private WoodMergeTarget mergeTarget;
 
-    private Vector3 visualRestPosition;      // görselin dinlenme pozu (düşme animasyonu başlamadan, kil şekli için)
-    private Quaternion visualRestRotation = Quaternion.identity;
-
     private void Awake()
     {
         drag = new GridDragMotor(this, followSpeed);
         mergeTarget = new WoodMergeTarget(this);
-        if (Visual != null)
-        {
-            visualRestPosition = Visual.localPosition;
-            visualRestRotation = Visual.localRotation;
-        }
-    }
-
-    // Kil görünüm (WoodMerger açtıysa): modeli tek parça kil şekliyle değiştirilir. Şekil grid'den (hücreler, sabit
-    // kalınlık), modelden değil. Şekil görselin (Visual) çocuğu: ağaçtan düşme animasyonu görseli taşıyor. Görselin
-    // ölçeği (örn. 2BR'de 1, 2, 1) geri alınır ki şekil ölçeksiz hesaplansın. Aynı uzunluktaki odunlar aynı şekli
-    // paylaşır (önbellek).
-    private void Start()
-    {
-        WoodMerger merger = WoodMerger.Instance;
-        if (merger == null || Visual == null) return;
-
-        Renderer[] renderers = Visual.GetComponentsInChildren<Renderer>();
-        var space = new GameObject("Clay Space").transform;
-        space.SetParent(Visual, false);
-        Vector3 s = Visual.localScale;
-        space.localScale = new Vector3(1f / s.x, 1f / s.y, 1f / s.z);
-
-        // Hücreler: kökün uzayında (0, i, 0), dönüşsüz (kök alt hücrenin ortasında, odun dik); görselin ölçeksiz uzayına
-        // görselin dinlenme pozuyla çevrilir (düşme animasyonu sürüyor olabilir)
-        Quaternion toSpace = Quaternion.Inverse(visualRestRotation);
-        var piece = new ClayMesher.Piece { start = toSpace * -visualRestPosition, rotation = toSpace, length = Length };
-        string key = $"wood:{Length}:{Vector3Int.RoundToInt(piece.start * 100f)}:{Vector3Int.RoundToInt(visualRestRotation.eulerAngles)}";
-        GameObject clay = merger.AttachClay(space, new System.Collections.Generic.List<ClayMesher.Piece> { piece }, renderers, key);
-        if (clay == null) Destroy(space.gameObject);
     }
 
     // --- IInteractable: bu odun elde taşınırken ---

@@ -12,8 +12,6 @@ VARIANTS = [
     # name: shader adı, output: çıktı dosyası, description: başlık açıklaması
     # vertex: (include, fonksiyon) → pozisyon (ve normal) deforme edilir
     # fragment: (include, fonksiyon) ya da None → fonksiyon(input.positionCS) fragment'ın başında çağrılır (örn. clip)
-    # surface (isteğe bağlı): (include, fonksiyon) → ForwardLit ve GBuffer'da InitializeStandardLitSurfaceData yerine
-    #   fonksiyon(uv, surfaceData) çağrılır (makro; include pass dosyasından önce, fonksiyon da makro olabilir)
     dict(name="Village/Tree Chop Lit", output="TreeChopLit.shader",
          description="balta vuruşunda gövde göçüğü (ChopDent.hlsl) + rüzgârda salınım (Wind.hlsl), ikisi TreeVertex.hlsl'de",
          vertex=("TreeVertex.hlsl", "ApplyTreeVertex"), fragment=None),
@@ -24,9 +22,6 @@ VARIANTS = [
          description="vuruşta yerel jöle titreşimi, örn. kediye şaplak (Jiggle.hlsl)",
          vertex=("Jiggle.hlsl", "ApplyJiggle"), fragment=None),
 ]
-
-# InitializeStandardLitSurfaceData'yı çağıran pass'ler (surface için)
-SURFACE_PASSES = ["Shaders/LitForwardPass.hlsl", "Shaders/LitGBufferPass.hlsl"]
 
 # (orijinal vertex, pass include'u, pozisyon alanı, normal alanı ya da None)
 VERTEX_PASSES = [
@@ -130,9 +125,6 @@ def make_variant(urp, lit, v):
     if v["fragment"]:
         header += (f"// ForwardLit, GBuffer, DepthOnly, DepthNormals fragment'ı önce {v['fragment'][1]} çağırır "
                    "(ShadowCaster hariç).\n")
-    if v.get("surface"):
-        header += (f"// ForwardLit ve GBuffer'da yüzey verisi {v['surface'][1]} ile hesaplanır "
-                   "(InitializeStandardLitSurfaceData yerine).\n")
     header += "// Elle düzenlenmez: Editor~/make_lit_variants.py ile üretilir, URP güncellenince yeniden üret.\n"
     t = lit.replace('Shader "Universal Render Pipeline/Lit"', header + f'Shader "{v["name"]}"', 1)
 
@@ -173,19 +165,6 @@ def make_variant(urp, lit, v):
     for pass_include, blocks in additions.items():
         line = include_line(pass_include)
         t = t.replace(line, line + "".join("\n            " + block for block in blocks))
-
-    if v.get("surface"):
-        surface_include, surface_function = v["surface"]
-        for pass_include in SURFACE_PASSES:
-            line = include_line(pass_include)
-            call = "InitializeStandardLitSurfaceData(input.uv, surfaceData);"
-            if t.count(line) != 1 or read(os.path.join(urp, pass_include)).count(call) != 1:
-                sys.exit(f"Lit.shader / {pass_include} beklenen yapıda değil (surface)")
-            t = t.replace(line,
-                          f"#include \"{surface_include}\"\n"
-                          f"            #define InitializeStandardLitSurfaceData(uv, outSurfaceData) "
-                          f"{surface_function}(uv, outSurfaceData)\n"
-                          f"            " + line)
     return t
 
 
