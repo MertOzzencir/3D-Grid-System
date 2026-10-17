@@ -19,15 +19,24 @@ public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiec
     private GridDragMotor drag;
     private WoodMergeTarget mergeTarget;
 
+    private Vector3 visualRestPosition;      // görselin dinlenme pozu (düşme animasyonu başlamadan, kil şekli için)
+    private Quaternion visualRestRotation = Quaternion.identity;
+
     private void Awake()
     {
         drag = new GridDragMotor(this, followSpeed);
         mergeTarget = new WoodMergeTarget(this);
+        if (Visual != null)
+        {
+            visualRestPosition = Visual.localPosition;
+            visualRestRotation = Visual.localRotation;
+        }
     }
 
-    // Kil görünüm (WoodMerger açtıysa): modeli tek parça kil şekliyle değiştirilir. Şekil görselin (Visual) çocuğu:
-    // ağaçtan düşme animasyonu görseli taşıyor. Görselin ölçeği (örn. 2BR'de 1, 2, 1) geri alınır ki şekil ölçeksiz
-    // hesaplansın (yoksa köşeler uzardı). Aynı uzunluktaki odunlar aynı şekli paylaşır (önbellek).
+    // Kil görünüm (WoodMerger açtıysa): modeli tek parça kil şekliyle değiştirilir. Şekil grid'den (hücreler, sabit
+    // kalınlık), modelden değil. Şekil görselin (Visual) çocuğu: ağaçtan düşme animasyonu görseli taşıyor. Görselin
+    // ölçeği (örn. 2BR'de 1, 2, 1) geri alınır ki şekil ölçeksiz hesaplansın. Aynı uzunluktaki odunlar aynı şekli
+    // paylaşır (önbellek).
     private void Start()
     {
         WoodMerger merger = WoodMerger.Instance;
@@ -39,26 +48,10 @@ public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiec
         Vector3 s = Visual.localScale;
         space.localScale = new Vector3(1f / s.x, 1f / s.y, 1f / s.z);
 
-        bool found = false;
-        Bounds bounds = default;
-        foreach (MeshFilter filter in Visual.GetComponentsInChildren<MeshFilter>())
-        {
-            if (filter.sharedMesh == null) continue;
-            Bounds mesh = filter.sharedMesh.bounds;
-            for (int i = 0; i < 8; i++)
-            {
-                Vector3 corner = mesh.center + Vector3.Scale(mesh.extents,
-                    new Vector3((i & 1) == 0 ? -1f : 1f, (i & 2) == 0 ? -1f : 1f, (i & 4) == 0 ? -1f : 1f));
-                Vector3 point = space.InverseTransformPoint(filter.transform.TransformPoint(corner));
-                if (!found) { bounds = new Bounds(point, Vector3.zero); found = true; }
-                else bounds.Encapsulate(point);
-            }
-        }
-        if (!found)
-        {
-            Destroy(space.gameObject);
-            return;
-        }
+        // Kök alt hücrenin ortasında, odun dik: hücreler (0,0,0)..(0,L-1,0); kutu görselin ölçeksiz uzayına, görselin
+        // dinlenme pozuna göre çevrilir (düşme animasyonu sürüyor olabilir)
+        Bounds rootBox = merger.PieceBox(Vector3.zero, Vector3.up, Length, false);
+        var bounds = new Bounds(Quaternion.Inverse(visualRestRotation) * (rootBox.center - visualRestPosition), rootBox.size);
         string key = $"wood:{Vector3Int.RoundToInt(bounds.center * 100f)}:{Vector3Int.RoundToInt(bounds.size * 100f)}";
         GameObject clay = merger.AttachClay(space, new System.Collections.Generic.List<Bounds> { bounds }, renderers, key);
         if (clay == null) Destroy(space.gameObject);

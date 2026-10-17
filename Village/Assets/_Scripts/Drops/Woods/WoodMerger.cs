@@ -27,6 +27,9 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private float clayVoxelSize = 0.07f;
     [Tooltip("Dış kenarların yuvarlaklığı (birim)")]
     [SerializeField] private float clayCornerRadius = 0.12f;
+    [Tooltip("Odunun kalınlığı (birim, 1 = hücre kadar). Şekil modelden değil grid'den hesaplanır: bütün parçalar aynı " +
+             "kesitte, hücre sınırlarında (model sınırları biraz farklı olduğu için birleşim yerlerinde basamak kalıyordu).")]
+    [SerializeField, Range(0.3f, 1f)] private float clayThickness = 0.9f;
     [Tooltip("Parça sınırlarını içe çekme (birim): şekil modelden şişman görünürse")]
     [SerializeField] private float clayInset = 0f;
     [Tooltip("Kil şeklinin malzemesi (düz URP Lit; odunun WoodWobbleLit'i olmaz, vertex kaydırıyor). Build'de gerekli.")]
@@ -58,6 +61,18 @@ public class WoodMerger : MonoBehaviour
         clay.AddComponent<MeshFilter>().sharedMesh = mesh;
         clay.AddComponent<MeshRenderer>().sharedMaterial = ClayMaterial();
         return clay;
+    }
+
+    // Grid'den odun parçasının kutusu (çağıranın uzayında): start = ilk hücrenin ortası, axis = uzandığı yön (birim
+    // vektör), length = hücre sayısı. Uzunluk boyunca hücre sınırlarında; kesit clayThickness. reachBack: bağlandığı
+    // dik oduna kadar yarım hücre geri uzanır (yan parçalar: arada boşluk kalmasın).
+    public Bounds PieceBox(Vector3 start, Vector3 axis, int length, bool reachBack)
+    {
+        Vector3 from = start - axis * (reachBack ? 1f : 0.5f);
+        Vector3 to = start + axis * (length - 0.5f);
+        Vector3 along = new Vector3(Mathf.Abs(axis.x), Mathf.Abs(axis.y), Mathf.Abs(axis.z));
+        Vector3 size = along * Vector3.Distance(from, to) + (Vector3.one - along) * clayThickness;
+        return new Bounds((from + to) * 0.5f, size);
     }
 
     // Renk malzemede (MaterialPropertyBlock'la değil: birleşme sallanması kendi bloğunu yazıp siliyor)
