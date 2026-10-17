@@ -48,14 +48,11 @@ public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiec
         Vector3 s = Visual.localScale;
         space.localScale = new Vector3(1f / s.x, 1f / s.y, 1f / s.z);
 
-        // Kök alt hücrenin ortasında, odun dik: hücreler (0,0,0)..(0,L-1,0); kutu görselin ölçeksiz uzayına, görselin
-        // dinlenme pozuna göre çevrilir (düşme animasyonu sürüyor olabilir)
-        Bounds rootBox = merger.PieceBox(Vector3.zero, Vector3.up, Length, false);
-        var bounds = new Bounds(Quaternion.Inverse(visualRestRotation) * (rootBox.center - visualRestPosition), rootBox.size);
-        string key = $"wood:{Vector3Int.RoundToInt(bounds.center * 100f)}:{Vector3Int.RoundToInt(bounds.size * 100f)}";
-        // Hücreler: kökün uzayında (0, i, 0), dönüşsüz; görselin uzayına aynı dinlenme pozuyla
+        // Hücreler: kökün uzayında (0, i, 0), dönüşsüz (kök alt hücrenin ortasında, odun dik); görselin ölçeksiz uzayına
+        // görselin dinlenme pozuyla çevrilir (düşme animasyonu sürüyor olabilir)
         Quaternion toSpace = Quaternion.Inverse(visualRestRotation);
-        var piece = new ClayMesher.Piece { shape = bounds, start = toSpace * -visualRestPosition, rotation = toSpace, length = Length };
+        var piece = new ClayMesher.Piece { start = toSpace * -visualRestPosition, rotation = toSpace, length = Length };
+        string key = $"wood:{Length}:{Vector3Int.RoundToInt(piece.start * 100f)}:{Vector3Int.RoundToInt(visualRestRotation.eulerAngles)}";
         GameObject clay = merger.AttachClay(space, new System.Collections.Generic.List<ClayMesher.Piece> { piece }, renderers, key);
         if (clay == null) Destroy(space.gameObject);
     }

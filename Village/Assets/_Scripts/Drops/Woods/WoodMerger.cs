@@ -25,17 +25,13 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private bool clayLook = true;
     [Tooltip("Şeklin ızgara aralığı (birim): küçük = daha pürüzsüz ama üretimi daha yavaş")]
     [SerializeField] private float clayVoxelSize = 0.07f;
-    [Tooltip("Dış kenarların yuvarlaklığı (birim)")]
-    [SerializeField] private float clayCornerRadius = 0.12f;
-    [Tooltip("Odunun kalınlığı (birim, 1 = hücre kadar). Şekil modelden değil grid'den hesaplanır: bütün parçalar aynı " +
-             "kesitte, hücre sınırlarında. 1'den küçükse uzunluk boyunca uçlar yine hücre sınırında kaldığı için birleşimlerde " +
-             "basamak olur ve yan yana odunlar arasında boşluk kalır; 1 önerilir.")]
-    [SerializeField, Range(0.3f, 1f)] private float clayThickness = 1f;
-    [Tooltip("Parça sınırlarını içe çekme (birim): şekil modelden şişman görünürse")]
-    [SerializeField] private float clayInset = 0f;
-    [Tooltip("Kaynaşma yerlerinin (iki dolu hücrenin değdiği yüzlerin çevresi) sade kalan genişliği (birim): orada normal " +
-             "map yok, renk düz; hücrenin ortasına doğru 1BR'nin detayı geri gelir.")]
-    [SerializeField, Range(0.01f, 0.5f)] private float clayFuseWidth = 0.25f;
+    [Tooltip("Dolu bir komşuya bakan yönde 1BR modeli hücre ortasından bu kadar (birim) uzakta düz uzatılmaya başlar: " +
+             "modelin o yöndeki orta kesiti komşuya kadar çekilir, iki odunun yuvarlak kenarları kalkar. Modelin yan yüzünün " +
+             "düz kısmında olmalı (küçük = kaynaşma geniş, büyük = modelin kenar yuvarlağı birleşime yaklaşır).")]
+    [SerializeField, Range(0.05f, 0.45f)] private float clayExtrudeFrom = 0.3f;
+    [Tooltip("Uzatmanın başından hücrenin ortasına doğru 1BR'nin detayının (renk + normal map) geri geldiği genişlik " +
+             "(birim). Uzatılan (kaynaşan) kısım dokunun boş, düz renkli yerinden; normal map yok.")]
+    [SerializeField, Range(0.01f, 0.4f)] private float clayFuseWidth = 0.1f;
     [Tooltip("Kil şeklinin malzemesi. Shader'ı 'Village/Clay Wood Lit' olmalı; dokular 1BR odunun dokuları (Base Map = renk, " +
              "Normal Map = normal), görünüm her hücredeki hayali 1BR'den alınır. Build'de gerekli.")]
     [SerializeField] private Material clayMaterial;
@@ -54,10 +50,10 @@ public class WoodMerger : MonoBehaviour
     public GameObject AttachClay(Transform owner, System.Collections.Generic.List<ClayMesher.Piece> pieces, Renderer[] hide, string cacheKey = null)
     {
         if (!clayLook || pieces.Count == 0) return null;
-        string key = cacheKey == null ? null : $"{cacheKey}|{clayVoxelSize}|{clayCornerRadius}|{clayInset}|{clayFuseWidth}";
+        string key = cacheKey == null ? null : $"{cacheKey}|{clayVoxelSize}|{clayExtrudeFrom}|{clayFuseWidth}";
         if (key == null || !clayCache.TryGetValue(key, out Mesh mesh) || mesh == null)
         {
-            mesh = ClayMesher.Build(pieces, ClayReference(), clayVoxelSize, clayCornerRadius, clayFuseWidth, clayInset);
+            mesh = ClayMesher.Build(pieces, ClayReference(), clayVoxelSize, clayExtrudeFrom, clayFuseWidth);
             if (key != null && mesh != null) clayCache[key] = mesh;
         }
         if (mesh == null) return null;
@@ -71,28 +67,11 @@ public class WoodMerger : MonoBehaviour
         return clay;
     }
 
-    // Grid'den odun parçasının kutusu (çağıranın uzayında): start = ilk hücrenin ortası, axis = uzandığı yön (birim
-    // vektör), length = hücre sayısı. Uzunluk boyunca hücre sınırlarında; kesit clayThickness. reachBack: bağlandığı
-    // dik oduna kadar yarım hücre geri uzanır (yan parçalar: arada boşluk kalmasın).
-    public Bounds PieceBox(Vector3 start, Vector3 axis, int length, bool reachBack)
-    {
-        Vector3 from = start - axis * (reachBack ? 1f : 0.5f);
-        Vector3 to = start + axis * (length - 0.5f);
-        Vector3 along = new Vector3(Mathf.Abs(axis.x), Mathf.Abs(axis.y), Mathf.Abs(axis.z));
-        Vector3 size = along * Vector3.Distance(from, to) + (Vector3.one - along) * clayThickness;
-        return new Bounds((from + to) * 0.5f, size);
-    }
+    // Kil şekli için parça: hücreleri (1BR bunlara rotation ile oturur)
+    public ClayMesher.Piece ClayPiece(Vector3 start, Quaternion rotation, int length) =>
+        new ClayMesher.Piece { start = start, rotation = rotation, length = length };
 
-    // Kil şekli için parça: şekil kutusu (reachBack'li) ve hücreleri (1BR bunlara rotation ile oturur)
-    public ClayMesher.Piece ClayPiece(Vector3 start, Quaternion rotation, int length, bool reachBack) => new ClayMesher.Piece
-    {
-        shape = PieceBox(start, rotation * Vector3.up, length, reachBack),
-        start = start,
-        rotation = rotation,
-        length = length
-    };
-
-    // Görünümün alındığı 1BR: katalogdaki 1 boyluk odunun modeli, kökünün (= hücrenin ortası) uzayında. Mesh'in
+    // Şeklin ve görünümün alındığı 1BR: katalogdaki 1 boyluk odunun modeli, kökünün (= hücrenin ortası) uzayında. Mesh'in
     // Read/Write'ı açık olmalı (build'de okunabilsin).
     private ClayMesher.Reference ClayReference()
     {
@@ -102,12 +81,12 @@ public class WoodMerger : MonoBehaviour
         MeshFilter filter = wood != null ? wood.GetComponentInChildren<MeshFilter>(true) : null;
         if (filter == null || filter.sharedMesh == null)
         {
-            Debug.LogWarning("WoodMerger: katalogda 1BR odun ya da modeli yok; kil şeklinde doku olmayacak.", this);
+            Debug.LogWarning("WoodMerger: katalogda 1BR odun ya da modeli yok; kil şekli kurulamaz.", this);
             return null;
         }
         if (!filter.sharedMesh.isReadable)
         {
-            Debug.LogWarning($"WoodMerger: 1BR modelinin ({filter.sharedMesh.name}) Read/Write'ı kapalı; fbx'in Import ayarlarında aç.", this);
+            Debug.LogWarning($"WoodMerger: 1BR modelinin ({filter.sharedMesh.name}) Read/Write'ı kapalı; fbx'in Import ayarlarında aç (kil şekli kurulamaz).", this);
             return null;
         }
         Matrix4x4 toCell = wood.transform.worldToLocalMatrix * filter.transform.localToWorldMatrix;

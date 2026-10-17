@@ -175,9 +175,9 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
             box.center = bounds.center;
             box.size = bounds.size;
         }
-        // Kil şekli için parçanın grid'deki kutusu (modelin sınırı değil: bütün parçalar aynı kesitte, hücre hizasında)
+        // Kil şekli için parçanın hücreleri
         if (WoodMerger.Instance != null)
-            clayPieces.Add(WoodMerger.Instance.ClayPiece(start, rotation, length, start != Vector3Int.zero));
+            clayPieces.Add(WoodMerger.Instance.ClayPiece(start, rotation, length));
         else
         {
             Vector3 axis = rotation * Vector3.up;
