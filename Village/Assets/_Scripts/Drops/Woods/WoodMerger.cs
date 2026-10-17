@@ -33,7 +33,8 @@ public class WoodMerger : MonoBehaviour
     [SerializeField, Range(0.3f, 1f)] private float clayThickness = 1f;
     [Tooltip("Parça sınırlarını içe çekme (birim): şekil modelden şişman görünürse")]
     [SerializeField] private float clayInset = 0f;
-    [Tooltip("Kil şeklinin malzemesi (düz URP Lit; odunun WoodWobbleLit'i olmaz, vertex kaydırıyor). Build'de gerekli.")]
+    [Tooltip("Kil şeklinin malzemesi. Shader'ı 'Village/Wood Wobble Lit' olmalı ki birleşince sallansın (başka shader'da " +
+             "şekil sallanmaz). Build'de gerekli.")]
     [SerializeField] private Material clayMaterial;
     [Tooltip("Clay Material boşken (sadece editörde) kullanılan düz malzemenin rengi")]
     [SerializeField] private Color clayColor = new Color(0.78f, 0.58f, 0.38f);
@@ -41,6 +42,7 @@ public class WoodMerger : MonoBehaviour
     private static readonly System.Collections.Generic.Dictionary<string, Mesh> clayCache =
         new System.Collections.Generic.Dictionary<string, Mesh>();
     private Material fallbackClay;
+    private bool warnedClayShader;
 
     // Kaynaşmış kil şeklini owner'ın çocuğu olarak takar, verilen renderer'ları gizler. boxes owner'ın uzayında.
     // cacheKey: aynı şekli tekrar hesaplamamak için (tek odunlar). Kil görünüm kapalıysa null.
@@ -79,11 +81,21 @@ public class WoodMerger : MonoBehaviour
     // Renk malzemede (MaterialPropertyBlock'la değil: birleşme sallanması kendi bloğunu yazıp siliyor)
     private Material ClayMaterial()
     {
-        if (clayMaterial != null) return clayMaterial;
+        if (clayMaterial != null)
+        {
+            if (clayMaterial.shader.name != "Village/Wood Wobble Lit" && !warnedClayShader)
+            {
+                warnedClayShader = true;
+                Debug.LogWarning("WoodMerger: Clay Material'ın shader'ı 'Village/Wood Wobble Lit' değil; kil şekli birleşince sallanmaz.", this);
+            }
+            return clayMaterial;
+        }
 #if UNITY_EDITOR
         if (fallbackClay == null)
         {
-            fallbackClay = new Material(Shader.Find("Universal Render Pipeline/Lit")); // sadece editörde
+            // Sadece editörde: sallanan odun shader'ı (yoksa düz URP Lit)
+            Shader shader = Shader.Find("Village/Wood Wobble Lit") ?? Shader.Find("Universal Render Pipeline/Lit");
+            fallbackClay = new Material(shader);
             fallbackClay.SetColor("_BaseColor", clayColor);
         }
         return fallbackClay;
@@ -150,12 +162,17 @@ public class WoodMerger : MonoBehaviour
         PlayWobble(result, push);
     }
 
-    private void PlayWobble(GridPlaceable result, Vector3 push)
+    private void PlayWobble(GridPlaceable result, Vector3 push) => StartCoroutine(PlayWobbleNextFrame(result, push));
+
+    // Bir kare sonra: tek parça Wood'un kil şekli Start'ta kuruluyor, sallanacak renderer'lar arasında olsun
+    private System.Collections.IEnumerator PlayWobbleNextFrame(GridPlaceable result, Vector3 push)
     {
+        yield return null;
+        if (result == null) yield break;
         GridFootprint footprint = result.PlacedFootprint;
         // Pivot alt hücrenin ortasında; taban yarım hücre aşağıda
         Vector3 basePoint = result.transform.position + Vector3.up * (footprint.Min.y - 0.5f);
-        StartCoroutine(mergeWobble.Play(result.GetComponentsInChildren<Renderer>(), basePoint, footprint.Size.y, push));
+        yield return mergeWobble.Play(result.GetComponentsInChildren<Renderer>(), basePoint, footprint.Size.y, push);
     }
 
     private GridPlaceable SpawnLongWood(int length)
