@@ -2381,6 +2381,13 @@ MonoBehaviour:
     visibleAmount: 0.3
     duration: 0.15
   targetReleaseDistance: 3
+  clayLook: 1
+  clayVoxelSize: 0.07
+  clayCornerRadius: 0.12
+  clayThickness: 1
+  clayInset: 0
+  clayMaterial: {fileID: 2100000, guid: ac6c8ed5e9284be459d38ee02927e3ad, type: 2}
+  clayColor: {r: 0.78, g: 0.58, b: 0.38, a: 1}
 --- !u!4 &1126745012
 Transform:
   m_ObjectHideFlags: 0
