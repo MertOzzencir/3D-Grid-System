@@ -13,7 +13,7 @@ VARIANTS = [
     # vertex: (include, fonksiyon) → pozisyon (ve normal) deforme edilir
     # fragment: (include, fonksiyon) ya da None → fonksiyon(input.positionCS) fragment'ın başında çağrılır (örn. clip)
     # surface (isteğe bağlı): (include, fonksiyon) → ForwardLit ve GBuffer'da InitializeStandardLitSurfaceData yerine
-    #   fonksiyon(uv, input.positionWS, input.normalWS, surfaceData) çağrılır (makro; include pass dosyasından önce)
+    #   fonksiyon(uv, surfaceData) çağrılır (makro; include pass dosyasından önce, fonksiyon da makro olabilir)
     dict(name="Village/Tree Chop Lit", output="TreeChopLit.shader",
          description="balta vuruşunda gövde göçüğü (ChopDent.hlsl) + rüzgârda salınım (Wind.hlsl), ikisi TreeVertex.hlsl'de",
          vertex=("TreeVertex.hlsl", "ApplyTreeVertex"), fragment=None),
@@ -24,10 +24,10 @@ VARIANTS = [
          description="vuruşta yerel jöle titreşimi, örn. kediye şaplak (Jiggle.hlsl)",
          vertex=("Jiggle.hlsl", "ApplyJiggle"), fragment=None),
     dict(name="Village/Clay Wood Lit", output="ClayWoodLit.shader",
-         description="kil odun: Base Map odun dokusu her parçanın yönünde döşenir (ClayWood.hlsl) + birleşmede jöle gibi "
-                     "sallanma (Wobble.hlsl) + noktalı saydamlık (Fade.hlsl)",
+         description="kil odun: 1BR'nin dokuları, kaynaşma yerlerinde düz renk / normal yok (ClayWood.hlsl) + birleşmede "
+                     "jöle gibi sallanma (Wobble.hlsl) + noktalı saydamlık (Fade.hlsl)",
          vertex=("Wobble.hlsl", "ApplyWobble"), fragment=("Fade.hlsl", "ApplyFade"),
-         surface=("ClayWood.hlsl", "ClayWoodSurfaceData")),
+         surface=("ClayWood.hlsl", "CLAY_WOOD_SURFACE")),
 ]
 
 # InitializeStandardLitSurfaceData'yı çağıran pass'ler (surface için)
@@ -189,7 +189,7 @@ def make_variant(urp, lit, v):
             t = t.replace(line,
                           f"#include \"{surface_include}\"\n"
                           f"            #define InitializeStandardLitSurfaceData(uv, outSurfaceData) "
-                          f"{surface_function}(uv, input.positionWS, input.normalWS, outSurfaceData)\n"
+                          f"{surface_function}(uv, outSurfaceData)\n"
                           f"            " + line)
     return t
 

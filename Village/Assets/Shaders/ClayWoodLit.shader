@@ -1,8 +1,8 @@
-// URP Lit kopyası + kil odun: Base Map odun dokusu her parçanın yönünde döşenir (ClayWood.hlsl) + birleşmede jöle gibi sallanma (Wobble.hlsl) + noktalı saydamlık (Fade.hlsl).
+// URP Lit kopyası + kil odun: 1BR'nin dokuları, kaynaşma yerlerinde düz renk / normal yok (ClayWood.hlsl) + birleşmede jöle gibi sallanma (Wobble.hlsl) + noktalı saydamlık (Fade.hlsl).
 // Lit'ten tek fark: ForwardLit, ShadowCaster, GBuffer, DepthOnly, DepthNormals pass'lerinde
 // vertex, URP'nin kendi vertex fonksiyonuna gitmeden önce ApplyWobble ile deforme edilir.
 // ForwardLit, GBuffer, DepthOnly, DepthNormals fragment'ı önce ApplyFade çağırır (ShadowCaster hariç).
-// ForwardLit ve GBuffer'da yüzey verisi ClayWoodSurfaceData ile hesaplanır (InitializeStandardLitSurfaceData yerine).
+// ForwardLit ve GBuffer'da yüzey verisi CLAY_WOOD_SURFACE ile hesaplanır (InitializeStandardLitSurfaceData yerine).
 // Elle düzenlenmez: Editor~/make_lit_variants.py ile üretilir, URP güncellenince yeniden üret.
 Shader "Village/Clay Wood Lit"
 {
@@ -182,7 +182,7 @@ Shader "Village/Clay Wood Lit"
 
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "ClayWood.hlsl"
-            #define InitializeStandardLitSurfaceData(uv, outSurfaceData) ClayWoodSurfaceData(uv, input.positionWS, input.normalWS, outSurfaceData)
+            #define InitializeStandardLitSurfaceData(uv, outSurfaceData) CLAY_WOOD_SURFACE(uv, outSurfaceData)
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
             #include "Wobble.hlsl"
             Varyings VillageLitPassVertex(Attributes input)
@@ -350,7 +350,7 @@ Shader "Village/Clay Wood Lit"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "ClayWood.hlsl"
-            #define InitializeStandardLitSurfaceData(uv, outSurfaceData) ClayWoodSurfaceData(uv, input.positionWS, input.normalWS, outSurfaceData)
+            #define InitializeStandardLitSurfaceData(uv, outSurfaceData) CLAY_WOOD_SURFACE(uv, outSurfaceData)
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitGBufferPass.hlsl"
             #include "Wobble.hlsl"
             Varyings VillageLitGBufferPassVertex(Attributes input)

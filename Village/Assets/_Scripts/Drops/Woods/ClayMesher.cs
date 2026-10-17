@@ -8,19 +8,20 @@ using UnityEngine.Rendering;
 // yuvarlatılır: hacim "en büyük kutular"ına ayrılır (hacmin içinde kalıp hiçbir yöne büyüyemeyen bütün kutular,
 // birbirine binerler), her biri cornerRadius kadar küçültülüp birleşimin mesafe alanından (SDF) cornerRadius çıkarılır.
 // Değen iki parçanın ortak yüzü hacmin içinde kaldığı için oluk/çizgi olmaz; aynı düzlemdeki yüzeyler düz, iç köşeler
-// keskin kalır. (Eskiden her parça ayrı küçültülüyordu: üst üste farklı uzunlukta katlar birleşim yerinde oluk
-// bırakıyordu.) Mesafe alanı ızgarada örneklenip mesh çıkarılır (surface nets).
+// keskin kalır. Mesafe alanı ızgarada örneklenip mesh çıkarılır (surface nets).
 //
-// Lif yönü: her vertex'e hangi yönde uzanan oduna ait olduğu yazılır (UV0 = (X ağırlığı, Z ağırlığı), Y = 1 - ikisi;
-// "Village/Clay Wood Lit" shader'ı dokuyu bu yöne göre döşer). Ağırlık parçanın kendi hücrelerine (lif kutusu,
-// dik oduna uzanan kısım hariç) uzaklıktan: birleşim yerinde grainBlend genişliğinde iki yön yumuşakça karışır.
+// Görünüm 1BR odundan: her odun hücresine (parçanın yönünde döndürülmüş) hayali bir 1BR modeli oturtulur; kilin her
+// vertex'i kendi hücresindeki 1BR'nin en yakın noktasının UV'sini ve tangent'ını alır (Reference). Böylece renk ve
+// normal map 1BR'deki gibi, açıkta kalan uçlarda halka. Kaynaşma yerleri (hücrenin dolu bir komşuyla paylaştığı
+// yüzlerin çevresi, fuseWidth) sade: vertex'e "detay" değeri yazılır (1 = 1BR'nin aynısı, 0 = düz renk, normal yok);
+// tangent.w = işaret × (1 + detay) olarak taşınır, "Village/Clay Wood Lit" shader'ı çözer.
 //
 // Hücre hücre (chunk): şekil 1×1×1'lik hücre parçalarına bölünür (hücre sınırları -0.5 / +0.5'te, grid'le aynı). Her
-// hücrenin şekli sadece o hücreye margin kadar yakın kutulara bağlıdır; o kutular hücrenin etki alanına kırpılıp bir
-// parmak izi (anahtar) yapılır ve hücre şekli önbellekte bu anahtarla tutulur. Bir yapıya parça eklenince sadece parçanın
-// dokunduğu hücrelerin parmak izi değişir; diğerleri önbellekten gelir: ekleme maliyeti yapının büyüklüğünden bağımsız.
-// Aynı şekilli hücreler bütün yapılar arasında ortak. Hücreler ortak bir ızgarada (adım = 1 / N) ve sınırın iki yanında
-// aynı kutularla hesaplandığı için komşu hücrelerin sınırdaki vertex'leri birebir aynı: çatlak yok.
+// hücrenin şekli sadece o hücreye margin kadar yakın kutulara ve odun hücrelerine bağlıdır; bunlar hücrenin etki
+// alanına kırpılıp bir parmak izi (anahtar) yapılır ve hücre şekli önbellekte bu anahtarla tutulur. Bir yapıya parça
+// eklenince sadece parçanın dokunduğu hücrelerin parmak izi değişir; diğerleri önbellekten gelir: ekleme maliyeti
+// yapının büyüklüğünden bağımsız. Hücreler ortak bir ızgarada (adım = 1 / N) ve sınırın iki yanında aynı kutularla
+// hesaplandığı için komşu hücrelerin sınırdaki vertex'leri birebir aynı: çatlak yok.
 // Kutular ve sonuç aynı uzayda (çağıranın yerel uzayı).
 public static class ClayMesher
 {
@@ -28,36 +29,61 @@ public static class ClayMesher
     {
         public Vector3 center;
         public Vector3 half;
-        public int axis; // lif yönü (0 = X, 1 = Y, 2 = Z); şekil kutularında kullanılmaz
         public Vector3 Min => center - half;
         public Vector3 Max => center + half;
     }
 
-    // Bir odun parçası: shape = şekle giren kutu (dik oduna uzanan kısım dahil), grain = parçanın kendi hücreleri
-    // (lif yönü için), axis = uzandığı eksen (0 = X, 1 = Y, 2 = Z)
+    // Bir odun parçası: shape = şekle giren kutu (dik oduna uzanan kısım dahil); start = ilk hücrenin ortası,
+    // rotation = parçanın dönüşü (1BR modeli bu dönüşle hücrelere oturur, uzandığı yön rotation * yukarı),
+    // length = hücre sayısı
     public struct Piece
     {
         public Bounds shape;
-        public Bounds grain;
-        public int axis;
+        public Vector3 start;
+        public Quaternion rotation;
+        public int length;
     }
+
+    // Tek odun hücresi: ortası, 1BR'nin dönüşü, dolu komşular (bit: +x, -x, +y, -y, +z, -z)
+    private struct Cell
+    {
+        public Vector3 center;
+        public Quaternion rotation;
+        public int neighbors;
+    }
+
+    private static readonly Vector3[] Directions =
+        { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
 
     // Hücre şekilleri: parmak izi → mesh (hücrenin kendi uzayında, [0, 1]); null = o hücrede yüzey yok
     private static readonly Dictionary<string, Mesh> chunkCache = new Dictionary<string, Mesh>();
     private const int MaxCachedChunks = 6000;
 
-    // pieces: parçalar (çağıranın uzayında); voxelSize: ızgara aralığı (1 / N'ye yuvarlanır); cornerRadius: dış kenar
-    // yuvarlaklığı; grainBlend: birleşimde iki lif yönünün karıştığı genişlik
-    public static Mesh Build(List<Piece> pieces, float voxelSize, float cornerRadius, float grainBlend, float inset = 0f)
+    // pieces: parçalar (çağıranın uzayında); reference: görünümün alındığı 1BR (null ise UV yok); voxelSize: ızgara
+    // aralığı (1 / N'ye yuvarlanır); cornerRadius: dış kenar yuvarlaklığı; fuseWidth: kaynaşma yerinin sade kalan genişliği
+    public static Mesh Build(List<Piece> pieces, Reference reference, float voxelSize, float cornerRadius, float fuseWidth, float inset = 0f)
     {
         var parts = new List<Part>();
-        var grains = new List<Part>();
+        var cells = new List<Cell>();
         foreach (Piece piece in pieces)
         {
             parts.Add(new Part { center = piece.shape.center, half = Vector3.Max(piece.shape.extents - Vector3.one * inset, Vector3.one * 0.02f) });
-            grains.Add(new Part { center = piece.grain.center, half = piece.grain.extents, axis = piece.axis });
+            Vector3 axis = piece.rotation * Vector3.up;
+            for (int i = 0; i < piece.length; i++)
+                cells.Add(new Cell { center = piece.start + axis * i, rotation = piece.rotation });
         }
         if (parts.Count == 0) return null;
+
+        // Dolu komşular
+        var filled = new HashSet<Vector3Int>();
+        foreach (Cell cell in cells) filled.Add(CellKey(cell.center));
+        for (int i = 0; i < cells.Count; i++)
+        {
+            Cell cell = cells[i];
+            for (int d = 0; d < 6; d++)
+                if (filled.Contains(CellKey(cell.center + Directions[d]))) cell.neighbors |= 1 << d;
+            cells[i] = cell;
+        }
 
         int n = Mathf.Clamp(Mathf.RoundToInt(1f / Mathf.Max(voxelSize, 0.01f)), 4, 64);
         float step = 1f / n;
@@ -66,10 +92,9 @@ public static class ClayMesher
         foreach (Part part in parts)
             radius = Mathf.Min(radius, Mathf.Min(part.half.x, Mathf.Min(part.half.y, part.half.z)) * 0.95f);
         radius = Mathf.Max(0f, radius);
-        grainBlend = Mathf.Max(grainBlend, 0.001f);
-        // Küçült + şişir iki kez radius uzağa bakar: hücrenin şekli 2 × radius yakınındaki kutulara bağlı; lif ağırlığı
-        // grainBlend yakınındaki lif kutularına
-        float margin = Mathf.Max(radius * 2f, grainBlend) + step * 3f;
+        fuseWidth = Mathf.Max(fuseWidth, 0.001f);
+        // Küçült + şişir iki kez radius uzağa bakar: hücrenin şekli 2 × radius yakınındaki kutulara bağlı
+        float margin = radius * 2f + step * 3f;
 
         if (chunkCache.Count > MaxCachedChunks) chunkCache.Clear();
 
@@ -85,7 +110,7 @@ public static class ClayMesher
 
         var combine = new List<CombineInstance>();
         var clipped = new List<Part>();
-        var clippedGrains = new List<Part>();
+        var localCells = new List<Cell>();
         var key = new StringBuilder(256);
         for (int cz = from.z; cz <= to.z; cz++)
             for (int cy = from.y; cy <= to.y; cy++)
@@ -99,20 +124,29 @@ public static class ClayMesher
                     clipped.Clear();
                     foreach (Part part in parts)
                     {
-                        if (!Clip(part, regionMin, regionMax, origin, out Part c)) continue;
+                        Vector3 pMin = Vector3.Max(part.Min, regionMin), pMax = Vector3.Min(part.Max, regionMax);
+                        if (pMin.x >= pMax.x || pMin.y >= pMax.y || pMin.z >= pMax.z) continue;
                         if (Inside(part, origin - Vector3.one * (radius + step * 2f), origin + Vector3.one * (1f + radius + step * 2f)))
                             buried = true;
-                        clipped.Add(c);
+                        // Hücrenin uzayında (alt köşe 0)
+                        clipped.Add(new Part { center = (pMin + pMax) * 0.5f - origin, half = (pMax - pMin) * 0.5f });
                     }
                     if (buried || clipped.Count == 0) continue;
-                    clippedGrains.Clear();
-                    foreach (Part grain in grains)
-                        if (Clip(grain, regionMin, regionMax, origin, out Part c)) clippedGrains.Add(c);
 
-                    string chunkKey = Key(key, clipped, clippedGrains, n, radius, grainBlend);
+                    // Bölgeye değen odun hücreleri (hücrenin uzayında)
+                    localCells.Clear();
+                    foreach (Cell cell in cells)
+                    {
+                        Vector3 c = cell.center;
+                        if (c.x + 0.5f < regionMin.x || c.x - 0.5f > regionMax.x || c.y + 0.5f < regionMin.y || c.y - 0.5f > regionMax.y ||
+                            c.z + 0.5f < regionMin.z || c.z - 0.5f > regionMax.z) continue;
+                        localCells.Add(new Cell { center = c - origin, rotation = cell.rotation, neighbors = cell.neighbors });
+                    }
+
+                    string chunkKey = Key(key, clipped, localCells, n, radius, fuseWidth, reference);
                     if (!chunkCache.TryGetValue(chunkKey, out Mesh mesh))
                     {
-                        mesh = ChunkMesh(MaximalBoxes(clipped, radius), clippedGrains, n, step, radius, grainBlend);
+                        mesh = ChunkMesh(MaximalBoxes(clipped, radius), localCells, reference, n, step, radius, fuseWidth);
                         chunkCache[chunkKey] = mesh;
                     }
                     if (mesh != null) combine.Add(new CombineInstance { mesh = mesh, transform = Matrix4x4.Translate(origin) });
@@ -125,45 +159,47 @@ public static class ClayMesher
         return result;
     }
 
-    // Kutuyu bölgeye kırpar, hücrenin uzayına (alt köşe 0) çevirir; bölgeye değmiyorsa false
-    private static bool Clip(Part part, Vector3 regionMin, Vector3 regionMax, Vector3 origin, out Part clipped)
-    {
-        Vector3 pMin = Vector3.Max(part.Min, regionMin), pMax = Vector3.Min(part.Max, regionMax);
-        clipped = new Part { center = (pMin + pMax) * 0.5f - origin, half = (pMax - pMin) * 0.5f, axis = part.axis };
-        return pMin.x < pMax.x && pMin.y < pMax.y && pMin.z < pMax.z;
-    }
+    private static Vector3Int CellKey(Vector3 center) => Vector3Int.RoundToInt(center * 4f);
 
     private static bool Inside(Part part, Vector3 min, Vector3 max) =>
         part.Min.x <= min.x && part.Min.y <= min.y && part.Min.z <= min.z &&
         part.Max.x >= max.x && part.Max.y >= max.y && part.Max.z >= max.z;
 
-    // Hücrenin parmak izi: ızgara, yarıçap, karışma ve kırpılmış kutular (sıralı, yuvarlanmış)
-    private static string Key(StringBuilder sb, List<Part> clipped, List<Part> grains, int n, float radius, float grainBlend)
+    // Hücrenin parmak izi: ızgara, yarıçap, kaynaşma, referans, kırpılmış kutular ve odun hücreleri (sıralı, yuvarlanmış)
+    private static string Key(StringBuilder sb, List<Part> clipped, List<Cell> localCells, int n, float radius, float fuseWidth, Reference reference)
     {
-        Sort(clipped);
-        Sort(grains);
+        clipped.Sort((a, b) =>
+        {
+            int c = a.center.x.CompareTo(b.center.x);
+            if (c != 0) return c;
+            c = a.center.y.CompareTo(b.center.y);
+            return c != 0 ? c : a.center.z.CompareTo(b.center.z);
+        });
+        localCells.Sort((a, b) =>
+        {
+            int c = a.center.x.CompareTo(b.center.x);
+            if (c != 0) return c;
+            c = a.center.y.CompareTo(b.center.y);
+            return c != 0 ? c : a.center.z.CompareTo(b.center.z);
+        });
         sb.Clear();
-        sb.Append(n).Append('|').Append(Mathf.RoundToInt(radius * 10000f)).Append('|').Append(Mathf.RoundToInt(grainBlend * 10000f));
-        foreach (Part part in clipped) AppendBox(sb, part, 's');
-        foreach (Part part in grains) AppendBox(sb, part, (char)('x' + part.axis));
+        sb.Append(n).Append('|').Append(Mathf.RoundToInt(radius * 10000f)).Append('|').Append(Mathf.RoundToInt(fuseWidth * 10000f))
+          .Append('|').Append(reference != null ? reference.Id : 0);
+        foreach (Part part in clipped)
+        {
+            Vector3 lo = part.Min, hi = part.Max;
+            sb.Append('|').Append(Mathf.RoundToInt(lo.x * 1000f)).Append(',').Append(Mathf.RoundToInt(lo.y * 1000f)).Append(',').Append(Mathf.RoundToInt(lo.z * 1000f))
+              .Append(':').Append(Mathf.RoundToInt(hi.x * 1000f)).Append(',').Append(Mathf.RoundToInt(hi.y * 1000f)).Append(',').Append(Mathf.RoundToInt(hi.z * 1000f));
+        }
+        foreach (Cell cell in localCells)
+        {
+            Vector3 c = cell.center;
+            Quaternion r = cell.rotation;
+            sb.Append("|c").Append(Mathf.RoundToInt(c.x * 1000f)).Append(',').Append(Mathf.RoundToInt(c.y * 1000f)).Append(',').Append(Mathf.RoundToInt(c.z * 1000f))
+              .Append(':').Append(Mathf.RoundToInt(r.x * 1000f)).Append(',').Append(Mathf.RoundToInt(r.y * 1000f)).Append(',')
+              .Append(Mathf.RoundToInt(r.z * 1000f)).Append(',').Append(Mathf.RoundToInt(r.w * 1000f)).Append(':').Append(cell.neighbors);
+        }
         return sb.ToString();
-    }
-
-    private static void Sort(List<Part> list) => list.Sort((a, b) =>
-    {
-        int c = a.center.x.CompareTo(b.center.x);
-        if (c != 0) return c;
-        c = a.center.y.CompareTo(b.center.y);
-        if (c != 0) return c;
-        c = a.center.z.CompareTo(b.center.z);
-        return c != 0 ? c : a.axis.CompareTo(b.axis);
-    });
-
-    private static void AppendBox(StringBuilder sb, Part part, char tag)
-    {
-        Vector3 lo = part.Min, hi = part.Max;
-        sb.Append('|').Append(tag).Append(Mathf.RoundToInt(lo.x * 1000f)).Append(',').Append(Mathf.RoundToInt(lo.y * 1000f)).Append(',').Append(Mathf.RoundToInt(lo.z * 1000f))
-          .Append(':').Append(Mathf.RoundToInt(hi.x * 1000f)).Append(',').Append(Mathf.RoundToInt(hi.y * 1000f)).Append(',').Append(Mathf.RoundToInt(hi.z * 1000f));
     }
 
     // Kutuların birleşimini (tek hacim) "en büyük kutular"ına ayırır: hacmin içinde kalan ve hiçbir yöne büyüyemeyen
@@ -278,33 +314,50 @@ public static class ClayMesher
         return g.sqrMagnitude > 1e-10f ? g.normalized : Vector3.up;
     }
 
-    // Noktanın lif yönü ağırlıkları (X, Z; Y = 1 - ikisi): her eksen için o yöndeki lif kutularına en yakın uzaklık;
-    // en yakın eksen tam, ondan grainBlend kadar uzaktaki eksen sıfır, arası yumuşak geçiş. Hiç lif kutusu yoksa dikey.
-    private static Vector2 GrainWeights(List<Part> grains, Vector3 p, float grainBlend)
+    // Vertex'in görünümü: sahibi olan odun hücresi (küpüne en yakın), o hücredeki 1BR'nin en yakın noktasının UV'si ve
+    // tangent'ı; detay = dolu komşuyla paylaşılan en yakın yüze uzaklıktan (fuseWidth'te tam)
+    private static void Appearance(List<Cell> cells, Reference reference, Vector3 v, float fuseWidth, out Vector2 uv, out Vector4 tangent)
     {
-        float dx = float.MaxValue, dy = float.MaxValue, dz = float.MaxValue;
-        foreach (Part grain in grains)
+        uv = Vector2.zero;
+        tangent = new Vector4(1f, 0f, 0f, 1f);
+        int owner = -1;
+        float best = float.MaxValue;
+        for (int i = 0; i < cells.Count; i++)
         {
-            float d = Vector3.Max(Abs(p - grain.center) - grain.half, Vector3.zero).magnitude;
-            if (grain.axis == 0) dx = Mathf.Min(dx, d);
-            else if (grain.axis == 2) dz = Mathf.Min(dz, d);
-            else dy = Mathf.Min(dy, d);
+            float d = Vector3.Max(Abs(v - cells[i].center) - Vector3.one * 0.5f, Vector3.zero).sqrMagnitude;
+            if (d < best)
+            {
+                best = d;
+                owner = i;
+            }
         }
-        float nearest = Mathf.Min(dx, Mathf.Min(dy, dz));
-        if (nearest == float.MaxValue) return Vector2.zero;
-        float wx = Falloff(dx - nearest, grainBlend), wy = Falloff(dy - nearest, grainBlend), wz = Falloff(dz - nearest, grainBlend);
-        float total = wx + wy + wz;
-        return new Vector2(wx / total, wz / total);
-    }
+        if (owner < 0) return;
 
-    private static float Falloff(float distance, float width) => 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(distance / width));
+        Cell cell = cells[owner];
+        Vector3 offset = v - cell.center;
+        float fuse = float.MaxValue;
+        for (int d = 0; d < 6; d++)
+            if ((cell.neighbors & (1 << d)) != 0)
+                fuse = Mathf.Min(fuse, Mathf.Max(0f, 0.5f - Vector3.Dot(offset, Directions[d])));
+        float detail = fuse == float.MaxValue ? 1f : Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(fuse / fuseWidth));
+
+        float sign = 1f;
+        if (reference != null)
+        {
+            reference.Sample(Quaternion.Inverse(cell.rotation) * offset, out uv, out Vector4 local);
+            Vector3 t = cell.rotation * new Vector3(local.x, local.y, local.z);
+            tangent = new Vector4(t.x, t.y, t.z, 1f);
+            sign = local.w < 0f ? -1f : 1f;
+        }
+        tangent.w = sign * (1f + detail);
+    }
 
     // Bir hücrenin (uzayı [0, 1]) şekli, surface nets. Noktalar -1..n+1 (komşu küplerin vertex'leri için bir sıra
     // fazla), küp vertex'leri -1..n-1, dörtgenler tabanı 0..n-1 olan ızgara kenarları için (her kenar tek hücrenin).
     // Izgara yarım adım kaydırılmış (noktalar (i + 0.5) * adım): odun yüzleri hücre sınırlarında (kalınlık 1) ve sınır
     // bir ızgara noktasına denk gelince iki komşu hücre küçük bir hesap farkıyla yüzü birbirine bırakıp ikisi de
     // çizmiyordu (delikler). Kaydırınca yüz hep bir kenarın ortasında, sahibi kesin.
-    private static Mesh ChunkMesh(List<Part> parts, List<Part> grains, int n, float step, float radius, float grainBlend)
+    private static Mesh ChunkMesh(List<Part> parts, List<Cell> cells, Reference reference, int n, float step, float radius, float fuseWidth)
     {
         int m = n + 3;                        // nokta sayısı (eksen başına), indeks i ↔ ızgara -1 + i
         int Index(int x, int y, int z) => x + m * (y + m * z);
@@ -329,7 +382,8 @@ public static class ClayMesher
 
         var vertices = new List<Vector3>();
         var normals = new List<Vector3>();
-        var grainUv = new List<Vector2>();
+        var uvs = new List<Vector2>();
+        var tangents = new List<Vector4>();
         var corner = new float[8];
         var cornerPos = new Vector3[8];
         for (int z = 0; z < c; z++)
@@ -360,7 +414,9 @@ public static class ClayMesher
                     cellVertex[CellIndex(x, y, z)] = vertices.Count;
                     vertices.Add(v);
                     normals.Add(Gradient(parts, v, step * 0.5f, radius));
-                    grainUv.Add(GrainWeights(grains, v, grainBlend));
+                    Appearance(cells, reference, v, fuseWidth, out Vector2 uv, out Vector4 tangent);
+                    uvs.Add(uv);
+                    tangents.Add(tangent);
                 }
 
         var triangles = new List<int>();
@@ -398,7 +454,8 @@ public static class ClayMesher
         if (vertices.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
         mesh.SetVertices(vertices);
         mesh.SetNormals(normals);
-        mesh.SetUVs(0, grainUv);
+        mesh.SetUVs(0, uvs);
+        mesh.SetTangents(tangents);
         mesh.SetTriangles(triangles, 0);
         mesh.RecalculateBounds();
         return mesh;
@@ -406,4 +463,143 @@ public static class ClayMesher
 
     private static readonly int[,] Edges =
         { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 }, { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 }, { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
+
+    // Görünümün alındığı model (1BR): mesh'in üçgenleri hücre uzayında (ortası 0, odun +Y yönünde). Bir noktanın en
+    // yakın yüzey noktasının UV'si ve tangent'ı. Hız için üçgenler ızgara kovalarına dağıtılır (her kova kendisine
+    // yakın üçgenleri tutar; kil yüzeyi modele yakın olduğu için en yakın üçgen hep kovada).
+    public sealed class Reference
+    {
+        private const int Grid = 8;
+
+        public int Id { get; }
+
+        private readonly Vector3[] positions;
+        private readonly Vector2[] uvs;
+        private readonly Vector4[] tangents;
+        private readonly int[] triangles;
+        private readonly List<int>[] buckets = new List<int>[Grid * Grid * Grid];
+        private readonly Vector3 boundsMin, bucketSize;
+
+        // toCell: mesh uzayından hücre uzayına (1BR prefab'ının kökü = hücrenin ortası)
+        public Reference(Mesh mesh, Matrix4x4 toCell, int id)
+        {
+            Id = id;
+            Vector3[] source = mesh.vertices;
+            Vector4[] sourceTangents = mesh.tangents;
+            Vector2[] sourceUvs = mesh.uv;
+            triangles = mesh.triangles;
+            positions = new Vector3[source.Length];
+            uvs = new Vector2[source.Length];
+            tangents = new Vector4[source.Length];
+            for (int i = 0; i < source.Length; i++)
+            {
+                positions[i] = toCell.MultiplyPoint3x4(source[i]);
+                uvs[i] = i < sourceUvs.Length ? sourceUvs[i] : Vector2.zero;
+                Vector4 t = i < sourceTangents.Length ? sourceTangents[i] : new Vector4(1f, 0f, 0f, 1f);
+                Vector3 dir = toCell.MultiplyVector(new Vector3(t.x, t.y, t.z)).normalized;
+                tangents[i] = new Vector4(dir.x, dir.y, dir.z, t.w < 0f ? -1f : 1f);
+            }
+
+            Vector3 min = Vector3.one * float.MaxValue, max = Vector3.one * float.MinValue;
+            foreach (Vector3 p in positions)
+            {
+                min = Vector3.Min(min, p);
+                max = Vector3.Max(max, p);
+            }
+            boundsMin = min - Vector3.one * 0.25f;
+            bucketSize = (max + Vector3.one * 0.25f - boundsMin) / Grid;
+            float pad = Mathf.Max(bucketSize.x, Mathf.Max(bucketSize.y, bucketSize.z)) * 1.5f;
+            for (int i = 0; i < buckets.Length; i++) buckets[i] = new List<int>();
+            for (int t = 0; t < triangles.Length; t += 3)
+            {
+                Vector3 a = positions[triangles[t]], b = positions[triangles[t + 1]], c = positions[triangles[t + 2]];
+                Vector3Int lo = BucketOf(Vector3.Min(a, Vector3.Min(b, c)) - Vector3.one * pad);
+                Vector3Int hi = BucketOf(Vector3.Max(a, Vector3.Max(b, c)) + Vector3.one * pad);
+                for (int z = lo.z; z <= hi.z; z++)
+                    for (int y = lo.y; y <= hi.y; y++)
+                        for (int x = lo.x; x <= hi.x; x++)
+                            buckets[x + Grid * (y + Grid * z)].Add(t);
+            }
+        }
+
+        private Vector3Int BucketOf(Vector3 p)
+        {
+            Vector3 f = p - boundsMin;
+            return new Vector3Int(Mathf.Clamp((int)(f.x / bucketSize.x), 0, Grid - 1), Mathf.Clamp((int)(f.y / bucketSize.y), 0, Grid - 1),
+                                  Mathf.Clamp((int)(f.z / bucketSize.z), 0, Grid - 1));
+        }
+
+        // p: hücre uzayında; uv ve tangent (hücre uzayında, w işaret) en yakın yüzey noktasından
+        public void Sample(Vector3 p, out Vector2 uv, out Vector4 tangent)
+        {
+            Vector3Int b = BucketOf(p);
+            List<int> list = buckets[b.x + Grid * (b.y + Grid * b.z)];
+            int bestTriangle = -1;
+            Vector3 bestBary = Vector3.zero;
+            float best = float.MaxValue;
+            int count = list.Count > 0 ? list.Count : triangles.Length / 3;
+            for (int k = 0; k < count; k++)
+            {
+                int t = list.Count > 0 ? list[k] : k * 3;
+                Vector3 q = Closest(p, positions[triangles[t]], positions[triangles[t + 1]], positions[triangles[t + 2]], out Vector3 bary);
+                float d = (q - p).sqrMagnitude;
+                if (d < best)
+                {
+                    best = d;
+                    bestTriangle = t;
+                    bestBary = bary;
+                }
+            }
+            if (bestTriangle < 0)
+            {
+                uv = Vector2.zero;
+                tangent = new Vector4(1f, 0f, 0f, 1f);
+                return;
+            }
+            int i0 = triangles[bestTriangle], i1 = triangles[bestTriangle + 1], i2 = triangles[bestTriangle + 2];
+            uv = uvs[i0] * bestBary.x + uvs[i1] * bestBary.y + uvs[i2] * bestBary.z;
+            Vector3 dir = (Vector3)tangents[i0] * bestBary.x + (Vector3)tangents[i1] * bestBary.y + (Vector3)tangents[i2] * bestBary.z;
+            dir = dir.sqrMagnitude > 1e-8f ? dir.normalized : new Vector3(tangents[i0].x, tangents[i0].y, tangents[i0].z);
+            tangent = new Vector4(dir.x, dir.y, dir.z, tangents[i0].w);
+        }
+
+        // Üçgenin p'ye en yakın noktası ve ağırlıkları (Ericson, Real-Time Collision Detection)
+        private static Vector3 Closest(Vector3 p, Vector3 a, Vector3 b, Vector3 c, out Vector3 bary)
+        {
+            Vector3 ab = b - a, ac = c - a, ap = p - a;
+            float d1 = Vector3.Dot(ab, ap), d2 = Vector3.Dot(ac, ap);
+            if (d1 <= 0f && d2 <= 0f) { bary = new Vector3(1f, 0f, 0f); return a; }
+            Vector3 bp = p - b;
+            float d3 = Vector3.Dot(ab, bp), d4 = Vector3.Dot(ac, bp);
+            if (d3 >= 0f && d4 <= d3) { bary = new Vector3(0f, 1f, 0f); return b; }
+            float vc = d1 * d4 - d3 * d2;
+            if (vc <= 0f && d1 >= 0f && d3 <= 0f)
+            {
+                float v = d1 / (d1 - d3);
+                bary = new Vector3(1f - v, v, 0f);
+                return a + ab * v;
+            }
+            Vector3 cp = p - c;
+            float d5 = Vector3.Dot(ab, cp), d6 = Vector3.Dot(ac, cp);
+            if (d6 >= 0f && d5 <= d6) { bary = new Vector3(0f, 0f, 1f); return c; }
+            float vb = d5 * d2 - d1 * d6;
+            if (vb <= 0f && d2 >= 0f && d6 <= 0f)
+            {
+                float w = d2 / (d2 - d6);
+                bary = new Vector3(1f - w, 0f, w);
+                return a + ac * w;
+            }
+            float va = d3 * d6 - d5 * d4;
+            if (va <= 0f && d4 - d3 >= 0f && d5 - d6 >= 0f)
+            {
+                float w = (d4 - d3) / (d4 - d3 + (d5 - d6));
+                bary = new Vector3(0f, 1f - w, w);
+                return b + (c - b) * w;
+            }
+            float denom = 1f / (va + vb + vc);
+            float vv = vb * denom, ww = vc * denom;
+            bary = new Vector3(1f - vv - ww, vv, ww);
+            return a + ab * vv + ac * ww;
+        }
+    }
 }
