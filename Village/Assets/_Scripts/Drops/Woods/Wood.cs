@@ -53,7 +53,8 @@ public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiec
         Bounds rootBox = merger.PieceBox(Vector3.zero, Vector3.up, Length, false);
         var bounds = new Bounds(Quaternion.Inverse(visualRestRotation) * (rootBox.center - visualRestPosition), rootBox.size);
         string key = $"wood:{Vector3Int.RoundToInt(bounds.center * 100f)}:{Vector3Int.RoundToInt(bounds.size * 100f)}";
-        GameObject clay = merger.AttachClay(space, new System.Collections.Generic.List<Bounds> { bounds }, renderers, key);
+        var piece = new ClayMesher.Piece { shape = bounds, grain = bounds, axis = 1 }; // tek odun dik (Y)
+        GameObject clay = merger.AttachClay(space, new System.Collections.Generic.List<ClayMesher.Piece> { piece }, renderers, key);
         if (clay == null) Destroy(space.gameObject);
     }
 

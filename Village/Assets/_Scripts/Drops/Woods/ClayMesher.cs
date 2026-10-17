@@ -11,6 +11,10 @@ using UnityEngine.Rendering;
 // keskin kalır. (Eskiden her parça ayrı küçültülüyordu: üst üste farklı uzunlukta katlar birleşim yerinde oluk
 // bırakıyordu.) Mesafe alanı ızgarada örneklenip mesh çıkarılır (surface nets).
 //
+// Lif yönü: her vertex'e hangi yönde uzanan oduna ait olduğu yazılır (UV0 = (X ağırlığı, Z ağırlığı), Y = 1 - ikisi;
+// "Village/Clay Wood Lit" shader'ı dokuyu bu yöne göre döşer). Ağırlık parçanın kendi hücrelerine (lif kutusu,
+// dik oduna uzanan kısım hariç) uzaklıktan: birleşim yerinde grainBlend genişliğinde iki yön yumuşakça karışır.
+//
 // Hücre hücre (chunk): şekil 1×1×1'lik hücre parçalarına bölünür (hücre sınırları -0.5 / +0.5'te, grid'le aynı). Her
 // hücrenin şekli sadece o hücreye margin kadar yakın kutulara bağlıdır; o kutular hücrenin etki alanına kırpılıp bir
 // parmak izi (anahtar) yapılır ve hücre şekli önbellekte bu anahtarla tutulur. Bir yapıya parça eklenince sadece parçanın
@@ -24,22 +28,36 @@ public static class ClayMesher
     {
         public Vector3 center;
         public Vector3 half;
+        public int axis; // lif yönü (0 = X, 1 = Y, 2 = Z); şekil kutularında kullanılmaz
         public Vector3 Min => center - half;
         public Vector3 Max => center + half;
+    }
+
+    // Bir odun parçası: shape = şekle giren kutu (dik oduna uzanan kısım dahil), grain = parçanın kendi hücreleri
+    // (lif yönü için), axis = uzandığı eksen (0 = X, 1 = Y, 2 = Z)
+    public struct Piece
+    {
+        public Bounds shape;
+        public Bounds grain;
+        public int axis;
     }
 
     // Hücre şekilleri: parmak izi → mesh (hücrenin kendi uzayında, [0, 1]); null = o hücrede yüzey yok
     private static readonly Dictionary<string, Mesh> chunkCache = new Dictionary<string, Mesh>();
     private const int MaxCachedChunks = 6000;
 
-    // boxes: kutular (çağıranın uzayında); voxelSize: ızgara aralığı (1 / N'ye yuvarlanır); cornerRadius: dış kenar yuvarlaklığı
-    public static Mesh Build(List<Bounds> boxes, float voxelSize, float cornerRadius, float inset = 0f)
+    // pieces: parçalar (çağıranın uzayında); voxelSize: ızgara aralığı (1 / N'ye yuvarlanır); cornerRadius: dış kenar
+    // yuvarlaklığı; grainBlend: birleşimde iki lif yönünün karıştığı genişlik
+    public static Mesh Build(List<Piece> pieces, float voxelSize, float cornerRadius, float grainBlend, float inset = 0f)
     {
         var parts = new List<Part>();
-        foreach (Bounds box in boxes)
-            parts.Add(new Part { center = box.center, half = Vector3.Max(box.extents - Vector3.one * inset, Vector3.one * 0.02f) });
+        var grains = new List<Part>();
+        foreach (Piece piece in pieces)
+        {
+            parts.Add(new Part { center = piece.shape.center, half = Vector3.Max(piece.shape.extents - Vector3.one * inset, Vector3.one * 0.02f) });
+            grains.Add(new Part { center = piece.grain.center, half = piece.grain.extents, axis = piece.axis });
+        }
         if (parts.Count == 0) return null;
-        MergeBoxes(parts);
 
         int n = Mathf.Clamp(Mathf.RoundToInt(1f / Mathf.Max(voxelSize, 0.01f)), 4, 64);
         float step = 1f / n;
@@ -48,8 +66,10 @@ public static class ClayMesher
         foreach (Part part in parts)
             radius = Mathf.Min(radius, Mathf.Min(part.half.x, Mathf.Min(part.half.y, part.half.z)) * 0.95f);
         radius = Mathf.Max(0f, radius);
-        // Küçült + şişir iki kez radius uzağa bakar: hücrenin şekli 2 × radius yakınındaki kutulara bağlı
-        float margin = radius * 2f + step * 3f;
+        grainBlend = Mathf.Max(grainBlend, 0.001f);
+        // Küçült + şişir iki kez radius uzağa bakar: hücrenin şekli 2 × radius yakınındaki kutulara bağlı; lif ağırlığı
+        // grainBlend yakınındaki lif kutularına
+        float margin = Mathf.Max(radius * 2f, grainBlend) + step * 3f;
 
         if (chunkCache.Count > MaxCachedChunks) chunkCache.Clear();
 
@@ -65,6 +85,7 @@ public static class ClayMesher
 
         var combine = new List<CombineInstance>();
         var clipped = new List<Part>();
+        var clippedGrains = new List<Part>();
         var key = new StringBuilder(256);
         for (int cz = from.z; cz <= to.z; cz++)
             for (int cy = from.y; cy <= to.y; cy++)
@@ -78,19 +99,20 @@ public static class ClayMesher
                     clipped.Clear();
                     foreach (Part part in parts)
                     {
-                        Vector3 pMin = Vector3.Max(part.Min, regionMin), pMax = Vector3.Min(part.Max, regionMax);
-                        if (pMin.x >= pMax.x || pMin.y >= pMax.y || pMin.z >= pMax.z) continue;
+                        if (!Clip(part, regionMin, regionMax, origin, out Part c)) continue;
                         if (Inside(part, origin - Vector3.one * (radius + step * 2f), origin + Vector3.one * (1f + radius + step * 2f)))
                             buried = true;
-                        // Hücrenin uzayında (alt köşe 0)
-                        clipped.Add(new Part { center = (pMin + pMax) * 0.5f - origin, half = (pMax - pMin) * 0.5f });
+                        clipped.Add(c);
                     }
                     if (buried || clipped.Count == 0) continue;
+                    clippedGrains.Clear();
+                    foreach (Part grain in grains)
+                        if (Clip(grain, regionMin, regionMax, origin, out Part c)) clippedGrains.Add(c);
 
-                    string chunkKey = Key(key, clipped, n, radius);
+                    string chunkKey = Key(key, clipped, clippedGrains, n, radius, grainBlend);
                     if (!chunkCache.TryGetValue(chunkKey, out Mesh mesh))
                     {
-                        mesh = ChunkMesh(MaximalBoxes(clipped, radius), n, step, radius);
+                        mesh = ChunkMesh(MaximalBoxes(clipped, radius), clippedGrains, n, step, radius, grainBlend);
                         chunkCache[chunkKey] = mesh;
                     }
                     if (mesh != null) combine.Add(new CombineInstance { mesh = mesh, transform = Matrix4x4.Translate(origin) });
@@ -103,66 +125,45 @@ public static class ClayMesher
         return result;
     }
 
+    // Kutuyu bölgeye kırpar, hücrenin uzayına (alt köşe 0) çevirir; bölgeye değmiyorsa false
+    private static bool Clip(Part part, Vector3 regionMin, Vector3 regionMax, Vector3 origin, out Part clipped)
+    {
+        Vector3 pMin = Vector3.Max(part.Min, regionMin), pMax = Vector3.Min(part.Max, regionMax);
+        clipped = new Part { center = (pMin + pMax) * 0.5f - origin, half = (pMax - pMin) * 0.5f, axis = part.axis };
+        return pMin.x < pMax.x && pMin.y < pMax.y && pMin.z < pMax.z;
+    }
+
     private static bool Inside(Part part, Vector3 min, Vector3 max) =>
         part.Min.x <= min.x && part.Min.y <= min.y && part.Min.z <= min.z &&
         part.Max.x >= max.x && part.Max.y >= max.y && part.Max.z >= max.z;
 
-    // Hücrenin parmak izi: ızgara, yarıçap ve kırpılmış kutular (sıralı, yuvarlanmış)
-    private static string Key(StringBuilder sb, List<Part> clipped, int n, float radius)
+    // Hücrenin parmak izi: ızgara, yarıçap, karışma ve kırpılmış kutular (sıralı, yuvarlanmış)
+    private static string Key(StringBuilder sb, List<Part> clipped, List<Part> grains, int n, float radius, float grainBlend)
     {
-        clipped.Sort((a, b) =>
-        {
-            int c = a.center.x.CompareTo(b.center.x);
-            if (c != 0) return c;
-            c = a.center.y.CompareTo(b.center.y);
-            return c != 0 ? c : a.center.z.CompareTo(b.center.z);
-        });
+        Sort(clipped);
+        Sort(grains);
         sb.Clear();
-        sb.Append(n).Append('|').Append(Mathf.RoundToInt(radius * 10000f));
-        foreach (Part part in clipped)
-        {
-            Vector3 lo = part.Min, hi = part.Max;
-            sb.Append('|').Append(Mathf.RoundToInt(lo.x * 1000f)).Append(',').Append(Mathf.RoundToInt(lo.y * 1000f)).Append(',').Append(Mathf.RoundToInt(lo.z * 1000f))
-              .Append(':').Append(Mathf.RoundToInt(hi.x * 1000f)).Append(',').Append(Mathf.RoundToInt(hi.y * 1000f)).Append(',').Append(Mathf.RoundToInt(hi.z * 1000f));
-        }
+        sb.Append(n).Append('|').Append(Mathf.RoundToInt(radius * 10000f)).Append('|').Append(Mathf.RoundToInt(grainBlend * 10000f));
+        foreach (Part part in clipped) AppendBox(sb, part, 's');
+        foreach (Part part in grains) AppendBox(sb, part, (char)('x' + part.axis));
         return sb.ToString();
     }
 
-    // Aynı kesitte, uç uca değen kutular tek kutu olur (uzun kirişin 1'er birimlik parçaları, üst üste katlar): iki
-    // yuvarlak kutu yan yana gelince yuvarlak kenarları birleşim yerinde oluk bırakıyordu
-    public static void MergeBoxes(List<Part> parts)
+    private static void Sort(List<Part> list) => list.Sort((a, b) =>
     {
-        const float eps = 0.03f;
-        bool changed = true;
-        while (changed)
-        {
-            changed = false;
-            for (int a = 0; a < parts.Count && !changed; a++)
-                for (int b = a + 1; b < parts.Count && !changed; b++)
-                    for (int axis = 0; axis < 3 && !changed; axis++)
-                    {
-                        Part pa = parts[a], pb = parts[b];
-                        bool sameSection = true;
-                        for (int other = 0; other < 3; other++)
-                        {
-                            if (other == axis) continue;
-                            if (Mathf.Abs(pa.center[other] - pb.center[other]) > eps || Mathf.Abs(pa.half[other] - pb.half[other]) > eps)
-                                sameSection = false;
-                        }
-                        if (!sameSection) continue;
-                        float gap = Mathf.Abs(pa.center[axis] - pb.center[axis]) - pa.half[axis] - pb.half[axis];
-                        if (gap > eps) continue;
+        int c = a.center.x.CompareTo(b.center.x);
+        if (c != 0) return c;
+        c = a.center.y.CompareTo(b.center.y);
+        if (c != 0) return c;
+        c = a.center.z.CompareTo(b.center.z);
+        return c != 0 ? c : a.axis.CompareTo(b.axis);
+    });
 
-                        float lo = Mathf.Min(pa.center[axis] - pa.half[axis], pb.center[axis] - pb.half[axis]);
-                        float hi = Mathf.Max(pa.center[axis] + pa.half[axis], pb.center[axis] + pb.half[axis]);
-                        Vector3 center = pa.center, half = pa.half;
-                        center[axis] = (lo + hi) * 0.5f;
-                        half[axis] = (hi - lo) * 0.5f;
-                        parts[a] = new Part { center = center, half = half };
-                        parts.RemoveAt(b);
-                        changed = true;
-                    }
-        }
+    private static void AppendBox(StringBuilder sb, Part part, char tag)
+    {
+        Vector3 lo = part.Min, hi = part.Max;
+        sb.Append('|').Append(tag).Append(Mathf.RoundToInt(lo.x * 1000f)).Append(',').Append(Mathf.RoundToInt(lo.y * 1000f)).Append(',').Append(Mathf.RoundToInt(lo.z * 1000f))
+          .Append(':').Append(Mathf.RoundToInt(hi.x * 1000f)).Append(',').Append(Mathf.RoundToInt(hi.y * 1000f)).Append(',').Append(Mathf.RoundToInt(hi.z * 1000f));
     }
 
     // Kutuların birleşimini (tek hacim) "en büyük kutular"ına ayırır: hacmin içinde kalan ve hiçbir yöne büyüyemeyen
@@ -277,12 +278,33 @@ public static class ClayMesher
         return g.sqrMagnitude > 1e-10f ? g.normalized : Vector3.up;
     }
 
+    // Noktanın lif yönü ağırlıkları (X, Z; Y = 1 - ikisi): her eksen için o yöndeki lif kutularına en yakın uzaklık;
+    // en yakın eksen tam, ondan grainBlend kadar uzaktaki eksen sıfır, arası yumuşak geçiş. Hiç lif kutusu yoksa dikey.
+    private static Vector2 GrainWeights(List<Part> grains, Vector3 p, float grainBlend)
+    {
+        float dx = float.MaxValue, dy = float.MaxValue, dz = float.MaxValue;
+        foreach (Part grain in grains)
+        {
+            float d = Vector3.Max(Abs(p - grain.center) - grain.half, Vector3.zero).magnitude;
+            if (grain.axis == 0) dx = Mathf.Min(dx, d);
+            else if (grain.axis == 2) dz = Mathf.Min(dz, d);
+            else dy = Mathf.Min(dy, d);
+        }
+        float nearest = Mathf.Min(dx, Mathf.Min(dy, dz));
+        if (nearest == float.MaxValue) return Vector2.zero;
+        float wx = Falloff(dx - nearest, grainBlend), wy = Falloff(dy - nearest, grainBlend), wz = Falloff(dz - nearest, grainBlend);
+        float total = wx + wy + wz;
+        return new Vector2(wx / total, wz / total);
+    }
+
+    private static float Falloff(float distance, float width) => 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(distance / width));
+
     // Bir hücrenin (uzayı [0, 1]) şekli, surface nets. Noktalar -1..n+1 (komşu küplerin vertex'leri için bir sıra
     // fazla), küp vertex'leri -1..n-1, dörtgenler tabanı 0..n-1 olan ızgara kenarları için (her kenar tek hücrenin).
     // Izgara yarım adım kaydırılmış (noktalar (i + 0.5) * adım): odun yüzleri hücre sınırlarında (kalınlık 1) ve sınır
     // bir ızgara noktasına denk gelince iki komşu hücre küçük bir hesap farkıyla yüzü birbirine bırakıp ikisi de
     // çizmiyordu (delikler). Kaydırınca yüz hep bir kenarın ortasında, sahibi kesin.
-    private static Mesh ChunkMesh(List<Part> parts, int n, float step, float radius)
+    private static Mesh ChunkMesh(List<Part> parts, List<Part> grains, int n, float step, float radius, float grainBlend)
     {
         int m = n + 3;                        // nokta sayısı (eksen başına), indeks i ↔ ızgara -1 + i
         int Index(int x, int y, int z) => x + m * (y + m * z);
@@ -307,6 +329,7 @@ public static class ClayMesher
 
         var vertices = new List<Vector3>();
         var normals = new List<Vector3>();
+        var grainUv = new List<Vector2>();
         var corner = new float[8];
         var cornerPos = new Vector3[8];
         for (int z = 0; z < c; z++)
@@ -337,6 +360,7 @@ public static class ClayMesher
                     cellVertex[CellIndex(x, y, z)] = vertices.Count;
                     vertices.Add(v);
                     normals.Add(Gradient(parts, v, step * 0.5f, radius));
+                    grainUv.Add(GrainWeights(grains, v, grainBlend));
                 }
 
         var triangles = new List<int>();
@@ -374,6 +398,7 @@ public static class ClayMesher
         if (vertices.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
         mesh.SetVertices(vertices);
         mesh.SetNormals(normals);
+        mesh.SetUVs(0, grainUv);
         mesh.SetTriangles(triangles, 0);
         mesh.RecalculateBounds();
         return mesh;

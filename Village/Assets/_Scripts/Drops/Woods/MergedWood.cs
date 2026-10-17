@@ -36,7 +36,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     private string signature;           // şekil değişmedikçe aynı
     private int signatureSteps;
     private readonly List<Renderer>[] sideRenderers = NewSideRenderers();
-    private readonly List<Bounds> pieceBounds = new List<Bounds>(); // parçaların sınırları (yerel), kil şekli için
+    private readonly List<ClayMesher.Piece> clayPieces = new List<ClayMesher.Piece>(); // parçalar (yerel), kil şekli için
     private GameObject clay;
 
     public int BaseLength => baseLength;
@@ -98,7 +98,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
 
         foreach (List<Renderer> list in sideRenderers)
             list.Clear();
-        pieceBounds.Clear();
+        clayPieces.Clear();
 
         AddPiece(catalog.GetWood(baseLength), Vector3Int.zero, Quaternion.identity, baseLength);
         foreach ((WoodSlot slot, int length) in FilledSlots())
@@ -117,7 +117,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     {
         if (clay != null) Destroy(clay);
         if (WoodMerger.Instance != null)
-            clay = WoodMerger.Instance.AttachClay(transform, pieceBounds, GetComponentsInChildren<Renderer>());
+            clay = WoodMerger.Instance.AttachClay(transform, clayPieces, GetComponentsInChildren<Renderer>());
     }
 
     public override GridFootprint GetFootprint()
@@ -177,7 +177,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         }
         // Kil şekli için parçanın grid'deki kutusu (modelin sınırı değil: bütün parçalar aynı kesitte, hücre hizasında)
         if (WoodMerger.Instance != null)
-            pieceBounds.Add(WoodMerger.Instance.PieceBox(start, rotation * Vector3.up, length, start != Vector3Int.zero));
+            clayPieces.Add(WoodMerger.Instance.ClayPiece(start, rotation * Vector3.up, length, start != Vector3Int.zero));
         else
         {
             Vector3 axis = rotation * Vector3.up;

@@ -33,8 +33,10 @@ public class WoodMerger : MonoBehaviour
     [SerializeField, Range(0.3f, 1f)] private float clayThickness = 1f;
     [Tooltip("Parça sınırlarını içe çekme (birim): şekil modelden şişman görünürse")]
     [SerializeField] private float clayInset = 0f;
-    [Tooltip("Kil şeklinin malzemesi. Shader'ı 'Village/Wood Wobble Lit' olmalı ki birleşince sallansın (başka shader'da " +
-             "şekil sallanmaz). Build'de gerekli.")]
+    [Tooltip("Birleşim yerinde iki odunun lif yönünün (dokunun) karıştığı genişlik (birim). 0'a yakın = keskin geçiş.")]
+    [SerializeField, Range(0.01f, 0.5f)] private float clayGrainBlend = 0.15f;
+    [Tooltip("Kil şeklinin malzemesi. Shader'ı 'Village/Clay Wood Lit' olmalı: Base Map'teki odun dokusunu her parçanın " +
+             "yönünde döşer (lifler soldan sağa çizilmiş olmalı), birleşince sallanır. Build'de gerekli.")]
     [SerializeField] private Material clayMaterial;
     [Tooltip("Clay Material boşken (sadece editörde) kullanılan düz malzemenin rengi")]
     [SerializeField] private Color clayColor = new Color(0.78f, 0.58f, 0.38f);
@@ -46,13 +48,13 @@ public class WoodMerger : MonoBehaviour
 
     // Kaynaşmış kil şeklini owner'ın çocuğu olarak takar, verilen renderer'ları gizler. boxes owner'ın uzayında.
     // cacheKey: aynı şekli tekrar hesaplamamak için (tek odunlar). Kil görünüm kapalıysa null.
-    public GameObject AttachClay(Transform owner, System.Collections.Generic.List<Bounds> boxes, Renderer[] hide, string cacheKey = null)
+    public GameObject AttachClay(Transform owner, System.Collections.Generic.List<ClayMesher.Piece> pieces, Renderer[] hide, string cacheKey = null)
     {
-        if (!clayLook || boxes.Count == 0) return null;
-        string key = cacheKey == null ? null : $"{cacheKey}|{clayVoxelSize}|{clayCornerRadius}|{clayInset}";
+        if (!clayLook || pieces.Count == 0) return null;
+        string key = cacheKey == null ? null : $"{cacheKey}|{clayVoxelSize}|{clayCornerRadius}|{clayInset}|{clayGrainBlend}";
         if (key == null || !clayCache.TryGetValue(key, out Mesh mesh) || mesh == null)
         {
-            mesh = ClayMesher.Build(boxes, clayVoxelSize, clayCornerRadius, clayInset);
+            mesh = ClayMesher.Build(pieces, clayVoxelSize, clayCornerRadius, clayGrainBlend, clayInset);
             if (key != null && mesh != null) clayCache[key] = mesh;
         }
         if (mesh == null) return null;
@@ -78,25 +80,41 @@ public class WoodMerger : MonoBehaviour
         return new Bounds((from + to) * 0.5f, size);
     }
 
+    // Kil şekli için parça: şekil kutusu (reachBack'li), lif kutusu (sadece kendi hücreleri) ve uzandığı eksen
+    public ClayMesher.Piece ClayPiece(Vector3 start, Vector3 axis, int length, bool reachBack)
+    {
+        Vector3 a = new Vector3(Mathf.Abs(axis.x), Mathf.Abs(axis.y), Mathf.Abs(axis.z));
+        int index = a.y >= a.x && a.y >= a.z ? 1 : a.x >= a.z ? 0 : 2;
+        return new ClayMesher.Piece
+        {
+            shape = PieceBox(start, axis, length, reachBack),
+            grain = PieceBox(start, axis, length, false),
+            axis = index
+        };
+    }
+
     // Renk malzemede (MaterialPropertyBlock'la değil: birleşme sallanması kendi bloğunu yazıp siliyor)
     private Material ClayMaterial()
     {
         if (clayMaterial != null)
         {
-            if (clayMaterial.shader.name != "Village/Wood Wobble Lit" && !warnedClayShader)
+            if (clayMaterial.shader.name != "Village/Clay Wood Lit" && !warnedClayShader)
             {
                 warnedClayShader = true;
-                Debug.LogWarning("WoodMerger: Clay Material'ın shader'ı 'Village/Wood Wobble Lit' değil; kil şekli birleşince sallanmaz.", this);
+                Debug.LogWarning("WoodMerger: Clay Material'ın shader'ı 'Village/Clay Wood Lit' değil; doku odun yönünde döşenmez " +
+                                 "(Wood Wobble Lit değilse birleşince sallanmaz da).", this);
             }
             return clayMaterial;
         }
 #if UNITY_EDITOR
         if (fallbackClay == null)
         {
-            // Sadece editörde: sallanan odun shader'ı (yoksa düz URP Lit)
-            Shader shader = Shader.Find("Village/Wood Wobble Lit") ?? Shader.Find("Universal Render Pipeline/Lit");
+            // Sadece editörde: kil odun shader'ı + deneme dokusu (yoksa düz URP Lit)
+            Shader shader = Shader.Find("Village/Clay Wood Lit") ?? Shader.Find("Universal Render Pipeline/Lit");
             fallbackClay = new Material(shader);
             fallbackClay.SetColor("_BaseColor", clayColor);
+            var grain = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Material/Textures/WoodGrainTest.png");
+            if (grain != null) fallbackClay.SetTexture("_BaseMap", grain);
         }
         return fallbackClay;
 #else
