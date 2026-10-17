@@ -50,6 +50,7 @@ Sistem haritası (interaktif): `Docs/system-map.html` (yayında: https://claude.
 - Blueprint imzası döndürmeden bağımsız (`WoodLayout.CanonicalSignature`: 4 dönüşten sıralamada en küçüğü); döndürülmüş aynı şekil eşleşir, ayna görüntüsü eşleşmez. `steps` çıktısı slot'a yerleştirirken gereken dönüş.
 - `MergedWood` kayıt durumu: `baseLength` + 4 yan; eski format (sadece sağ yan, `layers`) yüklenirken sağ yana çevrilir.
 - Kombinasyon prefab'ı yapılmaz (eski 2BR_1BR sistemi kaldırıldı).
+- **Kil odun prototipi** (`Drops/Woods/ClayWoodPrototype`, sahneye eklenen bileşen; denemede): odunları ayrı modeller yerine tek kaynaşmış şekil olarak çizer. Her Wood / MergedWood gövde renderer'ının sınırı yuvarlak kutu (`cornerRadius`, `inset`); birbirine değenler grup (union-find), her grup için SDF yumuşak birleşim (`blend`) ızgarada (`voxelSize`) örneklenip surface nets ile tek mesh. Odunların renderer'ları gizlenir (collider, tutma, birleştirme aynı), elde tutulan hariç; değişince (`checkInterval`, konum imzası) yeniden üretilir. Doku yok (`color`). Kapatınca eski haline döner. Amaç: ek yeri görünmeyen, her kombinasyonda kesintisiz odun; beğenilirse detay dokuyla (kabuk + uç halkası, dünya uzayında) gelecek.
 
 ## Blueprint (boyama kitabı)
 - Blueprint sahnesinde (`Scenes/Blueprint.unity`) Play mode'da parçalar yerleştirilir, **Tools → Blueprint Creator** ile prefab + `GridPlaceableSO` üretilir (`Assets/Blueprints`).
