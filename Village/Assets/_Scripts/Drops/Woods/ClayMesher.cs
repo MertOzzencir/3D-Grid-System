@@ -3,10 +3,13 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// Kutuları kaynaşmış tek bir kil şekline çeviren hesap (Tiny Glade / Dreams yolu). Kutular önce birleştirilir
-// (aynı kesitte uç uca değenler tek kutu), sonra bütün şeklin dış kenarları birlikte yuvarlatılır: her kutu
-// cornerRadius kadar küçültülüp birleşimin mesafe alanından (SDF) cornerRadius çıkarılır. Aynı düzlemdeki yüzeyler
-// kusursuz düz birleşir; iç köşeler keskin kalır. Mesafe alanı ızgarada örneklenip mesh çıkarılır (surface nets).
+// Kutuları kaynaşmış tek bir kil şekline çeviren hesap (Tiny Glade / Dreams yolu). Bütün kutular tek bir dolu hacim
+// sayılır (ana odun, yan parçalar, üst/alt katlar: hangisi olduğu fark etmez), sonra bu hacmin sadece dış kenarları
+// yuvarlatılır: hacim "en büyük kutular"ına ayrılır (hacmin içinde kalıp hiçbir yöne büyüyemeyen bütün kutular,
+// birbirine binerler), her biri cornerRadius kadar küçültülüp birleşimin mesafe alanından (SDF) cornerRadius çıkarılır.
+// Değen iki parçanın ortak yüzü hacmin içinde kaldığı için oluk/çizgi olmaz; aynı düzlemdeki yüzeyler düz, iç köşeler
+// keskin kalır. (Eskiden her parça ayrı küçültülüyordu: üst üste farklı uzunlukta katlar birleşim yerinde oluk
+// bırakıyordu.) Mesafe alanı ızgarada örneklenip mesh çıkarılır (surface nets).
 //
 // Hücre hücre (chunk): şekil 1×1×1'lik hücre parçalarına bölünür (hücre sınırları -0.5 / +0.5'te, grid'le aynı). Her
 // hücrenin şekli sadece o hücreye margin kadar yakın kutulara bağlıdır; o kutular hücrenin etki alanına kırpılıp bir
@@ -45,7 +48,8 @@ public static class ClayMesher
         foreach (Part part in parts)
             radius = Mathf.Min(radius, Mathf.Min(part.half.x, Mathf.Min(part.half.y, part.half.z)) * 0.95f);
         radius = Mathf.Max(0f, radius);
-        float margin = radius + step * 3f;
+        // Küçült + şişir iki kez radius uzağa bakar: hücrenin şekli 2 × radius yakınındaki kutulara bağlı
+        float margin = radius * 2f + step * 3f;
 
         if (chunkCache.Count > MaxCachedChunks) chunkCache.Clear();
 
@@ -86,7 +90,7 @@ public static class ClayMesher
                     string chunkKey = Key(key, clipped, n, radius);
                     if (!chunkCache.TryGetValue(chunkKey, out Mesh mesh))
                     {
-                        mesh = ChunkMesh(clipped, n, step, radius);
+                        mesh = ChunkMesh(MaximalBoxes(clipped, radius), n, step, radius);
                         chunkCache[chunkKey] = mesh;
                     }
                     if (mesh != null) combine.Add(new CombineInstance { mesh = mesh, transform = Matrix4x4.Translate(origin) });
@@ -161,10 +165,97 @@ public static class ClayMesher
         }
     }
 
+    // Kutuların birleşimini (tek hacim) "en büyük kutular"ına ayırır: hacmin içinde kalan ve hiçbir yöne büyüyemeyen
+    // bütün kutular. Kutuların bütün yüz koordinatlarıyla sıkıştırılmış bir ızgarada (her eksende farklı yüz
+    // konumları) dolu hücreler işaretlenir, sonra x / y aralıkları için z boyunca dolu sütunlar taranır. Küçültülünce
+    // boş kalan (radius'tan ince) kutular atlanır.
+    private static List<Part> MaximalBoxes(List<Part> parts, float radius)
+    {
+        var coords = new float[3][];
+        var sorted = new List<float>();
+        for (int a = 0; a < 3; a++)
+        {
+            sorted.Clear();
+            foreach (Part part in parts)
+            {
+                sorted.Add(part.Min[a]);
+                sorted.Add(part.Max[a]);
+            }
+            sorted.Sort();
+            var unique = new List<float>();
+            foreach (float v in sorted)
+                if (unique.Count == 0 || v - unique[unique.Count - 1] > 1e-4f) unique.Add(v);
+            coords[a] = unique.ToArray();
+        }
+        int nx = coords[0].Length - 1, ny = coords[1].Length - 1, nz = coords[2].Length - 1;
+        var result = new List<Part>();
+        if (nx <= 0 || ny <= 0 || nz <= 0) return result;
+
+        // Dolu hücreler ve toplamlar (prefix sum: bir aralığın tamamen dolu olup olmadığı tek adımda)
+        int sx = nx + 1, sy = ny + 1;
+        var sum = new int[sx * sy * (nz + 1)];
+        int S(int x, int y, int z) => sum[x + sx * (y + sy * z)];
+        for (int z = 0; z < nz; z++)
+            for (int y = 0; y < ny; y++)
+                for (int x = 0; x < nx; x++)
+                {
+                    Vector3 c = new Vector3((coords[0][x] + coords[0][x + 1]) * 0.5f, (coords[1][y] + coords[1][y + 1]) * 0.5f,
+                                            (coords[2][z] + coords[2][z + 1]) * 0.5f);
+                    int filled = 0;
+                    foreach (Part part in parts)
+                        if (c.x > part.Min.x && c.x < part.Max.x && c.y > part.Min.y && c.y < part.Max.y && c.z > part.Min.z && c.z < part.Max.z)
+                        {
+                            filled = 1;
+                            break;
+                        }
+                    sum[(x + 1) + sx * ((y + 1) + sy * (z + 1))] = filled
+                        + S(x, y + 1, z + 1) + S(x + 1, y, z + 1) + S(x + 1, y + 1, z)
+                        - S(x, y, z + 1) - S(x, y + 1, z) - S(x + 1, y, z) + S(x, y, z);
+                }
+        // [x0, x1] × [y0, y1] × [z0, z1] (hücre indeksleri, dahil) tamamen dolu mu; ızgara dışı = boş
+        bool Full(int x0, int x1, int y0, int y1, int z0, int z1)
+        {
+            if (x0 < 0 || y0 < 0 || z0 < 0 || x1 >= nx || y1 >= ny || z1 >= nz) return false;
+            int count = S(x1 + 1, y1 + 1, z1 + 1) - S(x0, y1 + 1, z1 + 1) - S(x1 + 1, y0, z1 + 1) - S(x1 + 1, y1 + 1, z0)
+                      + S(x0, y0, z1 + 1) + S(x0, y1 + 1, z0) + S(x1 + 1, y0, z0) - S(x0, y0, z0);
+            return count == (x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1);
+        }
+
+        for (int x0 = 0; x0 < nx; x0++)
+            for (int x1 = x0; x1 < nx; x1++)
+            {
+                bool anyX = false;
+                for (int y0 = 0; y0 < ny; y0++)
+                    for (int y1 = y0; y1 < ny; y1++)
+                    {
+                        bool any = false;
+                        for (int z = 0; z < nz; z++)
+                        {
+                            if (!Full(x0, x1, y0, y1, z, z)) continue;
+                            int z0 = z;
+                            while (z + 1 < nz && Full(x0, x1, y0, y1, z + 1, z + 1)) z++;
+                            any = true;
+                            // x ve y'de de büyüyemiyorsa en büyük kutu
+                            if (Full(x0 - 1, x0 - 1, y0, y1, z0, z) || Full(x1 + 1, x1 + 1, y0, y1, z0, z) ||
+                                Full(x0, x1, y0 - 1, y0 - 1, z0, z) || Full(x0, x1, y1 + 1, y1 + 1, z0, z)) continue;
+                            Vector3 lo = new Vector3(coords[0][x0], coords[1][y0], coords[2][z0]);
+                            Vector3 hi = new Vector3(coords[0][x1 + 1], coords[1][y1 + 1], coords[2][z + 1]);
+                            Vector3 half = (hi - lo) * 0.5f;
+                            if (half.x < radius - 1e-5f || half.y < radius - 1e-5f || half.z < radius - 1e-5f) continue;
+                            result.Add(new Part { center = (lo + hi) * 0.5f, half = Vector3.Max(half, Vector3.one * radius) });
+                        }
+                        if (!any) break; // y1 büyüdükçe dolu sütun çıkmaz
+                        anyX = true;
+                    }
+                if (!anyX) break; // x1 büyüdükçe de
+            }
+        return result;
+    }
+
     private static Vector3 Abs(Vector3 v) => new Vector3(Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z));
 
-    // Mesafe alanı (eksi = içeride): radius kadar küçültülmüş kutuların birleşimi, sonra hepsi birlikte radius kadar
-    // şişirilir (dış kenarlar yuvarlak, aynı düzlemdeki yüzeyler düz)
+    // Mesafe alanı (eksi = içeride): radius kadar küçültülmüş en büyük kutuların birleşimi, sonra hepsi birlikte radius
+    // kadar şişirilir (dış kenarlar yuvarlak, aynı düzlemdeki yüzeyler düz, değen parçalar arasında oluk yok)
     private static float Sdf(List<Part> parts, Vector3 p, float radius)
     {
         float d = float.MaxValue;
