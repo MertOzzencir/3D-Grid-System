@@ -38,12 +38,19 @@ public class WoodRope
     [SerializeField] private float strandPitch = 0.35f;
     [Tooltip("Düğüm topunun büyüklüğü (kalınlığa oranla)")]
     [SerializeField] private float knotSize = 1.7f;
-    [Tooltip("Birleştirme anında ipin sarılma süresi (saniye)")]
-    [SerializeField] private float growDuration = 0.6f;
+    [Header("Sarılma animasyonu (birleştirme anında, sadece yeni kısım)")]
+    [Tooltip("İpin uzama hızı (birim / saniye)")]
+    [SerializeField] private float growSpeed = 3.5f;
     [Tooltip("İp sarılmaya birleşmeden bu kadar sonra başlar (saniye)")]
     [SerializeField] private float growDelay = 0.1f;
-    [Tooltip("İp bitince düğümlerin zıplayarak oturma süresi (saniye)")]
+    [Tooltip("Birden çok yeni ip parçası bu arayla sırayla sarılır (saniye)")]
+    [SerializeField] private float growStagger = 0.08f;
+    [Tooltip("Açılan ip önce bu oranda kalın (gevşek) gelir, sonra yaylanarak oturur (0 = yok)")]
+    [SerializeField, Range(0f, 1f)] private float looseness = 0.45f;
+    [Tooltip("Düğümlerin zıplayarak oturma süresi (saniye)")]
     [SerializeField] private float knotPopDuration = 0.25f;
+    [Tooltip("Düğüm oturunca saçılan ip lifi sayısı (0 = yok)")]
+    [SerializeField, Range(0, 30)] private int knotFibers = 10;
 
     private const int Sides = 12;
     private const float Step = 0.02f; // ipin boyunca örnek aralığı (örgü için sık)
@@ -148,9 +155,18 @@ public class WoodRope
         var rope = new GameObject("Rope");
         rope.transform.SetParent(parent, false);
         rope.AddComponent<MeshFilter>().sharedMesh = mesh;
-        rope.AddComponent<MeshRenderer>().sharedMaterial = Material(woodMaterial);
-        rope.AddComponent<RopeGrow>().Setup(mesh, animCenters.ToArray(), animChain.ToArray(), animDistance.ToArray(),
-                                            growDuration, growDelay, knotPopDuration);
+        Material ropeMaterial = Material(woodMaterial);
+        rope.AddComponent<MeshRenderer>().sharedMaterial = ropeMaterial;
+        rope.AddComponent<RopeGrow>().Setup(mesh, animCenters.ToArray(), animChain.ToArray(), animDistance.ToArray(), new RopeGrow.Settings
+        {
+            speed = growSpeed,
+            delay = growDelay,
+            stagger = growStagger,
+            loose = looseness,
+            knotDuration = knotPopDuration,
+            fibers = knotFibers,
+            material = ropeMaterial
+        });
         return rope;
     }
 
