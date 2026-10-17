@@ -25,9 +25,9 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private bool clayLook = true;
     [Tooltip("Dolgunun ızgara aralığı (birim): küçük = daha pürüzsüz dolgu ama üretimi daha yavaş (0.04 önerilir)")]
     [SerializeField] private float clayVoxelSize = 0.04f;
-    [Tooltip("Değen iki odun arasındaki oluğun ne kadar dolacağı (birim): yumuşak birleşimin genişliği. Büyük = kalın, " +
-             "yumuşak dolgu; küçük = ince dolgu.")]
-    [SerializeField, Range(0.01f, 0.15f)] private float clayBlend = 0.08f;
+    [Tooltip("Değen iki odun arasındaki oluğun ne kadar dolacağı (birim): yumuşak birleşimin genişliği. Dolgu en fazla " +
+             "bunun dörtte biri kadar kalınlaşır (oluğun derinliği ~0.1 ise ~0.4 gerekir). Büyük = kalın, yumuşak dolgu.")]
+    [SerializeField, Range(0.01f, 0.4f)] private float clayBlend = 0.25f;
     [Tooltip("Dolgunun 1BR dokusundaki yeri (UV, 0..1): dokunun hiçbir yüzün kullanmadığı, düz odun renkli bir noktası. " +
              "Dolgu buradan renk alır, normal map'i düz olmalı.")]
     [SerializeField] private Vector2 clayFillUv = new Vector2(0.2f, 0.85f);

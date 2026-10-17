@@ -70,7 +70,7 @@ public static class ClayMesher
         {
             int n = Mathf.Clamp(Mathf.RoundToInt(1f / Mathf.Max(voxelSize, 0.01f)), 4, 64);
             float step = 1f / n;
-            blend = Mathf.Clamp(blend, 0.001f, 0.15f);
+            blend = Mathf.Clamp(blend, 0.001f, 0.4f);
             // Bir noktanın değeri sadece modeli (hücreden ~0.05 taşar) blend kadar yakına gelen odunlara bağlı
             float margin = 0.55f + blend + step * 3f;
 
@@ -307,6 +307,7 @@ public static class ClayMesher
         private const int Grid = 16;
         private const int DistanceRes = 40;
         private const float DistanceRange = 0.8f; // mesafe ızgarası [-0.8, 0.8]³
+        private const float MaxBlend = 0.4f;      // smooth min bu kadar uzaktaki değerlere bakar
 
         public int Id { get; }
         public Mesh Mesh { get; }
@@ -347,7 +348,7 @@ public static class ClayMesher
             }
             boundsMin = Vector3.one * -(DistanceRange + 0.05f);
             bucketSize = Vector3.one * (2f * (DistanceRange + 0.05f) / Grid);
-            pad = bucketSize.x * 1.5f;
+            pad = Mathf.Max(bucketSize.x * 1.5f, MaxBlend + 0.05f); // mesafe yüzeyden bu kadar uzağa kadar doğru
             for (int i = 0; i < buckets.Length; i++) buckets[i] = new List<int>();
             for (int t = 0; t < triangles.Length; t += 3)
             {
