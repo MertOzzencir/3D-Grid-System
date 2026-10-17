@@ -4,22 +4,22 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 // Odun hücrelerini kaynaşmış tek bir şekle çeviren hesap. Şekil de görünüm de 1BR odun modelinden (Reference): her odun
-// hücresine parçanın dönüşüyle 1BR'nin kendisi oturur (modelin mesafe alanı, SDF). Dolu bir komşuya bakan yönde model
-// düz uzatılır: modelin o yöndeki orta kesiti (extrudeFrom'dan sonrası) komşu hücreye kadar çekilir, iki hücrenin
-// uzatmaları birbirine biner. Böylece birleşim yerinde modelin yuvarlak kenarları kalkar (oluk yok), açıkta kalan
-// yüzler ve uçlar 1BR'nin aynısı. Bütün hücrelerin birleşimi (min) ızgarada örneklenip mesh çıkarılır (surface nets).
+// hücresine parçanın dönüşüyle 1BR'nin kendisi oturur (modelin mesafe alanı, SDF); her odun 1BR'nin yastık şeklini
+// korur. Kaynaşma sadece değme yerlerinde: hücrelerin mesafe alanları yumuşak birleşimle (smooth min, genişlik blend)
+// birleşir, iki modelin arasındaki oluk hamur sıvanmış gibi dolar. Bütün hücrelerin birleşimi ızgarada örneklenip
+// mesh çıkarılır (surface nets).
 //
 // Görünüm: kilin her vertex'i sahibi olan hücredeki (mesafesi en küçük) 1BR'nin en yakın noktasının UV'sini ve
-// tangent'ını alır. Uzatılan (kaynaşan) kısımda detay 0: shader orada dokunun boş, düz renkli yerini kullanır, normal
-// map yok; uzatmanın başlangıcından fuseWidth içeriye doğru detay yumuşakça 1'e döner. Detay tangent.w'de:
-// işaret × (1 + detay) ("Village/Clay Wood Lit" çözer).
+// tangent'ını alır. Kaynaşma şeridinde (en yakın iki hücrenin mesafesi birbirine fuseWidth'ten yakın) detay 0'a iner:
+// shader orada dokunun boş, düz renkli yerini kullanır, normal map yok. Detay tangent.w'de: işaret × (1 + detay)
+// ("Village/Clay Wood Lit" çözer).
 //
 // Hücre hücre (chunk): şekil 1×1×1'lik hücre parçalarına bölünür (hücre sınırları -0.5 / +0.5'te, grid'le aynı). Her
-// hücrenin şekli sadece ona margin kadar yakın odun hücrelerine (ortası, dönüşü, dolu komşuları) bağlıdır; bunlardan
-// bir parmak izi (anahtar) yapılır ve hücre şekli önbellekte bu anahtarla tutulur. Bir yapıya parça eklenince sadece
-// parçanın çevresindeki hücrelerin izi değişir; diğerleri önbellekten gelir: ekleme maliyeti yapının büyüklüğünden
-// bağımsız. Hücreler ortak bir ızgarada (adım = 1 / N) ve sınırın iki yanında aynı verilerle hesaplandığı için komşu
-// hücrelerin sınırdaki vertex'leri birebir aynı: çatlak yok. Hepsi çağıranın yerel uzayında.
+// hücrenin şekli sadece ona margin kadar yakın odun hücrelerine (ortası, dönüşü) bağlıdır; bunlardan bir parmak izi
+// (anahtar) yapılır ve hücre şekli önbellekte bu anahtarla tutulur. Bir yapıya parça eklenince sadece parçanın
+// çevresindeki hücrelerin izi değişir; diğerleri önbellekten gelir: ekleme maliyeti yapının büyüklüğünden bağımsız.
+// Uzaktaki hücreler yumuşak birleşimi değiştirmez (blend'den uzak değer etkisiz), bu yüzden sınırın iki yanında değerler
+// birebir aynı: çatlak yok. Hepsi çağıranın yerel uzayında.
 public static class ClayMesher
 {
     // Bir odun parçası: start = ilk hücrenin ortası, rotation = parçanın dönüşü (1BR bu dönüşle hücrelere oturur,
@@ -31,27 +31,20 @@ public static class ClayMesher
         public int length;
     }
 
-    // Tek odun hücresi: ortası, 1BR'nin dönüşü, dolu komşular (bit: +x, -x, +y, -y, +z, -z)
+    // Tek odun hücresi: ortası, 1BR'nin dönüşü
     private struct Cell
     {
         public Vector3 center;
         public Quaternion rotation;
-        public int neighbors;
     }
-
-    private static readonly Vector3[] Directions =
-        { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
-
-    private const float Overlap = 0.05f; // uzatma komşu hücreye bu kadar taşar (iki uzatma birbirine binsin)
 
     // Hücre şekilleri: parmak izi → mesh (hücrenin kendi uzayında, [0, 1]); null = o hücrede yüzey yok
     private static readonly Dictionary<string, Mesh> chunkCache = new Dictionary<string, Mesh>();
     private const int MaxCachedChunks = 6000;
 
     // pieces: parçalar (çağıranın uzayında); reference: şeklin ve görünümün alındığı 1BR; voxelSize: ızgara aralığı
-    // (1 / N'ye yuvarlanır); extrudeFrom: dolu komşuya doğru model hücre ortasından bu kadar uzakta uzatılmaya başlar;
-    // fuseWidth: uzatmanın başından içeri doğru detayın geri geldiği genişlik
-    public static Mesh Build(List<Piece> pieces, Reference reference, float voxelSize, float extrudeFrom, float fuseWidth)
+    // (1 / N'ye yuvarlanır); blend: değme yerindeki yumuşak birleşimin genişliği; fuseWidth: kaynaşma şeridinin genişliği
+    public static Mesh Build(List<Piece> pieces, Reference reference, float voxelSize, float blend, float fuseWidth)
     {
         if (reference == null) return null;
         var cells = new List<Cell>();
@@ -63,23 +56,12 @@ public static class ClayMesher
         }
         if (cells.Count == 0) return null;
 
-        // Dolu komşular
-        var filled = new HashSet<Vector3Int>();
-        foreach (Cell cell in cells) filled.Add(CellKey(cell.center));
-        for (int i = 0; i < cells.Count; i++)
-        {
-            Cell cell = cells[i];
-            for (int d = 0; d < 6; d++)
-                if (filled.Contains(CellKey(cell.center + Directions[d]))) cell.neighbors |= 1 << d;
-            cells[i] = cell;
-        }
-
         int n = Mathf.Clamp(Mathf.RoundToInt(1f / Mathf.Max(voxelSize, 0.01f)), 4, 64);
         float step = 1f / n;
-        extrudeFrom = Mathf.Clamp(extrudeFrom, 0.05f, 0.45f);
+        blend = Mathf.Clamp(blend, 0.001f, 0.15f);
         fuseWidth = Mathf.Max(fuseWidth, 0.001f);
-        // Bir noktanın değeri en fazla bir hücre ötedeki odunlara bağlı (model hücreden ~0.05 taşar)
-        float margin = 0.6f + step * 3f;
+        // Bir noktanın değeri sadece modeli (hücreden ~0.05 taşar) blend kadar yakına gelen odunlara bağlı
+        float margin = 0.55f + blend + step * 3f;
 
         if (chunkCache.Count > MaxCachedChunks) chunkCache.Clear();
 
@@ -110,14 +92,14 @@ public static class ClayMesher
                         Vector3 c = cell.center;
                         if (c.x < regionMin.x || c.x > regionMax.x || c.y < regionMin.y || c.y > regionMax.y ||
                             c.z < regionMin.z || c.z > regionMax.z) continue;
-                        localCells.Add(new Cell { center = c - origin, rotation = cell.rotation, neighbors = cell.neighbors });
+                        localCells.Add(new Cell { center = c - origin, rotation = cell.rotation });
                     }
                     if (localCells.Count == 0) continue;
 
-                    string chunkKey = Key(key, localCells, n, extrudeFrom, fuseWidth, reference);
+                    string chunkKey = Key(key, localCells, n, blend, fuseWidth, reference);
                     if (!chunkCache.TryGetValue(chunkKey, out Mesh mesh))
                     {
-                        mesh = ChunkMesh(localCells, reference, n, step, extrudeFrom, fuseWidth);
+                        mesh = ChunkMesh(localCells, reference, n, step, blend, fuseWidth);
                         chunkCache[chunkKey] = mesh;
                     }
                     if (mesh != null) combine.Add(new CombineInstance { mesh = mesh, transform = Matrix4x4.Translate(origin) });
@@ -130,10 +112,8 @@ public static class ClayMesher
         return result;
     }
 
-    private static Vector3Int CellKey(Vector3 center) => Vector3Int.RoundToInt(center * 4f);
-
-    // Hücrenin parmak izi: ızgara, uzatma ayarları, referans ve odun hücreleri (sıralı, yuvarlanmış)
-    private static string Key(StringBuilder sb, List<Cell> localCells, int n, float extrudeFrom, float fuseWidth, Reference reference)
+    // Hücrenin parmak izi: ızgara, birleşim ayarları, referans ve odun hücreleri (sıralı, yuvarlanmış)
+    private static string Key(StringBuilder sb, List<Cell> localCells, int n, float blend, float fuseWidth, Reference reference)
     {
         localCells.Sort((a, b) =>
         {
@@ -143,7 +123,7 @@ public static class ClayMesher
             return c != 0 ? c : a.center.z.CompareTo(b.center.z);
         });
         sb.Clear();
-        sb.Append(n).Append('|').Append(Mathf.RoundToInt(extrudeFrom * 10000f)).Append('|').Append(Mathf.RoundToInt(fuseWidth * 10000f))
+        sb.Append(n).Append('|').Append(Mathf.RoundToInt(blend * 10000f)).Append('|').Append(Mathf.RoundToInt(fuseWidth * 10000f))
           .Append('|').Append(reference.Id);
         foreach (Cell cell in localCells)
         {
@@ -151,75 +131,64 @@ public static class ClayMesher
             Quaternion r = cell.rotation;
             sb.Append('|').Append(Mathf.RoundToInt(c.x * 1000f)).Append(',').Append(Mathf.RoundToInt(c.y * 1000f)).Append(',').Append(Mathf.RoundToInt(c.z * 1000f))
               .Append(':').Append(Mathf.RoundToInt(r.x * 1000f)).Append(',').Append(Mathf.RoundToInt(r.y * 1000f)).Append(',')
-              .Append(Mathf.RoundToInt(r.z * 1000f)).Append(',').Append(Mathf.RoundToInt(r.w * 1000f)).Append(':').Append(cell.neighbors);
+              .Append(Mathf.RoundToInt(r.z * 1000f)).Append(',').Append(Mathf.RoundToInt(r.w * 1000f));
         }
         return sb.ToString();
     }
 
-    // Noktanın bir hücreye göre modeldeki karşılığı: dolu komşulara doğru extrudeFrom'dan ötesi geri çekilir (uzatma),
-    // sonuç 1BR'nin uzayında. limit: uzatmanın komşu hücrede bittiği düzleme uzaklık (pozitif = ötesinde)
-    private static Vector3 ModelPoint(Cell cell, Vector3 p, float extrudeFrom, out float limit, out float extruded)
+    // Bir hücrenin 1BR'sinin mesafesi
+    private static float CellDistance(Cell cell, Reference reference, Vector3 p) =>
+        reference.Distance(Quaternion.Inverse(cell.rotation) * (p - cell.center));
+
+    // Yumuşak birleşim (polinom smooth min): iki değer blend'den uzaksa düz min, yakınsa aradaki oluk dolar
+    private static float SmoothMin(float a, float b, float blend)
     {
-        Vector3 offset = p - cell.center;
-        limit = float.MinValue;
-        extruded = float.MinValue; // uzatma başlangıcına göre en derin konum (pozitif = uzatılan kısımda)
-        for (int d = 0; d < 6; d++)
-        {
-            if ((cell.neighbors & (1 << d)) == 0) continue;
-            float t = Vector3.Dot(p - cell.center, Directions[d]);
-            limit = Mathf.Max(limit, t - (0.5f + Overlap));
-            extruded = Mathf.Max(extruded, t - extrudeFrom);
-            if (t > extrudeFrom) offset -= Directions[d] * (t - extrudeFrom);
-        }
-        return Quaternion.Inverse(cell.rotation) * offset;
+        float h = Mathf.Max(blend - Mathf.Abs(a - b), 0f) / blend;
+        return Mathf.Min(a, b) - h * h * blend * 0.25f;
     }
 
-    // Bir hücrenin (uzatılmış) 1BR'sinin mesafesi
-    private static float CellDistance(Cell cell, Reference reference, Vector3 p, float extrudeFrom)
-    {
-        Vector3 local = ModelPoint(cell, p, extrudeFrom, out float limit, out _);
-        return Mathf.Max(reference.Distance(local), limit);
-    }
-
-    // Mesafe alanı (eksi = içeride): bütün hücrelerin birleşimi
-    private static float Sdf(List<Cell> cells, Reference reference, Vector3 p, float extrudeFrom)
+    // Mesafe alanı (eksi = içeride): bütün hücrelerin yumuşak birleşimi (hücreler sıralı: her parçada aynı sonuç)
+    private static float Sdf(List<Cell> cells, Reference reference, Vector3 p, float blend)
     {
         float d = float.MaxValue;
         foreach (Cell cell in cells)
-            d = Mathf.Min(d, CellDistance(cell, reference, p, extrudeFrom));
+        {
+            float c = CellDistance(cell, reference, p);
+            d = d == float.MaxValue ? c : SmoothMin(d, c, blend);
+        }
         return d;
     }
 
-    private static Vector3 Gradient(List<Cell> cells, Reference reference, Vector3 p, float h, float extrudeFrom)
+    private static Vector3 Gradient(List<Cell> cells, Reference reference, Vector3 p, float h, float blend)
     {
         Vector3 g = new Vector3(
-            Sdf(cells, reference, p + Vector3.right * h, extrudeFrom) - Sdf(cells, reference, p - Vector3.right * h, extrudeFrom),
-            Sdf(cells, reference, p + Vector3.up * h, extrudeFrom) - Sdf(cells, reference, p - Vector3.up * h, extrudeFrom),
-            Sdf(cells, reference, p + Vector3.forward * h, extrudeFrom) - Sdf(cells, reference, p - Vector3.forward * h, extrudeFrom));
+            Sdf(cells, reference, p + Vector3.right * h, blend) - Sdf(cells, reference, p - Vector3.right * h, blend),
+            Sdf(cells, reference, p + Vector3.up * h, blend) - Sdf(cells, reference, p - Vector3.up * h, blend),
+            Sdf(cells, reference, p + Vector3.forward * h, blend) - Sdf(cells, reference, p - Vector3.forward * h, blend));
         return g.sqrMagnitude > 1e-10f ? g.normalized : Vector3.up;
     }
 
     // Vertex'in görünümü: sahibi (mesafesi en küçük) hücredeki 1BR'nin en yakın noktasının UV'si ve tangent'ı; detay
-    // uzatılan kısımda 0, uzatmanın başından fuseWidth içeride 1
-    private static void Appearance(List<Cell> cells, Reference reference, Vector3 v, float extrudeFrom, float fuseWidth,
-                                   out Vector2 uv, out Vector4 tangent)
+    // en yakın iki hücrenin mesafe farkından (değme yerinde ikisi eşit: 0, fuseWidth farkta 1)
+    private static void Appearance(List<Cell> cells, Reference reference, Vector3 v, float fuseWidth, out Vector2 uv, out Vector4 tangent)
     {
         int owner = -1;
-        float best = float.MaxValue;
+        float best = float.MaxValue, second = float.MaxValue;
         for (int i = 0; i < cells.Count; i++)
         {
-            float d = CellDistance(cells[i], reference, v, extrudeFrom);
+            float d = CellDistance(cells[i], reference, v);
             if (d < best)
             {
+                second = best;
                 best = d;
                 owner = i;
             }
+            else if (d < second) second = d;
         }
         Cell cell = cells[owner];
-        Vector3 local = ModelPoint(cell, v, extrudeFrom, out _, out float extruded);
-        float detail = extruded == float.MinValue ? 1f : 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((extruded + fuseWidth) / fuseWidth));
+        float detail = second == float.MaxValue ? 1f : Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((second - best) / fuseWidth));
 
-        reference.Sample(local, out uv, out Vector4 localTangent);
+        reference.Sample(Quaternion.Inverse(cell.rotation) * (v - cell.center), out uv, out Vector4 localTangent);
         Vector3 t = cell.rotation * new Vector3(localTangent.x, localTangent.y, localTangent.z);
         float sign = localTangent.w < 0f ? -1f : 1f;
         tangent = new Vector4(t.x, t.y, t.z, sign * (1f + detail));
@@ -228,7 +197,7 @@ public static class ClayMesher
     // Bir hücrenin (uzayı [0, 1]) şekli, surface nets. Noktalar -1..n+1 (komşu küplerin vertex'leri için bir sıra
     // fazla), küp vertex'leri -1..n-1, dörtgenler tabanı 0..n-1 olan ızgara kenarları için (her kenar tek hücrenin).
     // Izgara yarım adım kaydırılmış (noktalar (i + 0.5) * adım): hücre sınırına denk gelen yüzlerin sahibi kesin olsun.
-    private static Mesh ChunkMesh(List<Cell> cells, Reference reference, int n, float step, float extrudeFrom, float fuseWidth)
+    private static Mesh ChunkMesh(List<Cell> cells, Reference reference, int n, float step, float blend, float fuseWidth)
     {
         int m = n + 3;                        // nokta sayısı (eksen başına), indeks i ↔ ızgara -1 + i
         int Index(int x, int y, int z) => x + m * (y + m * z);
@@ -240,7 +209,7 @@ public static class ClayMesher
             for (int y = 0; y < m; y++)
                 for (int x = 0; x < m; x++)
                 {
-                    float v = Sdf(cells, reference, Point(x, y, z), extrudeFrom);
+                    float v = Sdf(cells, reference, Point(x, y, z), blend);
                     values[Index(x, y, z)] = v;
                     if (v < 0f) anyInside = true; else anyOutside = true;
                 }
@@ -284,8 +253,8 @@ public static class ClayMesher
                     Vector3 v = sum / count;
                     cellVertex[CellIndex(x, y, z)] = vertices.Count;
                     vertices.Add(v);
-                    normals.Add(Gradient(cells, reference, v, step * 0.5f, extrudeFrom));
-                    Appearance(cells, reference, v, extrudeFrom, fuseWidth, out Vector2 uv, out Vector4 tangent);
+                    normals.Add(Gradient(cells, reference, v, step * 0.5f, blend));
+                    Appearance(cells, reference, v, fuseWidth, out Vector2 uv, out Vector4 tangent);
                     uvs.Add(uv);
                     tangents.Add(tangent);
                 }

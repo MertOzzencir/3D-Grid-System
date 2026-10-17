@@ -25,12 +25,11 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private bool clayLook = true;
     [Tooltip("Şeklin ızgara aralığı (birim): küçük = daha pürüzsüz ama üretimi daha yavaş")]
     [SerializeField] private float clayVoxelSize = 0.07f;
-    [Tooltip("Dolu bir komşuya bakan yönde 1BR modeli hücre ortasından bu kadar (birim) uzakta düz uzatılmaya başlar: " +
-             "modelin o yöndeki orta kesiti komşuya kadar çekilir, iki odunun yuvarlak kenarları kalkar. Modelin yan yüzünün " +
-             "düz kısmında olmalı (küçük = kaynaşma geniş, büyük = modelin kenar yuvarlağı birleşime yaklaşır).")]
-    [SerializeField, Range(0.05f, 0.45f)] private float clayExtrudeFrom = 0.3f;
-    [Tooltip("Uzatmanın başından hücrenin ortasına doğru 1BR'nin detayının (renk + normal map) geri geldiği genişlik " +
-             "(birim). Uzatılan (kaynaşan) kısım dokunun boş, düz renkli yerinden; normal map yok.")]
+    [Tooltip("Değen iki odun arasındaki oluğun ne kadar dolacağı (birim): yumuşak birleşimin genişliği. Büyük = kalın, " +
+             "yumuşak dolgu; küçük = odunlar neredeyse ayrı.")]
+    [SerializeField, Range(0.01f, 0.15f)] private float clayBlend = 0.08f;
+    [Tooltip("Kaynaşma şeridinin genişliği (birim): değme yerinin bu kadar çevresinde 1BR'nin detayı (renk + normal map) " +
+             "söner, renk dokunun boş, düz renkli yerinden.")]
     [SerializeField, Range(0.01f, 0.4f)] private float clayFuseWidth = 0.1f;
     [Tooltip("Kil şeklinin malzemesi. Shader'ı 'Village/Clay Wood Lit' olmalı; dokular 1BR odunun dokuları (Base Map = renk, " +
              "Normal Map = normal), görünüm her hücredeki hayali 1BR'den alınır. Build'de gerekli.")]
@@ -50,10 +49,10 @@ public class WoodMerger : MonoBehaviour
     public GameObject AttachClay(Transform owner, System.Collections.Generic.List<ClayMesher.Piece> pieces, Renderer[] hide, string cacheKey = null)
     {
         if (!clayLook || pieces.Count == 0) return null;
-        string key = cacheKey == null ? null : $"{cacheKey}|{clayVoxelSize}|{clayExtrudeFrom}|{clayFuseWidth}";
+        string key = cacheKey == null ? null : $"{cacheKey}|{clayVoxelSize}|{clayBlend}|{clayFuseWidth}";
         if (key == null || !clayCache.TryGetValue(key, out Mesh mesh) || mesh == null)
         {
-            mesh = ClayMesher.Build(pieces, ClayReference(), clayVoxelSize, clayExtrudeFrom, clayFuseWidth);
+            mesh = ClayMesher.Build(pieces, ClayReference(), clayVoxelSize, clayBlend, clayFuseWidth);
             if (key != null && mesh != null) clayCache[key] = mesh;
         }
         if (mesh == null) return null;
