@@ -2,12 +2,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// PROTOTİP: odunları ayrı modeller yerine kaynaşmış tek bir kil şekli olarak çizer (Tiny Glade / Dreams yolu).
-// Sahnedeki bütün Wood ve MergedWood'ların görsel parçalarını bulur, her parçayı kenarları yuvarlatılmış bir kutu
-// olarak alır (renderer'ının sınırları), birbirine değenleri gruplar ve her grup için mesafe alanını (SDF, yumuşak
-// birleşim: iki hamuru bastırmak gibi) bir ızgarada örnekleyip tek bir mesh çıkarır (surface nets). Odunların kendi
-// renderer'ları gizlenir; collider'ları, tutma, birleştirme aynen çalışır. Elde tutulan odun kaynaşmaya girmez (kendi
-// modeliyle görünür). Odunlar değişince (eklendi, taşındı, silindi) yeniden üretilir.
+// PROTOTİP: birleştirilmiş odunları (MergedWood) ayrı parçalar yerine kaynaşmış tek bir kil şekli olarak çizer
+// (Tiny Glade / Dreams yolu). Tek başına duran odunlara (Wood) dokunmaz. Her yapının görsel parçalarını kenarları
+// yuvarlatılmış kutular olarak alır (renderer sınırları), aynı kesitte uç uca değenleri tek kutuya birleştirir (oluk
+// kalmasın), mesafe alanını (SDF, yumuşak birleşim: iki hamuru bastırmak gibi) ızgarada örnekleyip tek mesh çıkarır
+// (surface nets). Model yapı başına bir kez üretilir, sadece o yapı değişince yeniden (performans). Parçaların kendi
+// renderer'ları gizlenir; collider'ları, tutma, birleştirme aynen çalışır. Elde tutulan yapı kendi modeliyle görünür.
 // Doku yok (düz renk): önce şekli görmek için. Kapatınca (bileşeni disable) odunlar eski haline döner.
 public class ClayWoodPrototype : MonoBehaviour
 {
@@ -39,19 +39,28 @@ public class ClayWoodPrototype : MonoBehaviour
         public Vector3 half;
     }
 
-    private readonly List<GameObject> built = new List<GameObject>();
-    private readonly List<Part> lastParts = new List<Part>();
+    // Her birleşik odun yapısının (MergedWood) kaynaşmış modeli bir kez üretilir, yapı değişince (imza) yeniden.
+    // Tek başına duran odunlara (Wood) dokunulmaz: birleştirilmedikçe kendi modelleriyle kalırlar.
+    private class Entry
+    {
+        public int signature;
+        public GameObject mesh;
+        public readonly List<Renderer> hidden = new List<Renderer>();
+        public readonly List<Part> parts = new List<Part>();
+    }
+
+    private readonly Dictionary<MergedWood, Entry> entries = new Dictionary<MergedWood, Entry>();
+    private readonly List<MergedWood> stale = new List<MergedWood>();
+    private readonly HashSet<MergedWood> seen = new HashSet<MergedWood>();
     private Material fallback;
-    private readonly List<Renderer> hidden = new List<Renderer>();
     private float nextCheck;
-    private int lastSignature;
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorId = Shader.PropertyToID("_Color");
 
     private void OnDisable()
     {
-        Clear();
-        lastSignature = 0;
+        foreach (Entry entry in entries.Values) Release(entry);
+        entries.Clear();
     }
 
     private void Update()
@@ -59,50 +68,58 @@ public class ClayWoodPrototype : MonoBehaviour
         if (Time.time < nextCheck) return;
         nextCheck = Time.time + checkInterval;
 
-        List<(GridEntity wood, Renderer[] renderers)> woods = CollectWoods();
-        int signature = Signature(woods);
-        if (signature == lastSignature) return;
-        lastSignature = signature;
-        Rebuild(woods);
-    }
-
-    // Sahnedeki odunlar (elde tutulan hariç) ve görsel renderer'ları
-    private static List<(GridEntity, Renderer[])> CollectWoods()
-    {
-        var result = new List<(GridEntity, Renderer[])>();
         object held = InteractableController.Instance != null ? InteractableController.Instance.Held : null;
-        void Add(GridEntity entity)
+        seen.Clear();
+        foreach (MergedWood merged in FindObjectsByType<MergedWood>(FindObjectsSortMode.None))
         {
-            if (entity == null || ReferenceEquals(entity, held)) return;
-            var renderers = new List<Renderer>();
-            // Sadece odunun gövde parçaları: kapalı objeler ve küçük yardımcı modeller (birleştirme noktaları gibi) hariç
-            foreach (Renderer r in entity.GetComponentsInChildren<Renderer>(false))
-            {
-                if (!(r is MeshRenderer)) continue;
-                Vector3 size = BoundsOf(r).size;
-                if (Mathf.Min(size.x, Mathf.Min(size.y, size.z)) < 0.15f) continue;
-                renderers.Add(r);
-            }
-            if (renderers.Count > 0) result.Add((entity, renderers.ToArray()));
+            if (ReferenceEquals(merged, held)) continue; // elde tutulan kendi modeliyle görünür
+            seen.Add(merged);
+            List<Renderer> renderers = BodyRenderers(merged);
+            int signature = Signature(renderers);
+            if (entries.TryGetValue(merged, out Entry entry) && entry.signature == signature) continue;
+            if (entry != null) Release(entry);
+            else entries[merged] = entry = new Entry();
+            entry.signature = signature;
+            Build(entry, renderers);
         }
-        foreach (Wood wood in FindObjectsByType<Wood>(FindObjectsSortMode.None)) Add(wood);
-        foreach (MergedWood merged in FindObjectsByType<MergedWood>(FindObjectsSortMode.None)) Add(merged);
-        return result;
+
+        // Silinen ya da elde tutulan yapılar: kendi modelleri geri gelir
+        stale.Clear();
+        foreach (KeyValuePair<MergedWood, Entry> pair in entries)
+            if (pair.Key == null || !seen.Contains(pair.Key)) stale.Add(pair.Key);
+        foreach (MergedWood key in stale)
+        {
+            Release(entries[key]);
+            entries.Remove(key);
+        }
     }
 
-    // Yerleri değişti mi (yuvarlanmış konum / boy)
-    private static int Signature(List<(GridEntity wood, Renderer[] renderers)> woods)
+    // Yapının gövde parçaları: kapalı objeler ve küçük yardımcı modeller (birleştirme noktaları gibi) hariç
+    private static List<Renderer> BodyRenderers(MergedWood merged)
+    {
+        var renderers = new List<Renderer>();
+        foreach (Renderer r in merged.GetComponentsInChildren<Renderer>(false))
+        {
+            if (!(r is MeshRenderer)) continue;
+            Vector3 size = BoundsOf(r).size;
+            if (Mathf.Min(size.x, Mathf.Min(size.y, size.z)) < 0.15f) continue;
+            renderers.Add(r);
+        }
+        return renderers;
+    }
+
+    // Parçaların yerleri ve boyları (yapı değişti mi)
+    private static int Signature(List<Renderer> renderers)
     {
         unchecked
         {
-            int hash = 17 + woods.Count;
-            foreach ((GridEntity wood, Renderer[] renderers) in woods)
-                foreach (Renderer r in renderers)
-                {
-                    Bounds b = BoundsOf(r);
-                    hash = hash * 31 + Vector3Int.RoundToInt(b.center * 20f).GetHashCode();
-                    hash = hash * 31 + Vector3Int.RoundToInt(b.size * 20f).GetHashCode();
-                }
+            int hash = 17 + renderers.Count;
+            foreach (Renderer r in renderers)
+            {
+                Bounds b = BoundsOf(r);
+                hash = hash * 31 + Vector3Int.RoundToInt(b.center * 20f).GetHashCode();
+                hash = hash * 31 + Vector3Int.RoundToInt(b.size * 20f).GetHashCode();
+            }
             return hash;
         }
     }
@@ -124,70 +141,83 @@ public class ClayWoodPrototype : MonoBehaviour
         return world;
     }
 
-    private void Clear()
+    private void Release(Entry entry)
     {
-        foreach (GameObject go in built)
-            if (go != null) Destroy(go);
-        built.Clear();
-        foreach (Renderer r in hidden)
+        if (entry.mesh != null) Destroy(entry.mesh);
+        entry.mesh = null;
+        foreach (Renderer r in entry.hidden)
             if (r != null) r.enabled = true;
-        hidden.Clear();
+        entry.hidden.Clear();
+        entry.parts.Clear();
     }
 
-    private void Rebuild(List<(GridEntity wood, Renderer[] renderers)> woods)
+    private void Build(Entry entry, List<Renderer> renderers)
     {
-        Clear();
-
-        var parts = new List<Part>();
         if (material == null && fallback == null) fallback = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         Material source = material != null ? material : fallback;
-        foreach ((GridEntity wood, Renderer[] renderers) in woods)
-            foreach (Renderer r in renderers)
-            {
-                Bounds b = BoundsOf(r);
-                Vector3 half = Vector3.Max(b.extents - Vector3.one * inset, Vector3.one * 0.02f);
-                parts.Add(new Part { center = b.center, half = half });
-                r.enabled = false;
-                hidden.Add(r);
-            }
 
-        lastParts.Clear();
-        lastParts.AddRange(parts);
-
-        // Birbirine değen parçalar aynı grup (union-find): her grup ayrı mesh, ızgara küçük kalsın
-        int[] parent = new int[parts.Count];
-        for (int i = 0; i < parent.Length; i++) parent[i] = i;
-        int Find(int i) { while (parent[i] != i) i = parent[i] = parent[parent[i]]; return i; }
-        float reach = blend + voxelSize * 2f;
-        for (int a = 0; a < parts.Count; a++)
-            for (int b = a + 1; b < parts.Count; b++)
-            {
-                Vector3 gap = Abs(parts[a].center - parts[b].center) - parts[a].half - parts[b].half;
-                if (gap.x < reach && gap.y < reach && gap.z < reach) parent[Find(a)] = Find(b);
-            }
-        var groups = new Dictionary<int, List<Part>>();
-        for (int i = 0; i < parts.Count; i++)
+        foreach (Renderer r in renderers)
         {
-            int root = Find(i);
-            if (!groups.TryGetValue(root, out List<Part> list)) groups[root] = list = new List<Part>();
-            list.Add(parts[i]);
+            Bounds b = BoundsOf(r);
+            Vector3 half = Vector3.Max(b.extents - Vector3.one * inset, Vector3.one * 0.02f);
+            entry.parts.Add(new Part { center = b.center, half = half });
         }
+        MergeBoxes(entry.parts);
 
-        foreach (List<Part> group in groups.Values)
+        Mesh mesh = BuildMesh(entry.parts);
+        if (mesh == null) return;
+        foreach (Renderer r in renderers)
         {
-            Mesh mesh = BuildMesh(group);
-            if (mesh == null) continue;
-            var go = new GameObject("Clay Wood");
-            go.transform.SetParent(transform, false);
-            go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-            go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            var renderer = go.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = source;
-            var block = new MaterialPropertyBlock();
-            block.SetColor(BaseColorId, color);
-            block.SetColor(ColorId, color);
-            renderer.SetPropertyBlock(block);
-            built.Add(go);
+            r.enabled = false;
+            entry.hidden.Add(r);
+        }
+        var go = new GameObject("Clay Wood");
+        go.transform.SetParent(transform, false);
+        go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var renderer = go.AddComponent<MeshRenderer>();
+        renderer.sharedMaterial = source;
+        var block = new MaterialPropertyBlock();
+        block.SetColor(BaseColorId, color);
+        block.SetColor(ColorId, color);
+        renderer.SetPropertyBlock(block);
+        entry.mesh = go;
+    }
+
+    // Aynı kesitte, uç uca değen kutular tek kutu olur (uzun kirişin 1'er birimlik parçaları, üst üste katlar): iki
+    // yuvarlak kutu yan yana gelince yuvarlak kenarları birleşim yerinde oluk bırakıyordu
+    private static void MergeBoxes(List<Part> parts)
+    {
+        const float eps = 0.03f;
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (int a = 0; a < parts.Count && !changed; a++)
+                for (int b = a + 1; b < parts.Count && !changed; b++)
+                    for (int axis = 0; axis < 3 && !changed; axis++)
+                    {
+                        Part pa = parts[a], pb = parts[b];
+                        bool sameSection = true;
+                        for (int other = 0; other < 3; other++)
+                        {
+                            if (other == axis) continue;
+                            if (Mathf.Abs(pa.center[other] - pb.center[other]) > eps || Mathf.Abs(pa.half[other] - pb.half[other]) > eps)
+                                sameSection = false;
+                        }
+                        if (!sameSection) continue;
+                        float gap = Mathf.Abs(pa.center[axis] - pb.center[axis]) - pa.half[axis] - pb.half[axis];
+                        if (gap > eps) continue;
+
+                        float min = Mathf.Min(pa.center[axis] - pa.half[axis], pb.center[axis] - pb.half[axis]);
+                        float max = Mathf.Max(pa.center[axis] + pa.half[axis], pb.center[axis] + pb.half[axis]);
+                        Vector3 center = pa.center, half = pa.half;
+                        center[axis] = (min + max) * 0.5f;
+                        half[axis] = (max - min) * 0.5f;
+                        parts[a] = new Part { center = center, half = half };
+                        parts.RemoveAt(b);
+                        changed = true;
+                    }
         }
     }
 
@@ -195,7 +225,8 @@ public class ClayWoodPrototype : MonoBehaviour
     {
         if (!showParts) return;
         Gizmos.color = new Color(1f, 0.85f, 0.1f, 0.9f);
-        foreach (Part part in lastParts) Gizmos.DrawWireCube(part.center, part.half * 2f);
+        foreach (Entry entry in entries.Values)
+            foreach (Part part in entry.parts) Gizmos.DrawWireCube(part.center, part.half * 2f);
     }
 
     private static Vector3 Abs(Vector3 v) => new Vector3(Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z));
