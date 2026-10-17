@@ -116,13 +116,15 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         for (int s = 0; s < WoodLayout.SideCount; s++)
             for (int layer = 1; layer <= baseLength; layer++)
             {
-                if (!holders.TryGetValue((s, layer), out Transform bottom) || holders.ContainsKey((s, layer - 1))) continue;
+                if (!holders.TryGetValue((s, layer), out Transform first) || holders.ContainsKey((s, layer - 1))) continue;
                 int count = 1;
                 while (holders.ContainsKey((s, layer + count))) count++;
+                Transform last = holders[(s, layer + count - 1)];
 
-                Renderer woodRenderer = bottom.GetComponentInChildren<Renderer>();
-                Vector3 stackUp = Quaternion.Inverse(bottom.localRotation) * Vector3.up;
-                GameObject rope = WoodMerger.Instance.Rope.Attach(bottom, stackUp, count, woodRenderer != null ? woodRenderer.sharedMaterial : null);
+                // Halka ilk parçadan son parçaya uzanır (gerçek konumlardan: katların sırası yönü belirlemesin)
+                Renderer woodRenderer = first.GetComponentInChildren<Renderer>();
+                Vector3 span = Quaternion.Inverse(first.localRotation) * (last.localPosition - first.localPosition);
+                GameObject rope = WoodMerger.Instance.Rope.Attach(first, span, woodRenderer != null ? woodRenderer.sharedMaterial : null);
                 if (rope != null) sideRenderers[s].AddRange(rope.GetComponentsInChildren<Renderer>());
             }
     }

@@ -31,11 +31,18 @@ public class WoodRope
     private Material generatedMaterial;
     private Material generatedFrom;
 
-    // holder: en alttaki yan parçanın kökü (ilk hücrenin ortası, yerel Y = parçanın uzandığı yön; ana odunla değme yeri
-    // y = -0.5). stackUp: holder'ın uzayında yukarı (katların dizildiği yön); layers: halkanın sardığı kat sayısı.
-    // woodMaterial: parçanın malzemesi (ip malzemesi atanmamışsa kopyalanır). Eklenen ipi döndürür (kapalıysa null).
-    public GameObject Attach(Transform holder, Vector3 stackUp, int layers, Material woodMaterial)
+    // holder: yığındaki bir uçtaki yan parçanın kökü (ilk hücrenin ortası, yerel Y = parçanın uzandığı yön; ana odunla
+    // değme yeri y = -0.5). span: holder'ın uzayında bu parçadan yığının öbür ucundaki parçaya (tek parçada sıfır; halka
+    // ikisini birlikte sarar). woodMaterial: parçanın malzemesi (ip malzemesi atanmamışsa kopyalanır). Eklenen ipi
+    // döndürür (kapalıysa null).
+    public GameObject Attach(Transform holder, Vector3 span, Material woodMaterial)
     {
+        span -= Vector3.up * Vector3.Dot(span, Vector3.up); // parçanın ekseni boyunca kayma olmaz
+        float stretch = span.magnitude;                       // halkanın uzun kenarı bu kadar uzar
+        // Halkanın uzun kenarının yönü: yığının yönü; tek parçada parçaya dik herhangi bir yön
+        Vector3 stackDir = stretch > 0.001f ? span / stretch : Vector3.Cross(Vector3.up, Vector3.right).normalized;
+        if (stackDir.sqrMagnitude < 0.5f) stackDir = Vector3.right;
+
         if (!enabled) return null;
         GameObject rope;
         if (model != null)
@@ -46,14 +53,14 @@ public class WoodRope
         {
             rope = new GameObject("Rope");
             rope.transform.SetParent(holder, false);
-            rope.AddComponent<MeshFilter>().sharedMesh = RingMesh(halfSize + (layers - 1) * 0.5f, halfSize);
+            rope.AddComponent<MeshFilter>().sharedMesh = RingMesh(halfSize + stretch * 0.5f, halfSize);
             rope.AddComponent<MeshRenderer>().sharedMaterial = Material(woodMaterial);
         }
         rope.name = "Rope";
-        // Halkanın X'i katların yönünde (uzun kenar), Y'si parçanın ekseninde; ortası sardığı katların ortasında
-        rope.transform.localPosition = Vector3.up * (-0.5f + offset) + stackUp * ((layers - 1) * 0.5f);
-        rope.transform.localRotation = Quaternion.LookRotation(Vector3.Cross(stackUp, Vector3.up), Vector3.up);
-        if (model != null) rope.transform.localScale = new Vector3(1f + (layers - 1) / (2f * halfSize), 1f, 1f);
+        // Halkanın X'i yığının yönünde (uzun kenar), Y'si parçanın ekseninde; ortası sardığı parçaların ortasında
+        rope.transform.localPosition = Vector3.up * (-0.5f + offset) + span * 0.5f;
+        rope.transform.localRotation = Quaternion.LookRotation(Vector3.Cross(stackDir, Vector3.up), Vector3.up);
+        if (model != null) rope.transform.localScale = new Vector3(1f + stretch / (2f * halfSize), 1f, 1f);
         return rope;
     }
 
