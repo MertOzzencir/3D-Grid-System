@@ -26,22 +26,6 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
 
     [SerializeField] private float followSpeed = 10f;
 
-    [Header("Kil görünüm (deneme)")]
-    [Tooltip("Açıksa parçaların ayrı modelleri gizlenir, hepsi kaynaşmış tek bir kil şekli olarak çizilir (ClayMesher). " +
-             "Şekil kurulurken bir kez üretilir (birleştirme anında, kayıttan yüklenince).")]
-    [SerializeField] private bool clayLook = true;
-    [Tooltip("Şeklin ızgara aralığı (birim): küçük = daha pürüzsüz ama üretimi daha yavaş")]
-    [SerializeField] private float clayVoxelSize = 0.07f;
-    [Tooltip("Birleşim yerlerindeki kaynaşmanın genişliği (birim)")]
-    [SerializeField] private float clayBlend = 0.12f;
-    [Tooltip("Kenar yuvarlaklığı (birim)")]
-    [SerializeField] private float clayCornerRadius = 0.1f;
-    [Tooltip("Parça sınırlarını içe çekme (birim): şekil modelden şişman görünürse")]
-    [SerializeField] private float clayInset = 0f;
-    [Tooltip("Kil şeklinin malzemesi (URP Lit gibi düz bir malzeme; odunun WoodWobbleLit'i olmaz, vertex kaydırıyor)")]
-    [SerializeField] private Material clayMaterial;
-    [Tooltip("Clay Material boşken (sadece editörde) kullanılan düz malzemenin rengi")]
-    [SerializeField] private Color clayColor = new Color(0.78f, 0.58f, 0.38f);
 
     [SerializeField] private int baseLength;
     [SerializeField] private Side[] sides = new Side[0];
@@ -124,39 +108,17 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
                 sideRenderers[(int)slot.Side].AddRange(visual.GetComponentsInChildren<Renderer>());
         }
 
-        if (clayLook) BuildClay();
+        BuildClay();
     }
 
-    // Parçaların ayrı modelleri yerine kaynaşmış tek şekil (bir kez; yapı değişince MergedWood yeniden yaratılıyor)
+    // Parçaların ayrı modelleri yerine kaynaşmış tek şekil (bir kez; yapı değişince MergedWood yeniden yaratılıyor).
+    // Ayarlar WoodMerger'da.
     private void BuildClay()
     {
         if (clay != null) Destroy(clay);
-        Mesh mesh = ClayMesher.Build(pieceBounds, clayVoxelSize, clayCornerRadius, clayBlend, clayInset);
-        if (mesh == null) return;
-
-        foreach (Renderer r in GetComponentsInChildren<Renderer>()) r.enabled = false;
-        clay = new GameObject("Clay");
-        clay.transform.SetParent(transform, false);
-        clay.AddComponent<MeshFilter>().sharedMesh = mesh;
-        var renderer = clay.AddComponent<MeshRenderer>();
-        // Renk malzemede (MaterialPropertyBlock'la değil: birleşme sallanması kendi bloğunu yazıp siliyor)
-        Material material = clayMaterial;
-#if UNITY_EDITOR
-        if (material == null)
-        {
-            if (fallbackClay == null)
-            {
-                fallbackClay = new Material(Shader.Find("Universal Render Pipeline/Lit")); // sadece editörde
-                fallbackClay.SetColor("_BaseColor", clayColor);
-            }
-            material = fallbackClay;
-        }
-#endif
-        if (material == null) Debug.LogWarning("MergedWood: Clay Material atanmamış (build'de gerekli).", this);
-        renderer.sharedMaterial = material;
+        if (WoodMerger.Instance != null)
+            clay = WoodMerger.Instance.AttachClay(transform, pieceBounds, GetComponentsInChildren<Renderer>());
     }
-
-    private static Material fallbackClay;
 
     public override GridFootprint GetFootprint()
     {

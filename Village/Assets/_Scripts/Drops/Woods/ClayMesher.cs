@@ -2,10 +2,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// Kutuları kaynaşmış tek bir kil şekline çeviren hesap (Tiny Glade / Dreams yolu). Kutular kenarları yuvarlatılmış
-// kabul edilir; aynı kesitte uç uca değenler önce tek kutuya birleştirilir (yoksa birleşim yerinde oluk kalıyordu),
-// sonra mesafe alanı (SDF, yumuşak birleşim: iki hamuru bastırmak gibi) ızgarada örneklenip tek mesh çıkarılır
-// (surface nets). Kutular ve sonuç aynı uzayda (çağıranın yerel uzayı). Bir kez çağrılır (örn. MergedWood kurulurken).
+// Kutuları kaynaşmış tek bir kil şekline çeviren hesap (Tiny Glade / Dreams yolu). Kutular önce birleştirilir
+// (aynı kesitte uç uca değenler tek kutu), sonra bütün şeklin dış kenarları birlikte yuvarlatılır: her kutu
+// cornerRadius kadar küçültülüp birleşimin mesafe alanından (SDF) cornerRadius çıkarılır. Aynı düzlemdeki yüzeyler
+// kusursuz düz birleşir (yumuşak birleşim / smooth union aynı düzlemde kabarık çizgi bırakıyordu); iç köşeler keskin
+// kalır. Mesafe alanı ızgarada örneklenip tek mesh çıkarılır (surface nets). Kutular ve sonuç aynı uzayda (çağıranın yerel uzayı). Bir kez çağrılır (örn. MergedWood kurulurken).
 public static class ClayMesher
 {
     public struct Part
@@ -14,15 +15,15 @@ public static class ClayMesher
         public Vector3 half;
     }
 
-    // boxes: kutular (çağıranın uzayında); voxelSize: ızgara aralığı; cornerRadius: kenar yuvarlaklığı; blend: kaynaşma
-    public static Mesh Build(List<Bounds> boxes, float voxelSize, float cornerRadius, float blend, float inset = 0f)
+    // boxes: kutular (çağıranın uzayında); voxelSize: ızgara aralığı; cornerRadius: dış kenar yuvarlaklığı
+    public static Mesh Build(List<Bounds> boxes, float voxelSize, float cornerRadius, float inset = 0f)
     {
         var parts = new List<Part>();
         foreach (Bounds box in boxes)
             parts.Add(new Part { center = box.center, half = Vector3.Max(box.extents - Vector3.one * inset, Vector3.one * 0.02f) });
         if (parts.Count == 0) return null;
         MergeBoxes(parts);
-        return BuildMesh(parts, voxelSize, cornerRadius, blend);
+        return BuildMesh(parts, voxelSize, cornerRadius, 0f);
     }
 
     // Aynı kesitte, uç uca değen kutular tek kutu olur (uzun kirişin 1'er birimlik parçaları, üst üste katlar): iki
@@ -64,7 +65,8 @@ public static class ClayMesher
 
     private static Vector3 Abs(Vector3 v) => new Vector3(Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z));
 
-    // --- Mesafe alanı: yuvarlak kutuların yumuşak birleşimi (eksi = içeride) ---
+    // --- Mesafe alanı (eksi = içeride): cornerRadius kadar küçültülmüş kutuların birleşimi, sonra hepsi birlikte
+    // cornerRadius kadar şişirilir (Minkowski: dış kenarlar yuvarlak, aynı düzlemdeki yüzeyler düz) ---
 
     private static float Sdf(List<Part> parts, Vector3 p, float cornerRadius, float blend)
     {
@@ -73,17 +75,13 @@ public static class ClayMesher
         {
             float r = Mathf.Min(cornerRadius, Mathf.Min(part.half.x, Mathf.Min(part.half.y, part.half.z)) * 0.95f);
             Vector3 q = Abs(p - part.center) - (part.half - Vector3.one * r);
-            float box = Vector3.Max(q, Vector3.zero).magnitude + Mathf.Min(Mathf.Max(q.x, Mathf.Max(q.y, q.z)), 0f) - r;
-            d = d == float.MaxValue ? box : SmoothMin(d, box, blend);
+            float box = Vector3.Max(q, Vector3.zero).magnitude + Mathf.Min(Mathf.Max(q.x, Mathf.Max(q.y, q.z)), 0f);
+            d = Mathf.Min(d, box);
         }
-        return d;
-    }
-
-    private static float SmoothMin(float a, float b, float k)
-    {
-        if (k <= 0f) return Mathf.Min(a, b);
-        float h = Mathf.Clamp01(0.5f + 0.5f * (b - a) / k);
-        return Mathf.Lerp(b, a, h) - k * h * (1f - h);
+        float radius = cornerRadius;
+        foreach (Part part in parts)
+            radius = Mathf.Min(radius, Mathf.Min(part.half.x, Mathf.Min(part.half.y, part.half.z)) * 0.95f);
+        return d - radius;
     }
 
     // --- Surface nets: mesafe alanını ızgarada örnekle, işaret değişen her küpe bir vertex, kenarlara dörtgen ---
@@ -92,7 +90,7 @@ public static class ClayMesher
     {
         Bounds area = new Bounds(parts[0].center, parts[0].half * 2f);
         foreach (Part part in parts) area.Encapsulate(new Bounds(part.center, part.half * 2f));
-        area.Expand(blend * 2f + voxelSize * 4f);
+        area.Expand(cornerRadius * 2f + voxelSize * 4f);
 
         float step = Mathf.Max(0.02f, voxelSize);
         int nx = Mathf.CeilToInt(area.size.x / step) + 1, ny = Mathf.CeilToInt(area.size.y / step) + 1, nz = Mathf.CeilToInt(area.size.z / step) + 1;
