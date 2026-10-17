@@ -28,8 +28,9 @@ public class WoodMerger : MonoBehaviour
     [Tooltip("Dış kenarların yuvarlaklığı (birim)")]
     [SerializeField] private float clayCornerRadius = 0.12f;
     [Tooltip("Odunun kalınlığı (birim, 1 = hücre kadar). Şekil modelden değil grid'den hesaplanır: bütün parçalar aynı " +
-             "kesitte, hücre sınırlarında (model sınırları biraz farklı olduğu için birleşim yerlerinde basamak kalıyordu).")]
-    [SerializeField, Range(0.3f, 1f)] private float clayThickness = 0.9f;
+             "kesitte, hücre sınırlarında. 1'den küçükse uzunluk boyunca uçlar yine hücre sınırında kaldığı için birleşimlerde " +
+             "basamak olur ve yan yana odunlar arasında boşluk kalır; 1 önerilir.")]
+    [SerializeField, Range(0.3f, 1f)] private float clayThickness = 1f;
     [Tooltip("Parça sınırlarını içe çekme (birim): şekil modelden şişman görünürse")]
     [SerializeField] private float clayInset = 0f;
     [Tooltip("Kil şeklinin malzemesi (düz URP Lit; odunun WoodWobbleLit'i olmaz, vertex kaydırıyor). Build'de gerekli.")]
