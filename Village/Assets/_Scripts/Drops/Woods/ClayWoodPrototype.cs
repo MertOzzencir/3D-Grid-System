@@ -22,8 +22,11 @@ public class ClayWoodPrototype : MonoBehaviour
     [SerializeField] private float inset = 0f;
 
     [Header("Görünüm")]
-    [Tooltip("Kaynaşmış modelin malzemesi; boşsa ilk odunun malzemesi")]
+    [Tooltip("Kaynaşmış modelin malzemesi; boşsa düz bir URP Lit (odunun kendi malzemesi kullanılmaz: WoodWobbleLit " +
+             "vertex'leri kendisi kaydırıyor, üretilen modeli yanlış yere çiziyordu)")]
     [SerializeField] private Material material;
+    [Tooltip("Hesaplamaya giren odun parçalarının kutularını Scene'de sarı tel kafes olarak çiz (hata ayıklama)")]
+    [SerializeField] private bool showParts = true;
     [SerializeField] private Color color = new Color(0.78f, 0.58f, 0.38f);
 
     [Header("Güncelleme")]
@@ -37,6 +40,8 @@ public class ClayWoodPrototype : MonoBehaviour
     }
 
     private readonly List<GameObject> built = new List<GameObject>();
+    private readonly List<Part> lastParts = new List<Part>();
+    private Material fallback;
     private readonly List<Renderer> hidden = new List<Renderer>();
     private float nextCheck;
     private int lastSignature;
@@ -134,17 +139,20 @@ public class ClayWoodPrototype : MonoBehaviour
         Clear();
 
         var parts = new List<Part>();
-        Material source = material;
+        if (material == null && fallback == null) fallback = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        Material source = material != null ? material : fallback;
         foreach ((GridEntity wood, Renderer[] renderers) in woods)
             foreach (Renderer r in renderers)
             {
                 Bounds b = BoundsOf(r);
                 Vector3 half = Vector3.Max(b.extents - Vector3.one * inset, Vector3.one * 0.02f);
                 parts.Add(new Part { center = b.center, half = half });
-                if (source == null) source = r.sharedMaterial;
                 r.enabled = false;
                 hidden.Add(r);
             }
+
+        lastParts.Clear();
+        lastParts.AddRange(parts);
 
         // Birbirine değen parçalar aynı grup (union-find): her grup ayrı mesh, ızgara küçük kalsın
         int[] parent = new int[parts.Count];
@@ -181,6 +189,13 @@ public class ClayWoodPrototype : MonoBehaviour
             renderer.SetPropertyBlock(block);
             built.Add(go);
         }
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (!showParts) return;
+        Gizmos.color = new Color(1f, 0.85f, 0.1f, 0.9f);
+        foreach (Part part in lastParts) Gizmos.DrawWireCube(part.center, part.half * 2f);
     }
 
     private static Vector3 Abs(Vector3 v) => new Vector3(Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z));
