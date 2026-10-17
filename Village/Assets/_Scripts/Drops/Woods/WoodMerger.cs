@@ -77,6 +77,7 @@ public class WoodMerger : MonoBehaviour
             ? Vector3.zero
             : -(result.GridRotation * (Vector3)WoodLayout.SideDirection(slot.Side));
         PlayWobble(result, push);
+        if (result is MergedWood merged) merged.PlayRopeAnimation();
     }
 
     private void PlayWobble(GridPlaceable result, Vector3 push)

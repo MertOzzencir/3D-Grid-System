@@ -11,7 +11,8 @@ using UnityEngine;
 // çizilmez, ip yığının dış çevresini dolanır. Her köşe, değdiği yüzlerin dışına ve kenarların dışa yönüne doğru odunun
 // yüzeyine kaydırılır (ip oluğun içinde, odunlara oturur). Kenarlar uç uca zincirlere bağlanır (kollara ayrılan köşede
 // zincir biter), köşeler yayla yuvarlatılır, zincir boyunca örgülü (sarmal lifli) tek tüp; kollara ayrılan köşelerde,
-// uçlarda ve kapalı halkanın başında düğüm. Hepsi tek mesh.
+// uçlarda ve kapalı halkanın başında düğüm. Hepsi tek mesh. Birleştirme anında ip sarılarak gelir (RopeGrow): her
+// zincir başından ucu sivrilerek uzar, bitince düğümler zıplayarak oturur.
 // Malzeme atanmazsa odunun malzemesinin dokusuz kopyası ip rengiyle (aynı shader: birleşince odunla birlikte sallanır).
 [Serializable]
 public class WoodRope
@@ -36,12 +37,23 @@ public class WoodRope
     [SerializeField] private float strandPitch = 0.35f;
     [Tooltip("Düğüm topunun büyüklüğü (kalınlığa oranla)")]
     [SerializeField] private float knotSize = 1.7f;
+    [Tooltip("Birleştirme anında ipin sarılma süresi (saniye)")]
+    [SerializeField] private float growDuration = 0.6f;
+    [Tooltip("İp sarılmaya birleşmeden bu kadar sonra başlar (saniye)")]
+    [SerializeField] private float growDelay = 0.1f;
+    [Tooltip("İp bitince düğümlerin zıplayarak oturma süresi (saniye)")]
+    [SerializeField] private float knotPopDuration = 0.25f;
 
     private const int Sides = 12;
     private const float Step = 0.02f; // ipin boyunca örnek aralığı (örgü için sık)
 
     private Material generatedMaterial;
     private Material generatedFrom;
+
+    // Animasyon verisi (Build sırasında vertex'lerle aynı sırada): vertex'in ip yolundaki merkezi ve zincirdeki yeri
+    // (0..1; düğümde -1)
+    [NonSerialized] private readonly List<Vector3> animCenters = new List<Vector3>();
+    [NonSerialized] private readonly List<float> animProgress = new List<float>();
 
     // Bir değme yüzü: center = yüzün ortası, normal = ana odundan yan parçaya, up = yüzün bir kenar yönü (diğeri
     // normal × up); yüz 1 × 1
@@ -56,6 +68,8 @@ public class WoodRope
     public GameObject Build(Transform parent, List<Face> faces, Material woodMaterial)
     {
         if (!enabled || faces.Count == 0) return null;
+        animCenters.Clear();
+        animProgress.Clear();
 
         // Kenarlar (kafeste, koordinatlar × 2 tam sayı): her kenara değen yüzlerin normali ve kenarın o yüzdeki dışa yönü
         var edges = new Dictionary<(Vector3Int, Vector3Int), List<(Vector3 normal, Vector3 outward)>>();
@@ -174,6 +188,7 @@ public class WoodRope
         rope.transform.SetParent(parent, false);
         rope.AddComponent<MeshFilter>().sharedMesh = mesh;
         rope.AddComponent<MeshRenderer>().sharedMaterial = Material(woodMaterial);
+        rope.AddComponent<RopeGrow>().Setup(mesh, animCenters.ToArray(), animProgress.ToArray(), growDuration, growDelay, knotPopDuration);
         return rope;
     }
 
@@ -244,6 +259,8 @@ public class WoodRope
         Vector3 tangent = (path[1] - path[0]).normalized;
         Vector3 side = Vector3.Cross(tangent, Mathf.Abs(tangent.y) < 0.9f ? Vector3.up : Vector3.right).normalized;
         int start = vertices.Count;
+        float total = 0f;
+        for (int i = 1; i < path.Count; i++) total += Vector3.Distance(path[i], path[i - 1]);
         float distance = 0f;
         for (int i = 0; i < path.Count; i++)
         {
@@ -266,6 +283,8 @@ public class WoodRope
                 vertices.Add(path[i] + normal * radius);
                 normals.Add(normal);
                 uvs.Add(new Vector2(distance, (float)s / Sides));
+                animCenters.Add(path[i]);
+                animProgress.Add(total > 0f ? distance / total : 1f);
             }
         }
         int stride = Sides + 1;
@@ -293,6 +312,8 @@ public class WoodRope
                 vertices.Add(center + normal * thickness * knotSize);
                 normals.Add(normal);
                 uvs.Add(new Vector2(theta, phi));
+                animCenters.Add(center);
+                animProgress.Add(-1f);
             }
         }
         int stride = Sides + 1;

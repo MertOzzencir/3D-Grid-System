@@ -35,10 +35,17 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     private string signature;           // şekil değişmedikçe aynı
     private int signatureSteps;
     private readonly List<Renderer>[] sideRenderers = NewSideRenderers();
+    private GameObject rope;
 
     public int BaseLength => baseLength;
 
     public Renderer[] PieceRenderers(WoodSide side) => sideRenderers[(int)side].ToArray();
+
+    // İp sarılarak gelsin (birleştirme anında; kayıttan yüklenince ip hazır)
+    public void PlayRopeAnimation()
+    {
+        if (rope != null && rope.TryGetComponent(out RopeGrow grow)) grow.Play();
+    }
 
     private static List<Renderer>[] NewSideRenderers()
     {
@@ -121,7 +128,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         }
 
         // Bütün değme yerlerine tek parça ip (üst üste binmez)
-        if (WoodMerger.Instance != null) WoodMerger.Instance.Rope.Build(transform, ropeFaces, woodMaterial);
+        if (WoodMerger.Instance != null) rope = WoodMerger.Instance.Rope.Build(transform, ropeFaces, woodMaterial);
     }
 
     public override GridFootprint GetFootprint()
