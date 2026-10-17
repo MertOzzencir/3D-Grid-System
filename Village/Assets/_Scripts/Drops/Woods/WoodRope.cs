@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Bağlantı ipi: yan parçanın ana oduna değdiği yerin hemen dışında, parçanın etrafına sarılı ip halkası. Ayarları
-// WoodMerger'da; MergedWood her yan parça için Attach'i çağırır. Model atanırsa o konur, yoksa koddan yuvarlak köşeli
+// WoodMerger'da; MergedWood her yanda art arda dolu katlar için bir kez Attach'i çağırır: üst üste duran parçalar tek
+// uzun halkayla birlikte bağlanır (her parçaya ayrı halka komşu katın halkasıyla üst üste biniyordu). Model atanırsa o konur, yoksa koddan yuvarlak köşeli
 // kare bir halka (tüp) üretilir. Malzeme atanmazsa odunun malzemesinin kopyası ip rengiyle kullanılır (aynı shader:
 // birleşince odunla birlikte sallanır, ön parça saydamlaşmasına katılır).
 [Serializable]
@@ -30,9 +31,10 @@ public class WoodRope
     private Material generatedMaterial;
     private Material generatedFrom;
 
-    // holder: yan parçanın kökü (ilk hücrenin ortası, yerel Y = parçanın uzandığı yön; ana odunla değme yeri y = -0.5).
+    // holder: en alttaki yan parçanın kökü (ilk hücrenin ortası, yerel Y = parçanın uzandığı yön; ana odunla değme yeri
+    // y = -0.5). stackUp: holder'ın uzayında yukarı (katların dizildiği yön); layers: halkanın sardığı kat sayısı.
     // woodMaterial: parçanın malzemesi (ip malzemesi atanmamışsa kopyalanır). Eklenen ipi döndürür (kapalıysa null).
-    public GameObject Attach(Transform holder, Material woodMaterial)
+    public GameObject Attach(Transform holder, Vector3 stackUp, int layers, Material woodMaterial)
     {
         if (!enabled) return null;
         GameObject rope;
@@ -44,12 +46,14 @@ public class WoodRope
         {
             rope = new GameObject("Rope");
             rope.transform.SetParent(holder, false);
-            rope.AddComponent<MeshFilter>().sharedMesh = RingMesh();
+            rope.AddComponent<MeshFilter>().sharedMesh = RingMesh(halfSize + (layers - 1) * 0.5f, halfSize);
             rope.AddComponent<MeshRenderer>().sharedMaterial = Material(woodMaterial);
         }
         rope.name = "Rope";
-        rope.transform.localPosition = Vector3.up * (-0.5f + offset);
-        rope.transform.localRotation = Quaternion.identity;
+        // Halkanın X'i katların yönünde (uzun kenar), Y'si parçanın ekseninde; ortası sardığı katların ortasında
+        rope.transform.localPosition = Vector3.up * (-0.5f + offset) + stackUp * ((layers - 1) * 0.5f);
+        rope.transform.localRotation = Quaternion.LookRotation(Vector3.Cross(stackUp, Vector3.up), Vector3.up);
+        if (model != null) rope.transform.localScale = new Vector3(1f + (layers - 1) / (2f * halfSize), 1f, 1f);
         return rope;
     }
 
@@ -70,20 +74,20 @@ public class WoodRope
         return generatedMaterial;
     }
 
-    // XZ düzleminde yuvarlak köşeli kare yol boyunca tüp (u: yol boyunca, v: tüpün çevresi)
-    private Mesh RingMesh()
+    // XZ düzleminde yuvarlak köşeli dikdörtgen yol boyunca tüp (yarı boyları halfX, halfZ; u: yol boyunca, v: tüpün çevresi)
+    private Mesh RingMesh(float halfX, float halfZ)
     {
-        string key = $"{halfSize}|{cornerRadius}|{thickness}";
+        string key = $"{halfX}|{halfZ}|{cornerRadius}|{thickness}";
         if (meshCache.TryGetValue(key, out Mesh cached) && cached != null) return cached;
 
         const int cornerSteps = 6, sides = 8;
-        float corner = Mathf.Clamp(cornerRadius, 0.001f, halfSize);
-        float inner = halfSize - corner; // köşe yaylarının merkezleri ±inner'da
+        float corner = Mathf.Clamp(cornerRadius, 0.001f, Mathf.Min(halfX, halfZ));
+        float innerX = halfX - corner, innerZ = halfZ - corner; // köşe yaylarının merkezleri
 
         // Yol: dört köşe yayı (düz kenarlar yaylar arasında kendiliğinden oluşur)
         var path = new List<Vector3>();
         var outward = new List<Vector3>();
-        Vector2[] centers = { new Vector2(inner, inner), new Vector2(-inner, inner), new Vector2(-inner, -inner), new Vector2(inner, -inner) };
+        Vector2[] centers = { new Vector2(innerX, innerZ), new Vector2(-innerX, innerZ), new Vector2(-innerX, -innerZ), new Vector2(innerX, -innerZ) };
         for (int c = 0; c < 4; c++)
             for (int s = 0; s <= cornerSteps; s++)
             {

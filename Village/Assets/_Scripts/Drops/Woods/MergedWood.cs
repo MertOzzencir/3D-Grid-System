@@ -97,20 +97,34 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
             list.Clear();
 
         AddPiece(catalog.GetWood(baseLength), Vector3Int.zero, Quaternion.identity, baseLength);
+        var holders = new Dictionary<(int side, int layer), Transform>();
         foreach ((WoodSlot slot, int length) in FilledSlots())
         {
             GameObject visual = AddPiece(catalog.GetWood(length), WoodLayout.PieceStart(baseLength, slot), WoodLayout.PieceRotation(slot), length);
             if (visual == null) continue;
             sideRenderers[(int)slot.Side].AddRange(visual.GetComponentsInChildren<Renderer>());
-
-            // Ana oduna bağlandığı yere ip (yan parçayla birlikte saydamlaşır)
-            Renderer woodRenderer = visual.GetComponentInChildren<Renderer>();
-            GameObject rope = WoodMerger.Instance != null
-                ? WoodMerger.Instance.Rope.Attach(visual.transform.parent, woodRenderer != null ? woodRenderer.sharedMaterial : null)
-                : null;
-            if (rope != null)
-                sideRenderers[(int)slot.Side].AddRange(rope.GetComponentsInChildren<Renderer>());
+            holders[((int)slot.Side, slot.Layer)] = visual.transform.parent;
         }
+        AddRopes(holders);
+    }
+
+    // Ana oduna bağlanma yerlerine ip: her yanda art arda dolu katlar tek halkayla birlikte bağlanır (yan parçayla birlikte
+    // saydamlaşır)
+    private void AddRopes(Dictionary<(int side, int layer), Transform> holders)
+    {
+        if (WoodMerger.Instance == null) return;
+        for (int s = 0; s < WoodLayout.SideCount; s++)
+            for (int layer = 1; layer <= baseLength; layer++)
+            {
+                if (!holders.TryGetValue((s, layer), out Transform bottom) || holders.ContainsKey((s, layer - 1))) continue;
+                int count = 1;
+                while (holders.ContainsKey((s, layer + count))) count++;
+
+                Renderer woodRenderer = bottom.GetComponentInChildren<Renderer>();
+                Vector3 stackUp = Quaternion.Inverse(bottom.localRotation) * Vector3.up;
+                GameObject rope = WoodMerger.Instance.Rope.Attach(bottom, stackUp, count, woodRenderer != null ? woodRenderer.sharedMaterial : null);
+                if (rope != null) sideRenderers[s].AddRange(rope.GetComponentsInChildren<Renderer>());
+            }
     }
 
     public override GridFootprint GetFootprint()
