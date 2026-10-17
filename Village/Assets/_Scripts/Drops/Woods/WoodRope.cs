@@ -2,66 +2,186 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// Bağlantı ipi: yan parçanın ana oduna değdiği yerin hemen dışında, parçanın etrafına sarılı ip halkası. Ayarları
-// WoodMerger'da; MergedWood her yanda art arda dolu katlar için bir kez Attach'i çağırır: üst üste duran parçalar tek
-// uzun halkayla birlikte bağlanır (her parçaya ayrı halka komşu katın halkasıyla üst üste biniyordu). Model atanırsa o konur, yoksa koddan yuvarlak köşeli
-// kare bir halka (tüp) üretilir. Malzeme atanmazsa odunun malzemesinin kopyası ip rengiyle kullanılır (aynı shader:
-// birleşince odunla birlikte sallanır, ön parça saydamlaşmasına katılır).
+// Bağlantı ipi: yan parçaların ana oduna değdiği yüzlerin (kaynak yerleri) kenarları boyunca tek parça ip. Ayarları
+// WoodMerger'da; MergedWood bütün değme yüzleriyle bir kez Build'i çağırır.
+//
+// İp üst üste binmez: bütün yüzlerin kenarları ortak bir kafeste toplanır (köşeler yarım birim katlarında). İki farklı
+// yüzün paylaştığı kenar (ana odunun köşesinde iki yanın ortak dikey kenarı) tek kenar sayılır, ip oradan bir kez geçer;
+// aynı düzlemde iki yüzün paylaştığı kenar (aynı yanda üst üste katların arası) iki parçanın arasında kaldığı için hiç
+// çizilmez, ip yığının dış çevresini dolanır. Her köşe, değdiği yüzlerin dışına ve kenarların dışa yönüne doğru odunun
+// yüzeyine kaydırılır (ip oluğun içinde, odunlara oturur). Kenarlar tüp, köşeler küçük düğüm topu; hepsi tek mesh.
+// Malzeme atanmazsa odunun malzemesinin dokusuz kopyası ip rengiyle (aynı shader: birleşince odunla birlikte sallanır).
 [Serializable]
 public class WoodRope
 {
-    [Tooltip("Açıksa yan parçaların ana oduna bağlandığı yere ip sarılır")]
+    [Tooltip("Açıksa yan parçaların ana oduna bağlandığı yerlere ip sarılır")]
     [SerializeField] private bool enabled = true;
-    [Tooltip("İsteğe bağlı ip modeli. Pivot halkanın ortasında, halka XZ düzleminde (yan parçanın ekseni modelin Y'si). " +
-             "Boşsa koddan basit bir halka üretilir.")]
-    [SerializeField] private GameObject model;
     [Tooltip("İsteğe bağlı malzeme ('Village/Wood Wobble Lit' olmalı ki sallansın). Boşsa odunun malzemesi ip rengiyle.")]
     [SerializeField] private Material material;
     [SerializeField] private Color color = new Color(0.86f, 0.74f, 0.52f);
-    [Tooltip("Halkanın ana odunla yan parçanın değdiği yerden yan parçanın içine doğru uzaklığı (birim)")]
-    [SerializeField] private float offset = 0.2f;
-    [Tooltip("Halkanın yarı genişliği (birim): odunun yarı kalınlığından biraz büyük olmalı (1BR ~0.545)")]
-    [SerializeField] private float halfSize = 0.56f;
-    [Tooltip("Halkanın köşe yuvarlaklığı (birim)")]
-    [SerializeField] private float cornerRadius = 0.18f;
     [Tooltip("İpin kalınlığı (yarıçap, birim)")]
     [SerializeField] private float thickness = 0.045f;
+    [Tooltip("Odunun hücreden taşan kısmı (birim, 1BR ~0.045): ip hücre sınırından bu kadar + kalınlığı kadar dışarıda, " +
+             "odunun yüzeyine oturur")]
+    [SerializeField] private float surface = 0.045f;
 
-    private static readonly Dictionary<string, Mesh> meshCache = new Dictionary<string, Mesh>();
+    private const int Sides = 8;
+
     private Material generatedMaterial;
     private Material generatedFrom;
 
-    // holder: yığındaki bir uçtaki yan parçanın kökü (ilk hücrenin ortası, yerel Y = parçanın uzandığı yön; ana odunla
-    // değme yeri y = -0.5). span: holder'ın uzayında bu parçadan yığının öbür ucundaki parçaya (tek parçada sıfır; halka
-    // ikisini birlikte sarar). woodMaterial: parçanın malzemesi (ip malzemesi atanmamışsa kopyalanır). Eklenen ipi
-    // döndürür (kapalıysa null).
-    public GameObject Attach(Transform holder, Vector3 span, Material woodMaterial)
+    // Bir değme yüzü: center = yüzün ortası, normal = ana odundan yan parçaya, up = yüzün bir kenar yönü (diğeri
+    // normal × up); yüz 1 × 1
+    public struct Face
     {
-        span -= Vector3.up * Vector3.Dot(span, Vector3.up); // parçanın ekseni boyunca kayma olmaz
-        float stretch = span.magnitude;                       // halkanın uzun kenarı bu kadar uzar
-        // Halkanın uzun kenarının yönü: yığının yönü; tek parçada parçaya dik herhangi bir yön
-        Vector3 stackDir = stretch > 0.001f ? span / stretch : Vector3.Cross(Vector3.up, Vector3.right).normalized;
-        if (stackDir.sqrMagnitude < 0.5f) stackDir = Vector3.right;
+        public Vector3 center;
+        public Vector3 normal;
+        public Vector3 up;
+    }
 
-        if (!enabled) return null;
-        GameObject rope;
-        if (model != null)
+    // parent'ın uzayındaki değme yüzlerinden tek ip. Eklenen ipi döndürür (kapalıysa ya da yüz yoksa null).
+    public GameObject Build(Transform parent, List<Face> faces, Material woodMaterial)
+    {
+        if (!enabled || faces.Count == 0) return null;
+
+        // Kenarlar (kafeste, koordinatlar × 2 tam sayı): her kenara değen yüzlerin normali ve kenarın o yüzdeki dışa yönü
+        var edges = new Dictionary<(Vector3Int, Vector3Int), List<(Vector3 normal, Vector3 outward)>>();
+        foreach (Face face in faces)
         {
-            rope = UnityEngine.Object.Instantiate(model, holder, false);
+            Vector3 u = face.up * 0.5f, v = Vector3.Cross(face.normal, face.up).normalized * 0.5f;
+            Vector3[] corners = { face.center + u + v, face.center + u - v, face.center - u - v, face.center - u + v };
+            Vector3[] outwards = { face.up, -v.normalized, -face.up, v.normalized }; // kenar i: köşe i → i + 1
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3Int a = Lattice(corners[i]), b = Lattice(corners[(i + 1) % 4]);
+                var key = Compare(a, b) <= 0 ? (a, b) : (b, a);
+                if (!edges.TryGetValue(key, out var list)) edges[key] = list = new List<(Vector3, Vector3)>();
+                list.Add((face.normal, outwards[i]));
+            }
         }
-        else
+
+        // Aynı düzlemde iki yüzün paylaştığı kenar iki parçanın arasında: çizilmez. Kalan kenarların köşeleri dışa doğru
+        var kept = new List<(Vector3Int a, Vector3Int b)>();
+        var push = new Dictionary<Vector3Int, Vector3>();
+        foreach (var pair in edges)
         {
-            rope = new GameObject("Rope");
-            rope.transform.SetParent(holder, false);
-            rope.AddComponent<MeshFilter>().sharedMesh = RingMesh(halfSize + stretch * 0.5f, halfSize);
-            rope.AddComponent<MeshRenderer>().sharedMaterial = Material(woodMaterial);
+            bool inner = false;
+            for (int i = 0; i < pair.Value.Count && !inner; i++)
+                for (int j = i + 1; j < pair.Value.Count; j++)
+                    if (Vector3.Dot(pair.Value[i].normal, pair.Value[j].normal) > 0.9f) inner = true;
+            if (inner) continue;
+
+            kept.Add(pair.Key);
+            foreach ((Vector3 normal, Vector3 outward) in pair.Value)
+            {
+                Vector3 add = normal + outward;
+                push[pair.Key.Item1] = (push.TryGetValue(pair.Key.Item1, out Vector3 p1) ? p1 : Vector3.zero) + add;
+                push[pair.Key.Item2] = (push.TryGetValue(pair.Key.Item2, out Vector3 p2) ? p2 : Vector3.zero) + add;
+            }
         }
-        rope.name = "Rope";
-        // Halkanın X'i yığının yönünde (uzun kenar), Y'si parçanın ekseninde; ortası sardığı parçaların ortasında
-        rope.transform.localPosition = Vector3.up * (-0.5f + offset) + span * 0.5f;
-        rope.transform.localRotation = Quaternion.LookRotation(Vector3.Cross(stackDir, Vector3.up), Vector3.up);
-        if (model != null) rope.transform.localScale = new Vector3(1f + stretch / (2f * halfSize), 1f, 1f);
+        if (kept.Count == 0) return null;
+
+        // Köşenin yeri: kafes noktası + değdiği her yön ekseninde odunun yüzeyi + ip kalınlığı kadar dışarı
+        float inflate = surface + thickness;
+        var positions = new Dictionary<Vector3Int, Vector3>();
+        foreach (var pair in push)
+        {
+            Vector3 s = pair.Value;
+            Vector3 sign = new Vector3(Sign(s.x), Sign(s.y), Sign(s.z));
+            positions[pair.Key] = (Vector3)pair.Key * 0.5f + sign * inflate;
+        }
+
+        var vertices = new List<Vector3>();
+        var normals = new List<Vector3>();
+        var triangles = new List<int>();
+        foreach ((Vector3Int a, Vector3Int b) in kept)
+            AddTube(positions[a], positions[b], vertices, normals, triangles);
+        foreach (Vector3 p in positions.Values)
+            AddKnot(p, vertices, normals, triangles);
+
+        var mesh = new Mesh { name = "Wood Rope" };
+        if (vertices.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        mesh.SetVertices(vertices);
+        mesh.SetNormals(normals);
+        mesh.SetUVs(0, new List<Vector2>(new Vector2[vertices.Count]));
+        mesh.SetTriangles(triangles, 0);
+        mesh.RecalculateTangents();
+        mesh.RecalculateBounds();
+
+        var rope = new GameObject("Rope");
+        rope.transform.SetParent(parent, false);
+        rope.AddComponent<MeshFilter>().sharedMesh = mesh;
+        rope.AddComponent<MeshRenderer>().sharedMaterial = Material(woodMaterial);
         return rope;
+    }
+
+    private static Vector3Int Lattice(Vector3 p) => Vector3Int.RoundToInt(p * 2f);
+
+    private static int Compare(Vector3Int a, Vector3Int b)
+    {
+        if (a.x != b.x) return a.x.CompareTo(b.x);
+        if (a.y != b.y) return a.y.CompareTo(b.y);
+        return a.z.CompareTo(b.z);
+    }
+
+    private static float Sign(float value) => value > 0.5f ? 1f : value < -0.5f ? -1f : 0f;
+
+    // a'dan b'ye tüp
+    private void AddTube(Vector3 a, Vector3 b, List<Vector3> vertices, List<Vector3> normals, List<int> triangles)
+    {
+        Vector3 axis = (b - a).normalized;
+        Vector3 side = Vector3.Cross(axis, Mathf.Abs(axis.y) < 0.9f ? Vector3.up : Vector3.right).normalized;
+        Vector3 other = Vector3.Cross(axis, side);
+        int start = vertices.Count;
+        for (int s = 0; s <= Sides; s++)
+        {
+            float angle = s * Mathf.PI * 2f / Sides;
+            Vector3 normal = side * Mathf.Cos(angle) + other * Mathf.Sin(angle);
+            vertices.Add(a + normal * thickness);
+            normals.Add(normal);
+            vertices.Add(b + normal * thickness);
+            normals.Add(normal);
+        }
+        for (int s = 0; s < Sides; s++)
+        {
+            int a0 = start + s * 2, b0 = a0 + 1, a1 = a0 + 2, b1 = a0 + 3;
+            AddFacing(a0, a1, b0, vertices, normals, triangles);
+            AddFacing(a1, b1, b0, vertices, normals, triangles);
+        }
+    }
+
+    // Köşede küçük top (iki kenarın birleşimini kapatır)
+    private void AddKnot(Vector3 center, List<Vector3> vertices, List<Vector3> normals, List<int> triangles)
+    {
+        const int rings = 6;
+        int start = vertices.Count;
+        for (int r = 0; r <= rings; r++)
+        {
+            float phi = r * Mathf.PI / rings;
+            for (int s = 0; s <= Sides; s++)
+            {
+                float theta = s * Mathf.PI * 2f / Sides;
+                Vector3 normal = new Vector3(Mathf.Sin(phi) * Mathf.Cos(theta), Mathf.Cos(phi), Mathf.Sin(phi) * Mathf.Sin(theta));
+                vertices.Add(center + normal * thickness * 1.15f);
+                normals.Add(normal);
+            }
+        }
+        int stride = Sides + 1;
+        for (int r = 0; r < rings; r++)
+            for (int s = 0; s < Sides; s++)
+            {
+                int a = start + r * stride + s, b = a + 1, c = a + stride, d = c + 1;
+                AddFacing(a, b, c, vertices, normals, triangles);
+                AddFacing(b, d, c, vertices, normals, triangles);
+            }
+    }
+
+    // Üçgeni yüzü normallerle aynı tarafa bakacak sırayla ekler
+    private static void AddFacing(int a, int b, int c, List<Vector3> vertices, List<Vector3> normals, List<int> triangles)
+    {
+        Vector3 face = Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]);
+        if (Vector3.Dot(face, normals[a] + normals[b] + normals[c]) < 0f) (b, c) = (c, b);
+        triangles.Add(a); triangles.Add(b); triangles.Add(c);
     }
 
     private Material Material(Material woodMaterial)
@@ -79,67 +199,5 @@ public class WoodRope
             generatedFrom = woodMaterial;
         }
         return generatedMaterial;
-    }
-
-    // XZ düzleminde yuvarlak köşeli dikdörtgen yol boyunca tüp (yarı boyları halfX, halfZ; u: yol boyunca, v: tüpün çevresi)
-    private Mesh RingMesh(float halfX, float halfZ)
-    {
-        string key = $"{halfX}|{halfZ}|{cornerRadius}|{thickness}";
-        if (meshCache.TryGetValue(key, out Mesh cached) && cached != null) return cached;
-
-        const int cornerSteps = 6, sides = 8;
-        float corner = Mathf.Clamp(cornerRadius, 0.001f, Mathf.Min(halfX, halfZ));
-        float innerX = halfX - corner, innerZ = halfZ - corner; // köşe yaylarının merkezleri
-
-        // Yol: dört köşe yayı (düz kenarlar yaylar arasında kendiliğinden oluşur)
-        var path = new List<Vector3>();
-        var outward = new List<Vector3>();
-        Vector2[] centers = { new Vector2(innerX, innerZ), new Vector2(-innerX, innerZ), new Vector2(-innerX, -innerZ), new Vector2(innerX, -innerZ) };
-        for (int c = 0; c < 4; c++)
-            for (int s = 0; s <= cornerSteps; s++)
-            {
-                float angle = (c * 90f + s * 90f / cornerSteps) * Mathf.Deg2Rad;
-                Vector3 dir = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
-                path.Add(new Vector3(centers[c].x, 0f, centers[c].y) + dir * corner);
-                outward.Add(dir);
-            }
-
-        var vertices = new List<Vector3>();
-        var normals = new List<Vector3>();
-        var uvs = new List<Vector2>();
-        int rings = path.Count + 1; // ilk halka sonda tekrar (UV dikişi)
-        float length = 0f;
-        for (int i = 0; i < rings; i++)
-        {
-            int p = i % path.Count;
-            if (i > 0) length += Vector3.Distance(path[p], path[(i - 1) % path.Count]);
-            for (int s = 0; s <= sides; s++)
-            {
-                float angle = s * Mathf.PI * 2f / sides;
-                Vector3 normal = outward[p] * Mathf.Cos(angle) + Vector3.up * Mathf.Sin(angle);
-                vertices.Add(path[p] + normal * thickness);
-                normals.Add(normal);
-                uvs.Add(new Vector2(length, (float)s / sides));
-            }
-        }
-        var triangles = new List<int>();
-        int stride = sides + 1;
-        for (int i = 0; i < rings - 1; i++)
-            for (int s = 0; s < sides; s++)
-            {
-                int a = i * stride + s, b = a + 1, c = a + stride, d = c + 1;
-                triangles.Add(a); triangles.Add(b); triangles.Add(c);
-                triangles.Add(b); triangles.Add(d); triangles.Add(c);
-            }
-
-        var mesh = new Mesh { name = "Wood Rope" };
-        mesh.SetVertices(vertices);
-        mesh.SetNormals(normals);
-        mesh.SetUVs(0, uvs);
-        mesh.SetTriangles(triangles, 0);
-        mesh.RecalculateTangents();
-        mesh.RecalculateBounds();
-        meshCache[key] = mesh;
-        return mesh;
     }
 }

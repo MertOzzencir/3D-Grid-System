@@ -97,36 +97,31 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
             list.Clear();
 
         AddPiece(catalog.GetWood(baseLength), Vector3Int.zero, Quaternion.identity, baseLength);
-        var holders = new Dictionary<(int side, int layer), Transform>();
+        var ropeFaces = new List<WoodRope.Face>();
+        Material woodMaterial = null;
         foreach ((WoodSlot slot, int length) in FilledSlots())
         {
             GameObject visual = AddPiece(catalog.GetWood(length), WoodLayout.PieceStart(baseLength, slot), WoodLayout.PieceRotation(slot), length);
             if (visual == null) continue;
             sideRenderers[(int)slot.Side].AddRange(visual.GetComponentsInChildren<Renderer>());
-            holders[((int)slot.Side, slot.Layer)] = visual.transform.parent;
-        }
-        AddRopes(holders);
-    }
 
-    // Ana oduna bağlanma yerlerine ip: her yanda art arda dolu katlar tek halkayla birlikte bağlanır (yan parçayla birlikte
-    // saydamlaşır)
-    private void AddRopes(Dictionary<(int side, int layer), Transform> holders)
-    {
-        if (WoodMerger.Instance == null) return;
-        for (int s = 0; s < WoodLayout.SideCount; s++)
-            for (int layer = 1; layer <= baseLength; layer++)
+            // Ana odunla değdiği yüz (ip buraya)
+            Vector3 direction = WoodLayout.SideDirection(slot.Side);
+            ropeFaces.Add(new WoodRope.Face
             {
-                if (!holders.TryGetValue((s, layer), out Transform first) || holders.ContainsKey((s, layer - 1))) continue;
-                int count = 1;
-                while (holders.ContainsKey((s, layer + count))) count++;
-                Transform last = holders[(s, layer + count - 1)];
-
-                // Halka ilk parçadan son parçaya uzanır (gerçek konumlardan: katların sırası yönü belirlemesin)
-                Renderer woodRenderer = first.GetComponentInChildren<Renderer>();
-                Vector3 span = Quaternion.Inverse(first.localRotation) * (last.localPosition - first.localPosition);
-                GameObject rope = WoodMerger.Instance.Rope.Attach(first, span, woodRenderer != null ? woodRenderer.sharedMaterial : null);
-                if (rope != null) sideRenderers[s].AddRange(rope.GetComponentsInChildren<Renderer>());
+                center = (Vector3)WoodLayout.PieceStart(baseLength, slot) - direction * 0.5f,
+                normal = direction,
+                up = Vector3.up
+            });
+            if (woodMaterial == null)
+            {
+                Renderer renderer = visual.GetComponentInChildren<Renderer>();
+                if (renderer != null) woodMaterial = renderer.sharedMaterial;
             }
+        }
+
+        // Bütün değme yerlerine tek parça ip (üst üste binmez)
+        if (WoodMerger.Instance != null) WoodMerger.Instance.Rope.Build(transform, ropeFaces, woodMaterial);
     }
 
     public override GridFootprint GetFootprint()
