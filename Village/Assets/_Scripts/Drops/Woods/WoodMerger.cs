@@ -20,26 +20,23 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private float targetReleaseDistance = 5f;
 
     [Header("Kil görünüm (deneme)")]
-    [Tooltip("Açıksa bütün odunlar (tek odun ve birleştirilmiş yapılar) ayrı modelleri yerine kaynaşmış tek bir kil şekli " +
-             "olarak çizilir (ClayMesher). Şekil odun kurulurken bir kez üretilir; tek odunlarda uzunluk başına önbellekte.")]
+    [Tooltip("Açıksa bütün odunlar (tek odun ve birleştirilmiş yapılar) her hücreye konan 1BR modelinden ve değme " +
+             "yerlerindeki yumuşak dolgudan oluşan tek mesh olarak çizilir (ClayMesher). Odun kurulurken bir kez üretilir.")]
     [SerializeField] private bool clayLook = true;
-    [Tooltip("Şeklin ızgara aralığı (birim): küçük = daha pürüzsüz ama üretimi daha yavaş")]
-    [SerializeField] private float clayVoxelSize = 0.07f;
+    [Tooltip("Dolgunun ızgara aralığı (birim): küçük = daha pürüzsüz dolgu ama üretimi daha yavaş (0.04 önerilir)")]
+    [SerializeField] private float clayVoxelSize = 0.04f;
     [Tooltip("Değen iki odun arasındaki oluğun ne kadar dolacağı (birim): yumuşak birleşimin genişliği. Büyük = kalın, " +
-             "yumuşak dolgu; küçük = odunlar neredeyse ayrı.")]
+             "yumuşak dolgu; küçük = ince dolgu.")]
     [SerializeField, Range(0.01f, 0.15f)] private float clayBlend = 0.08f;
-    [Tooltip("Kaynaşma şeridinin genişliği (birim): değme yerinin bu kadar çevresinde 1BR'nin detayı (renk + normal map) " +
-             "söner, renk dokunun boş, düz renkli yerinden.")]
-    [SerializeField, Range(0.01f, 0.4f)] private float clayFuseWidth = 0.1f;
-    [Tooltip("Kil şeklinin malzemesi. Shader'ı 'Village/Clay Wood Lit' olmalı; dokular 1BR odunun dokuları (Base Map = renk, " +
-             "Normal Map = normal), görünüm her hücredeki hayali 1BR'den alınır. Build'de gerekli.")]
+    [Tooltip("Dolgunun 1BR dokusundaki yeri (UV, 0..1): dokunun hiçbir yüzün kullanmadığı, düz odun renkli bir noktası. " +
+             "Dolgu buradan renk alır, normal map'i düz olmalı.")]
+    [SerializeField] private Vector2 clayFillUv = new Vector2(0.2f, 0.85f);
+    [Tooltip("Boşsa 1BR odunun kendi malzemesi kullanılır (önerilen). Shader'ı 'Village/Wood Wobble Lit' olmalı ki " +
+             "birleşince sallansın.")]
     [SerializeField] private Material clayMaterial;
-    [Tooltip("Clay Material boşken (sadece editörde) kullanılan düz malzemenin rengi")]
-    [SerializeField] private Color clayColor = new Color(0.78f, 0.58f, 0.38f);
 
     private static readonly System.Collections.Generic.Dictionary<string, Mesh> clayCache =
         new System.Collections.Generic.Dictionary<string, Mesh>();
-    private Material fallbackClay;
     private bool warnedClayShader;
     private ClayMesher.Reference clayReference;
     private bool clayReferenceTried;
@@ -49,10 +46,10 @@ public class WoodMerger : MonoBehaviour
     public GameObject AttachClay(Transform owner, System.Collections.Generic.List<ClayMesher.Piece> pieces, Renderer[] hide, string cacheKey = null)
     {
         if (!clayLook || pieces.Count == 0) return null;
-        string key = cacheKey == null ? null : $"{cacheKey}|{clayVoxelSize}|{clayBlend}|{clayFuseWidth}";
+        string key = cacheKey == null ? null : $"{cacheKey}|{clayVoxelSize}|{clayBlend}|{clayFillUv}";
         if (key == null || !clayCache.TryGetValue(key, out Mesh mesh) || mesh == null)
         {
-            mesh = ClayMesher.Build(pieces, ClayReference(), clayVoxelSize, clayBlend, clayFuseWidth);
+            mesh = ClayMesher.Build(pieces, ClayReference(), clayVoxelSize, clayBlend, clayFillUv);
             if (key != null && mesh != null) clayCache[key] = mesh;
         }
         if (mesh == null) return null;
@@ -70,7 +67,7 @@ public class WoodMerger : MonoBehaviour
     public ClayMesher.Piece ClayPiece(Vector3 start, Quaternion rotation, int length) =>
         new ClayMesher.Piece { start = start, rotation = rotation, length = length };
 
-    // Şeklin ve görünümün alındığı 1BR: katalogdaki 1 boyluk odunun modeli, kökünün (= hücrenin ortası) uzayında. Mesh'in
+    // Hücrelere konan ve dolgunun hesaplandığı 1BR: katalogdaki 1 boyluk odunun modeli, kökünün (= hücrenin ortası) uzayında. Mesh'in
     // Read/Write'ı açık olmalı (build'de okunabilsin).
     private ClayMesher.Reference ClayReference()
     {
@@ -93,32 +90,22 @@ public class WoodMerger : MonoBehaviour
         return clayReference;
     }
 
-    // Renk malzemede (MaterialPropertyBlock'la değil: birleşme sallanması kendi bloğunu yazıp siliyor)
+    // Clay Material ya da 1BR odunun kendi malzemesi
     private Material ClayMaterial()
     {
-        if (clayMaterial != null)
+        Material material = clayMaterial;
+        if (material == null)
         {
-            if (clayMaterial.shader.name != "Village/Clay Wood Lit" && !warnedClayShader)
-            {
-                warnedClayShader = true;
-                Debug.LogWarning("WoodMerger: Clay Material'ın shader'ı 'Village/Clay Wood Lit' değil; kaynaşma yerleri sade " +
-                                 "olmaz (Wood Wobble Lit değilse birleşince sallanmaz da).", this);
-            }
-            return clayMaterial;
+            Wood wood = catalog != null ? catalog.GetWood(1) : null;
+            Renderer renderer = wood != null ? wood.GetComponentInChildren<MeshRenderer>(true) : null;
+            material = renderer != null ? renderer.sharedMaterial : null;
         }
-#if UNITY_EDITOR
-        if (fallbackClay == null)
+        if (material != null && material.shader.name != "Village/Wood Wobble Lit" && !warnedClayShader)
         {
-            // Sadece editörde: kil odun shader'ı, düz renk (yoksa düz URP Lit)
-            Shader shader = Shader.Find("Village/Clay Wood Lit") ?? Shader.Find("Universal Render Pipeline/Lit");
-            fallbackClay = new Material(shader);
-            fallbackClay.SetColor("_BaseColor", clayColor);
+            warnedClayShader = true;
+            Debug.LogWarning("WoodMerger: odun malzemesinin shader'ı 'Village/Wood Wobble Lit' değil; birleşince sallanmaz.", this);
         }
-        return fallbackClay;
-#else
-        Debug.LogWarning("WoodMerger: Clay Material atanmamış.", this);
-        return null;
-#endif
+        return material;
     }
 
     public WoodCatalogSO Catalog => catalog;

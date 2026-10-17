@@ -23,11 +23,6 @@ VARIANTS = [
     dict(name="Village/Creature Jiggle Lit", output="CreatureJiggleLit.shader",
          description="vuruşta yerel jöle titreşimi, örn. kediye şaplak (Jiggle.hlsl)",
          vertex=("Jiggle.hlsl", "ApplyJiggle"), fragment=None),
-    dict(name="Village/Clay Wood Lit", output="ClayWoodLit.shader",
-         description="kil odun: 1BR'nin dokuları, kaynaşma yerlerinde düz renk / normal yok (ClayWood.hlsl) + birleşmede "
-                     "jöle gibi sallanma (Wobble.hlsl) + noktalı saydamlık (Fade.hlsl)",
-         vertex=("Wobble.hlsl", "ApplyWobble"), fragment=("Fade.hlsl", "ApplyFade"),
-         surface=("ClayWood.hlsl", "CLAY_WOOD_SURFACE")),
 ]
 
 # InitializeStandardLitSurfaceData'yı çağıran pass'ler (surface için)
