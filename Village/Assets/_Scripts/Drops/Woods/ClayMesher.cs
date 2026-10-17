@@ -188,11 +188,14 @@ public static class ClayMesher
 
     // Bir hücrenin (uzayı [0, 1]) şekli, surface nets. Noktalar -1..n+1 (komşu küplerin vertex'leri için bir sıra
     // fazla), küp vertex'leri -1..n-1, dörtgenler tabanı 0..n-1 olan ızgara kenarları için (her kenar tek hücrenin).
+    // Izgara yarım adım kaydırılmış (noktalar (i + 0.5) * adım): odun yüzleri hücre sınırlarında (kalınlık 1) ve sınır
+    // bir ızgara noktasına denk gelince iki komşu hücre küçük bir hesap farkıyla yüzü birbirine bırakıp ikisi de
+    // çizmiyordu (delikler). Kaydırınca yüz hep bir kenarın ortasında, sahibi kesin.
     private static Mesh ChunkMesh(List<Part> parts, int n, float step, float radius)
     {
         int m = n + 3;                        // nokta sayısı (eksen başına), indeks i ↔ ızgara -1 + i
         int Index(int x, int y, int z) => x + m * (y + m * z);
-        Vector3 Point(int x, int y, int z) => new Vector3(x - 1, y - 1, z - 1) * step;
+        Vector3 Point(int x, int y, int z) => new Vector3(x - 0.5f, y - 0.5f, z - 0.5f) * step;
 
         var values = new float[m * m * m];
         bool anyInside = false, anyOutside = false;
