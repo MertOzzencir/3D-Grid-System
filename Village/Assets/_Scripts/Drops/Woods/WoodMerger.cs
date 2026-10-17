@@ -54,6 +54,9 @@ public class WoodMerger : MonoBehaviour
             sides[(int)slot.Side][slot.Layer - 1] = carried.Length;
         }
 
+        // Hedefin ipi (sonuç aynı yerde, aynı dönüşte kurulur): sadece yeni eklenen ip kenarları sarılarak gelsin
+        System.Collections.Generic.List<WoodRope.Face> previousRope = target is MergedWood oldMerged ? oldMerged.RopeFaces : null;
+
         // Taşınan odun yok olacak: geri yerleştirilmeye çalışılmasın diye iptal değil, sadece bırakıyoruz
         InteractableController.Instance.Release(carried);
         Destroy(carried.gameObject);
@@ -77,7 +80,7 @@ public class WoodMerger : MonoBehaviour
             ? Vector3.zero
             : -(result.GridRotation * (Vector3)WoodLayout.SideDirection(slot.Side));
         PlayWobble(result, push);
-        if (result is MergedWood merged) merged.PlayRopeAnimation();
+        if (result is MergedWood merged) merged.PlayRopeAnimation(previousRope);
     }
 
     private void PlayWobble(GridPlaceable result, Vector3 push)

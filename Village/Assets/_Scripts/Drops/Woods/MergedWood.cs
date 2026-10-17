@@ -36,15 +36,23 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     private int signatureSteps;
     private readonly List<Renderer>[] sideRenderers = NewSideRenderers();
     private GameObject rope;
+    private List<WoodRope.Face> ropeFaces = new List<WoodRope.Face>(); // ipin değme yüzleri (yerel)
+
+    public List<WoodRope.Face> RopeFaces => ropeFaces;
 
     public int BaseLength => baseLength;
 
     public Renderer[] PieceRenderers(WoodSide side) => sideRenderers[(int)side].ToArray();
 
-    // İp sarılarak gelsin (birleştirme anında; kayıttan yüklenince ip hazır)
-    public void PlayRopeAnimation()
+    // İp sarılarak gelsin (birleştirme anında; kayıttan yüklenince ip hazır). previous: birleşmeden önceki yapının değme
+    // yüzleri (aynı uzayda; tek odunsa null): sadece yeni eklenen kenarlar oynar
+    public void PlayRopeAnimation(List<WoodRope.Face> previous)
     {
-        if (rope != null && rope.TryGetComponent(out RopeGrow grow)) grow.Play();
+        if (rope == null || !rope.TryGetComponent(out RopeGrow grow) || WoodMerger.Instance == null) return;
+        var added = new List<(Vector3, Vector3)>();
+        var existing = new List<(Vector3, Vector3)>();
+        WoodMerger.Instance.Rope.Changes(ropeFaces, previous, added, existing);
+        grow.Play(added, existing);
     }
 
     private static List<Renderer>[] NewSideRenderers()
@@ -104,7 +112,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
             list.Clear();
 
         AddPiece(catalog.GetWood(baseLength), Vector3Int.zero, Quaternion.identity, baseLength);
-        var ropeFaces = new List<WoodRope.Face>();
+        ropeFaces = new List<WoodRope.Face>();
         Material woodMaterial = null;
         foreach ((WoodSlot slot, int length) in FilledSlots())
         {

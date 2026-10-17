@@ -12,7 +12,8 @@ using UnityEngine;
 // yüzeyine kaydırılır (ip oluğun içinde, odunlara oturur). Kenarlar uç uca zincirlere bağlanır (kollara ayrılan köşede
 // zincir biter), köşeler yayla yuvarlatılır, zincir boyunca örgülü (sarmal lifli) tek tüp; kollara ayrılan köşelerde,
 // uçlarda ve kapalı halkanın başında düğüm. Hepsi tek mesh. Birleştirme anında ip sarılarak gelir (RopeGrow): her
-// zincir başından ucu sivrilerek uzar, bitince düğümler zıplayarak oturur.
+// zincir başından ucu sivrilerek uzar, bitince düğümler zıplayarak oturur. Sadece birleştirmede eklenen kenarlar
+// (Changes) oynar; önceden olan ip sabit kalır, yeni kısım ona bağlandığı yerden uzar.
 // Malzeme atanmazsa odunun malzemesinin dokusuz kopyası ip rengiyle (aynı shader: birleşince odunla birlikte sallanır).
 [Serializable]
 public class WoodRope
@@ -50,10 +51,12 @@ public class WoodRope
     private Material generatedMaterial;
     private Material generatedFrom;
 
-    // Animasyon verisi (Build sırasında vertex'lerle aynı sırada): vertex'in ip yolundaki merkezi ve zincirdeki yeri
-    // (0..1; düğümde -1)
+    // Animasyon verisi (Build sırasında vertex'lerle aynı sırada): vertex'in ip yolundaki merkezi, zinciri (düğümde -1)
+    // ve zincir boyunca uzaklığı
     [NonSerialized] private readonly List<Vector3> animCenters = new List<Vector3>();
-    [NonSerialized] private readonly List<float> animProgress = new List<float>();
+    [NonSerialized] private readonly List<int> animChain = new List<int>();
+    [NonSerialized] private readonly List<float> animDistance = new List<float>();
+    [NonSerialized] private int chainCount;
 
     // Bir değme yüzü: center = yüzün ortası, normal = ana odundan yan parçaya, up = yüzün bir kenar yönü (diğeri
     // normal × up); yüz 1 × 1
@@ -69,54 +72,12 @@ public class WoodRope
     {
         if (!enabled || faces.Count == 0) return null;
         animCenters.Clear();
-        animProgress.Clear();
+        animChain.Clear();
+        animDistance.Clear();
+        chainCount = 0;
 
-        // Kenarlar (kafeste, koordinatlar × 2 tam sayı): her kenara değen yüzlerin normali ve kenarın o yüzdeki dışa yönü
-        var edges = new Dictionary<(Vector3Int, Vector3Int), List<(Vector3 normal, Vector3 outward)>>();
-        foreach (Face face in faces)
-        {
-            Vector3 u = face.up * 0.5f, v = Vector3.Cross(face.normal, face.up).normalized * 0.5f;
-            Vector3[] corners = { face.center + u + v, face.center + u - v, face.center - u - v, face.center - u + v };
-            Vector3[] outwards = { face.up, -v.normalized, -face.up, v.normalized }; // kenar i: köşe i → i + 1
-            for (int i = 0; i < 4; i++)
-            {
-                Vector3Int a = Lattice(corners[i]), b = Lattice(corners[(i + 1) % 4]);
-                var key = Compare(a, b) <= 0 ? (a, b) : (b, a);
-                if (!edges.TryGetValue(key, out var list)) edges[key] = list = new List<(Vector3, Vector3)>();
-                list.Add((face.normal, outwards[i]));
-            }
-        }
-
-        // Aynı düzlemde iki yüzün paylaştığı kenar iki parçanın arasında: çizilmez. Kalan kenarların köşeleri dışa doğru
-        var kept = new List<(Vector3Int a, Vector3Int b)>();
-        var push = new Dictionary<Vector3Int, Vector3>();
-        foreach (var pair in edges)
-        {
-            bool inner = false;
-            for (int i = 0; i < pair.Value.Count && !inner; i++)
-                for (int j = i + 1; j < pair.Value.Count; j++)
-                    if (Vector3.Dot(pair.Value[i].normal, pair.Value[j].normal) > 0.9f) inner = true;
-            if (inner) continue;
-
-            kept.Add(pair.Key);
-            foreach ((Vector3 normal, Vector3 outward) in pair.Value)
-            {
-                Vector3 add = normal + outward;
-                push[pair.Key.Item1] = (push.TryGetValue(pair.Key.Item1, out Vector3 p1) ? p1 : Vector3.zero) + add;
-                push[pair.Key.Item2] = (push.TryGetValue(pair.Key.Item2, out Vector3 p2) ? p2 : Vector3.zero) + add;
-            }
-        }
+        Layout(faces, out List<(Vector3Int a, Vector3Int b)> kept, out Dictionary<Vector3Int, Vector3> positions);
         if (kept.Count == 0) return null;
-
-        // Köşenin yeri: kafes noktası + değdiği her yön ekseninde odunun yüzeyi + ip kalınlığı kadar dışarı
-        float inflate = surface + thickness;
-        var positions = new Dictionary<Vector3Int, Vector3>();
-        foreach (var pair in push)
-        {
-            Vector3 s = pair.Value;
-            Vector3 sign = new Vector3(Sign(s.x), Sign(s.y), Sign(s.z));
-            positions[pair.Key] = (Vector3)pair.Key * 0.5f + sign * inflate;
-        }
 
         // Zincirler: derecesi 2 olmayan köşeler (uç, kollara ayrılma) zinciri böler; kalanlar kapalı halka
         var adjacency = new Dictionary<Vector3Int, List<Vector3Int>>();
@@ -188,8 +149,73 @@ public class WoodRope
         rope.transform.SetParent(parent, false);
         rope.AddComponent<MeshFilter>().sharedMesh = mesh;
         rope.AddComponent<MeshRenderer>().sharedMaterial = Material(woodMaterial);
-        rope.AddComponent<RopeGrow>().Setup(mesh, animCenters.ToArray(), animProgress.ToArray(), growDuration, growDelay, knotPopDuration);
+        rope.AddComponent<RopeGrow>().Setup(mesh, animCenters.ToArray(), animChain.ToArray(), animDistance.ToArray(),
+                                            growDuration, growDelay, knotPopDuration);
         return rope;
+    }
+
+    // Yüzlerden ipin kenarları (kafeste) ve köşelerin yerleri
+    private void Layout(List<Face> faces, out List<(Vector3Int a, Vector3Int b)> kept, out Dictionary<Vector3Int, Vector3> positions)
+    {
+        // Kenarlar (kafeste, koordinatlar × 2 tam sayı): her kenara değen yüzlerin normali ve kenarın o yüzdeki dışa yönü
+        var edges = new Dictionary<(Vector3Int, Vector3Int), List<(Vector3 normal, Vector3 outward)>>();
+        foreach (Face face in faces)
+        {
+            Vector3 u = face.up * 0.5f, v = Vector3.Cross(face.normal, face.up).normalized * 0.5f;
+            Vector3[] corners = { face.center + u + v, face.center + u - v, face.center - u - v, face.center - u + v };
+            Vector3[] outwards = { face.up, -v.normalized, -face.up, v.normalized }; // kenar i: köşe i → i + 1
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3Int a = Lattice(corners[i]), b = Lattice(corners[(i + 1) % 4]);
+                var key = Compare(a, b) <= 0 ? (a, b) : (b, a);
+                if (!edges.TryGetValue(key, out var list)) edges[key] = list = new List<(Vector3, Vector3)>();
+                list.Add((face.normal, outwards[i]));
+            }
+        }
+
+        // Aynı düzlemde iki yüzün paylaştığı kenar iki parçanın arasında: çizilmez. Kalan kenarların köşeleri dışa doğru
+        kept = new List<(Vector3Int a, Vector3Int b)>();
+        var push = new Dictionary<Vector3Int, Vector3>();
+        foreach (var pair in edges)
+        {
+            bool inner = false;
+            for (int i = 0; i < pair.Value.Count && !inner; i++)
+                for (int j = i + 1; j < pair.Value.Count; j++)
+                    if (Vector3.Dot(pair.Value[i].normal, pair.Value[j].normal) > 0.9f) inner = true;
+            if (inner) continue;
+
+            kept.Add(pair.Key);
+            foreach ((Vector3 normal, Vector3 outward) in pair.Value)
+            {
+                Vector3 add = normal + outward;
+                push[pair.Key.Item1] = (push.TryGetValue(pair.Key.Item1, out Vector3 p1) ? p1 : Vector3.zero) + add;
+                push[pair.Key.Item2] = (push.TryGetValue(pair.Key.Item2, out Vector3 p2) ? p2 : Vector3.zero) + add;
+            }
+        }
+        // Köşenin yeri: kafes noktası + değdiği her yön ekseninde odunun yüzeyi + ip kalınlığı kadar dışarı
+        float inflate = surface + thickness;
+        positions = new Dictionary<Vector3Int, Vector3>();
+        foreach (var pair in push)
+        {
+            Vector3 s = pair.Value;
+            Vector3 sign = new Vector3(Sign(s.x), Sign(s.y), Sign(s.z));
+            positions[pair.Key] = (Vector3)pair.Key * 0.5f + sign * inflate;
+        }
+    }
+
+    // Birleştirmede değişen kısım: şimdiki ipin kenarlarından öncekinde (previous, aynı uzayda) olmayanlar added, olanlar
+    // existing (şimdiki yerleriyle). previous null ya da boşsa hepsi yeni.
+    public void Changes(List<Face> current, List<Face> previous, List<(Vector3, Vector3)> added, List<(Vector3, Vector3)> existing)
+    {
+        Layout(current, out var kept, out var positions);
+        var before = new HashSet<(Vector3Int, Vector3Int)>();
+        if (previous != null && previous.Count > 0)
+        {
+            Layout(previous, out var oldKept, out _);
+            foreach (var edge in oldKept) before.Add(edge);
+        }
+        foreach ((Vector3Int a, Vector3Int b) in kept)
+            (before.Contains((a, b)) ? existing : added).Add((positions[a], positions[b]));
     }
 
     private static Vector3Int Lattice(Vector3 p) => Vector3Int.RoundToInt(p * 2f);
@@ -259,8 +285,7 @@ public class WoodRope
         Vector3 tangent = (path[1] - path[0]).normalized;
         Vector3 side = Vector3.Cross(tangent, Mathf.Abs(tangent.y) < 0.9f ? Vector3.up : Vector3.right).normalized;
         int start = vertices.Count;
-        float total = 0f;
-        for (int i = 1; i < path.Count; i++) total += Vector3.Distance(path[i], path[i - 1]);
+        int chain = chainCount++;
         float distance = 0f;
         for (int i = 0; i < path.Count; i++)
         {
@@ -284,7 +309,8 @@ public class WoodRope
                 normals.Add(normal);
                 uvs.Add(new Vector2(distance, (float)s / Sides));
                 animCenters.Add(path[i]);
-                animProgress.Add(total > 0f ? distance / total : 1f);
+                animChain.Add(chain);
+                animDistance.Add(distance);
             }
         }
         int stride = Sides + 1;
@@ -313,7 +339,8 @@ public class WoodRope
                 normals.Add(normal);
                 uvs.Add(new Vector2(theta, phi));
                 animCenters.Add(center);
-                animProgress.Add(-1f);
+                animChain.Add(-1);
+                animDistance.Add(0f);
             }
         }
         int stride = Sides + 1;
