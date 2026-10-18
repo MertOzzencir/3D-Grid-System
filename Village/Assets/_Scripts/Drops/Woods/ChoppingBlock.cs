@@ -43,7 +43,7 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
     [Tooltip("Kaç vuruşta bölünür")]
     [SerializeField, Min(1)] private int hitsToSplit = 1;
     [Tooltip("Baltanın parçanın ortasına göre yeri (birim, kameraya göre: X sağ, Y yukarı, Z kameradan uzağa / geriye)")]
-    [SerializeField] private Vector3 axeOffset = new Vector3(0f, 0.8f, 0.3f);
+    [SerializeField] private Vector3 axeOffset = new Vector3(0f, 0.5f, -1f);
     [Tooltip("Baltanın kütüğün üstündeki dönüşü (derece, kameraya göre: kamera döndükçe balta da döner). Play'deyken " +
              "değiştirince anında görünür; istenen duruş bulununca prefab'a yazılır.")]
     [SerializeField] private Vector3 axeRotation = new Vector3(45f, 0f, 0f);
