@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &6120934715330198301
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6120934715330198302}
+  - component: {fileID: 6120934715330198303}
+  m_Layer: 0
+  m_Name: SawBench
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6120934715330198302
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6120934715330198301}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6120934715330198303
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6120934715330198301}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dacc28e02c4848c48084373767db7a8f, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::SawBench
+  data: {fileID: 11400000, guid: bddc504ad51a440d8d5ad9b8493f1462, type: 2}
+  rotation: 0
+  followSpeed: 10
+  recipes:
+  - input: {fileID: 11400000, guid: 476508ab5e205db4bb9161092b80479a, type: 2}
+    output: {fileID: 11400000, guid: d1e9aea0f3f844f08afde29962d5e689, type: 2}
+    count: 2
+  - input: {fileID: 11400000, guid: d1e9aea0f3f844f08afde29962d5e689, type: 2}
+    output: {fileID: 11400000, guid: 7391f4ad374b4ad9a7d0bf413206dc3a, type: 2}
+    count: 2
+  model: {fileID: 0}
+  placeholderColor: {r: 0.62, g: 0.45, b: 0.3, a: 1}
+  topHeight: 0
+  jumpDuration: 0.35
+  jumpHeight: 0.6
+  strokesToCut: 3
+  sawTravel: 0.3
+  mouseSpeed: 2.5
+  cutDepth: 0.6
+  sawModel: {fileID: 0}
+  sawdustEffect: {fileID: 0}
+  sawFollowSpeed: 20

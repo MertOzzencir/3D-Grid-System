@@ -1,14 +1,14 @@
 using UnityEngine;
 
-// Kütüğün üstündeki parçanın yerini tutan collider: balta ve parça buraya hedeflenir (kütüğe yönlendirilir); sağ tıkla
-// tutulunca parça kütükten alınıp taşınır (bütün çağrılar parçaya yönlendirilir).
-public class ChoppingBlockTop : MonoBehaviour, IInteractable, IStickyToolTarget, IHoldTarget
+// İstasyonun (Workstation) üstündeki parçanın yerini tutan collider: alet ve parça buraya hedeflenir (istasyona
+// yönlendirilir); sağ tıkla tutulunca parça istasyondan alınıp taşınır (bütün çağrılar parçaya yönlendirilir).
+public class WorkstationTop : MonoBehaviour, IInteractable, IStickyToolTarget, IHoldTarget
 {
-    private ChoppingBlock block;
+    private Workstation block;
     private BoxCollider box;
     private IInteractable carried; // kütükten alınıp taşınan parça
 
-    public void Init(ChoppingBlock owner, BoxCollider collider)
+    public void Init(Workstation owner, BoxCollider collider)
     {
         block = owner;
         box = collider;
@@ -47,7 +47,7 @@ public class ChoppingBlockTop : MonoBehaviour, IInteractable, IStickyToolTarget,
     public void ContractCancel()
     {
         carried?.ContractCancel();
-        // İnce parça uygun yer bulamadıysa (havada kaldı) kütüğe geri konur
+        // İnce parça uygun yer bulamadıysa (havada kaldı) istasyona geri konur
         if (carried is FinePlaceable piece && !piece.IsPlaced && piece.transform.parent == null) block.TryHold(piece);
         carried = null;
     }

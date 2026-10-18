@@ -35,6 +35,9 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
 
     public bool IsPlaced => occupiedCells != null;
 
+    // Yüksekliği (birim): küçük küp 0.5
+    public float Height => fineSize.y * 0.5f;
+
     private void Awake()
     {
         if (model == null) return;
