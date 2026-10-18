@@ -59,7 +59,7 @@ MonoBehaviour:
   topHeight: 0
   hitsToSplit: 1
   axeHeight: 0.8
-  axeTilt: -90
+  axeRotation: {x: 0, y: 0, z: -90}
   chopEffect: {fileID: 0}
   jumpDuration: 0.35
   jumpHeight: 0.6
