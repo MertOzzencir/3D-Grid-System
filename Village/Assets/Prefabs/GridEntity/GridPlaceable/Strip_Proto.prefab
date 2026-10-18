@@ -140,6 +140,7 @@ MonoBehaviour:
   rotation: 0
   fineSize: {x: 1, y: 1, z: 2}
   followSpeed: 18
+  placeholderColor: {r: 0.98, g: 0.93, b: 0.55, a: 1}
 --- !u!65 &7207851914915010860
 BoxCollider:
   m_ObjectHideFlags: 0

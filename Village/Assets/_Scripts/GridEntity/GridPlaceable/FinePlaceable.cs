@@ -18,6 +18,8 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
     [SerializeField] private float followSpeed = 18f;
     [Tooltip("İsteğe bağlı model (pivot kutunun ortasında). Atanırsa prefab'taki geçici görünüm (kutu) gizlenir.")]
     [SerializeField] private GameObject model;
+    [Tooltip("Model yokken geçici görünümün (kutu) rengi: prototipte parçalar birbirinden ayırt edilsin. Beyaz = malzemenin kendi rengi.")]
+    [SerializeField] private Color placeholderColor = Color.white;
 
     private List<Vector3Int> occupiedCells;   // GridManager'da kapladığı hücreler (yerleşikken)
     private Vector3Int fineMin;               // kapladığı kutunun küçük küp olarak alt köşesi
@@ -40,7 +42,12 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
 
     private void Awake()
     {
-        if (model == null) return;
+        if (model == null)
+        {
+            if (placeholderColor != Color.white)
+                foreach (Renderer r in GetComponentsInChildren<Renderer>()) r.material.color = placeholderColor;
+            return;
+        }
         foreach (Renderer r in GetComponentsInChildren<Renderer>()) r.enabled = false; // geçici kutu
         Instantiate(model, transform, false).name = "Model";
     }
