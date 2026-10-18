@@ -58,8 +58,8 @@ MonoBehaviour:
   placeholderColor: {r: 0.55, g: 0.38, b: 0.24, a: 1}
   topHeight: 0
   hitsToSplit: 1
-  axeHeight: 0.8
-  axeRotation: {x: 0, y: 0, z: -90}
+  axeOffset: {x: 0, y: 0.8, z: 0.3}
+  axeRotation: {x: 45, y: 0, z: 0}
   chopEffect: {fileID: 0}
   jumpDuration: 0.35
   jumpHeight: 0.6
