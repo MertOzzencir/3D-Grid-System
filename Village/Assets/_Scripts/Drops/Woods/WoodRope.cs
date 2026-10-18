@@ -11,7 +11,9 @@ using UnityEngine;
 // çizilmez, ip yığının dış çevresini dolanır. Her köşe, değdiği yüzlerin dışına ve kenarların dışa yönüne doğru odunun
 // yüzeyine kaydırılır (ip oluğun içinde, odunlara oturur). Kenarlar uç uca zincirlere bağlanır (kollara ayrılan köşede
 // zincir biter), köşeler yayla yuvarlatılır, zincir boyunca örgülü (sarmal lifli) tek tüp; kollara ayrılan köşelerde,
-// uçlarda ve kapalı halkanın başında düğüm. Hepsi tek mesh. Birleştirme anında ip sarılarak gelir (RopeGrow): her
+// uçlarda ve kapalı halkanın başında düğüm. Bağlama gibi görünsün diye her yol `turns` kez sarılır: turlar ana oduna
+// değen yüzden yan parçaya doğru (köşenin değdiği yüz normalleri yönünde) yan yana dizilir; düğümler en dış turda. İpin
+// kalınlığı boyunca hafif düzensizlik var (makine işi gibi durmasın). Hepsi tek mesh. Birleştirme anında ip sarılarak gelir (RopeGrow): her
 // zincir başından ucu sivrilerek uzar, bitince düğümler zıplayarak oturur. Sadece birleştirmede eklenen kenarlar
 // (Changes) oynar; önceden olan ip sabit kalır, yeni kısım ona bağlandığı yerden uzar.
 // Malzeme atanmazsa odunun malzemesinin dokusuz kopyası ip rengiyle (aynı shader: birleşince odunla birlikte sallanır).
@@ -24,20 +26,26 @@ public class WoodRope
     [SerializeField] private Material material;
     [SerializeField] private Color color = new Color(0.86f, 0.74f, 0.52f);
     [Tooltip("İpin kalınlığı (yarıçap, birim)")]
-    [SerializeField] private float thickness = 0.045f;
+    [SerializeField] private float thickness = 0.03f;
     [Tooltip("Odunun hücreden taşan kısmı (birim, 1BR ~0.045): ip hücre sınırından bu kadar + kalınlığı kadar dışarıda, " +
              "odunun yüzeyine oturur")]
     [SerializeField] private float surface = 0.045f;
     [Tooltip("Köşelerin yuvarlaklığı (birim): ip köşede bu yarıçapta bir yayla döner")]
-    [SerializeField] private float cornerRadius = 0.12f;
+    [SerializeField] private float cornerRadius = 0.2f;
     [Tooltip("Örgüdeki lif sayısı")]
     [SerializeField, Range(0, 6)] private int strands = 3;
     [Tooltip("Liflerin kabarıklığı (kalınlığa oranla; 0 = düz tüp)")]
-    [SerializeField, Range(0f, 0.5f)] private float strandDepth = 0.22f;
+    [SerializeField, Range(0f, 0.5f)] private float strandDepth = 0.3f;
     [Tooltip("Bir lifin ipin etrafında bir tam tur attığı uzunluk (birim)")]
-    [SerializeField] private float strandPitch = 0.35f;
+    [SerializeField] private float strandPitch = 0.18f;
     [Tooltip("Düğüm topunun büyüklüğü (kalınlığa oranla)")]
     [SerializeField] private float knotSize = 1.7f;
+    [Tooltip("Bağlamadaki tur sayısı: ip yan parçaya doğru yan yana bu kadar kez sarılır")]
+    [SerializeField, Range(1, 6)] private int turns = 3;
+    [Tooltip("Turlar arası mesafe (ip kalınlığına oranla; 2 = turlar birbirine değer)")]
+    [SerializeField] private float turnSpacing = 2.1f;
+    [Tooltip("Kalınlıktaki düzensizlik (oran; 0 = kusursuz)")]
+    [SerializeField, Range(0f, 0.3f)] private float roughness = 0.08f;
     [Header("Sarılma animasyonu (birleştirme anında, sadece yeni kısım)")]
     [Tooltip("İpin uzama hızı (birim / saniye)")]
     [SerializeField] private float growSpeed = 3.5f;
@@ -83,7 +91,8 @@ public class WoodRope
         animDistance.Clear();
         chainCount = 0;
 
-        Layout(faces, out List<(Vector3Int a, Vector3Int b)> kept, out Dictionary<Vector3Int, Vector3> positions);
+        Layout(faces, out List<(Vector3Int a, Vector3Int b)> kept, out Dictionary<Vector3Int, Vector3> positions,
+               out Dictionary<Vector3Int, Vector3> wrapDirections);
         if (kept.Count == 0) return null;
 
         // Zincirler: derecesi 2 olmayan köşeler (uç, kollara ayrılma) zinciri böler; kalanlar kapalı halka
@@ -118,27 +127,46 @@ public class WoodRope
         var uvs = new List<Vector2>();
         var triangles = new List<int>();
         var knots = new List<Vector3>();
+        int turnCount = Mathf.Max(1, turns);
+        float spacing = thickness * turnSpacing;
+        // k. turdaki yer: yolun köşeleri sarılma yönünde k aralık ileride
+        List<Vector3> Turn(List<Vector3Int> chain, int k)
+        {
+            var points = new List<Vector3>(chain.Count);
+            foreach (Vector3Int node in chain)
+                points.Add(positions[node] + (wrapDirections.TryGetValue(node, out Vector3 w) ? w : Vector3.zero) * (k * spacing));
+            return points;
+        }
         foreach (var node in adjacency)
         {
             if (node.Value.Count == 2) continue;
-            knots.Add(positions[node.Key]); // uç ya da kollara ayrılma: düğüm
+            // Uç ya da kollara ayrılma: düğüm (en dış turda)
+            knots.Add(positions[node.Key] + (wrapDirections.TryGetValue(node.Key, out Vector3 w) ? w : Vector3.zero) * ((turnCount - 1) * spacing));
             foreach (Vector3Int next in node.Value)
                 if (!used.Contains(EdgeKey(node.Key, next)))
-                    AddRope(ToPoints(Walk(node.Key, next), positions), false, vertices, normals, uvs, triangles);
+                {
+                    List<Vector3Int> chain = Walk(node.Key, next);
+                    for (int k = 0; k < turnCount; k++)
+                        AddRope(Turn(chain, k), false, vertices, normals, uvs, triangles);
+                }
         }
         foreach ((Vector3Int a, Vector3Int b) in kept)
         {
             if (used.Contains(EdgeKey(a, b))) continue;
-            // Kapalı halka: ilk kenarın ortasından başlar (bütün köşeler yuvarlansın), başında düğüm
-            List<Vector3> loop = ToPoints(Walk(a, b), positions);
-            loop.RemoveAt(loop.Count - 1);
-            Vector3 start = (loop[0] + loop[1]) * 0.5f;
-            var rotated = new List<Vector3> { start };
-            for (int i = 1; i < loop.Count; i++) rotated.Add(loop[i]);
-            rotated.Add(loop[0]);
-            rotated.Add(start);
-            knots.Add(start);
-            AddRope(rotated, true, vertices, normals, uvs, triangles);
+            // Kapalı halka: ilk kenarın ortasından başlar (bütün köşeler yuvarlansın), en dış turun başında düğüm
+            List<Vector3Int> chain = Walk(a, b);
+            for (int k = 0; k < turnCount; k++)
+            {
+                List<Vector3> loop = Turn(chain, k);
+                loop.RemoveAt(loop.Count - 1);
+                Vector3 start = (loop[0] + loop[1]) * 0.5f;
+                var rotated = new List<Vector3> { start };
+                for (int i = 1; i < loop.Count; i++) rotated.Add(loop[i]);
+                rotated.Add(loop[0]);
+                rotated.Add(start);
+                if (k == turnCount - 1) knots.Add(start);
+                AddRope(rotated, true, vertices, normals, uvs, triangles);
+            }
         }
         foreach (Vector3 knot in knots)
             AddKnot(knot, vertices, normals, uvs, triangles);
@@ -171,8 +199,12 @@ public class WoodRope
     }
 
     // Yüzlerden ipin kenarları (kafeste) ve köşelerin yerleri
-    private void Layout(List<Face> faces, out List<(Vector3Int a, Vector3Int b)> kept, out Dictionary<Vector3Int, Vector3> positions)
+    // wrapDirections: köşe başına turların dizildiği yön (değdiği yüzlerin normallerinin ortalaması: ana odundan yan
+    // parçaya doğru)
+    private void Layout(List<Face> faces, out List<(Vector3Int a, Vector3Int b)> kept, out Dictionary<Vector3Int, Vector3> positions,
+                        out Dictionary<Vector3Int, Vector3> wrapDirections)
     {
+        var normalSums = new Dictionary<Vector3Int, Vector3>();
         // Kenarlar (kafeste, koordinatlar × 2 tam sayı): her kenara değen yüzlerin normali ve kenarın o yüzdeki dışa yönü
         var edges = new Dictionary<(Vector3Int, Vector3Int), List<(Vector3 normal, Vector3 outward)>>();
         foreach (Face face in faces)
@@ -206,6 +238,11 @@ public class WoodRope
                 Vector3 add = normal + outward;
                 push[pair.Key.Item1] = (push.TryGetValue(pair.Key.Item1, out Vector3 p1) ? p1 : Vector3.zero) + add;
                 push[pair.Key.Item2] = (push.TryGetValue(pair.Key.Item2, out Vector3 p2) ? p2 : Vector3.zero) + add;
+                foreach (Vector3Int node in new[] { pair.Key.Item1, pair.Key.Item2 })
+                {
+                    normalSums.TryGetValue(node, out Vector3 sum);
+                    normalSums[node] = sum + normal;
+                }
             }
         }
         // Köşenin yeri: kafes noktası + değdiği her yön ekseninde odunun yüzeyi + ip kalınlığı kadar dışarı
@@ -217,17 +254,24 @@ public class WoodRope
             Vector3 sign = new Vector3(Sign(s.x), Sign(s.y), Sign(s.z));
             positions[pair.Key] = (Vector3)pair.Key * 0.5f + sign * inflate;
         }
+        wrapDirections = new Dictionary<Vector3Int, Vector3>();
+        foreach (var pair in normalSums)
+        {
+            Vector3 s = pair.Value;
+            Vector3 dir = new Vector3(Sign(s.x), Sign(s.y), Sign(s.z));
+            wrapDirections[pair.Key] = dir.sqrMagnitude > 0f ? dir.normalized : Vector3.zero;
+        }
     }
 
     // Birleştirmede değişen kısım: şimdiki ipin kenarlarından öncekinde (previous, aynı uzayda) olmayanlar added, olanlar
     // existing (şimdiki yerleriyle). previous null ya da boşsa hepsi yeni.
     public void Changes(List<Face> current, List<Face> previous, List<(Vector3, Vector3)> added, List<(Vector3, Vector3)> existing)
     {
-        Layout(current, out var kept, out var positions);
+        Layout(current, out var kept, out var positions, out _);
         var before = new HashSet<(Vector3Int, Vector3Int)>();
         if (previous != null && previous.Count > 0)
         {
-            Layout(previous, out var oldKept, out _);
+            Layout(previous, out var oldKept, out _, out _);
             foreach (var edge in oldKept) before.Add(edge);
         }
         foreach ((Vector3Int a, Vector3Int b) in kept)
@@ -303,6 +347,7 @@ public class WoodRope
         int start = vertices.Count;
         int chain = chainCount++;
         float distance = 0f;
+        float seed = chain * 7.31f;
         for (int i = 0; i < path.Count; i++)
         {
             Vector3 next = i + 1 < path.Count ? path[i + 1] - path[i] : path[i] - path[i - 1];
@@ -320,7 +365,8 @@ public class WoodRope
             {
                 float angle = s * Mathf.PI * 2f / Sides;
                 Vector3 normal = side * Mathf.Cos(angle) + other * Mathf.Sin(angle);
-                float radius = thickness * (1f + strandDepth * Mathf.Cos(strands * angle - twist));
+                float rough = 1f + roughness * (Mathf.PerlinNoise(seed, distance * 5f) * 2f - 1f);
+                float radius = thickness * rough * (1f + strandDepth * Mathf.Cos(strands * angle - twist));
                 vertices.Add(path[i] + normal * radius);
                 normals.Add(normal);
                 uvs.Add(new Vector2(distance, (float)s / Sides));
