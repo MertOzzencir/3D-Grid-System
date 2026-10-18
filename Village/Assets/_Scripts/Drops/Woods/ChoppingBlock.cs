@@ -11,6 +11,8 @@ using UnityEngine;
 // (ChoppingBlockTop) açılır: balta oraya hedeflenir, sağ tıkla tutulunca parça kütükten alınır (yönlendirme).
 // Tarifler Inspector'da: girdi SO → çıktı SO × adet. Çıktısı boş tarif: parça konur ama bölünmez.
 // Üstteki parça kaydedilmez (kütük kaydedilir).
+// Görünüm: Model atanırsa o (pivot hücre ortasında), yoksa kodla geçici silindir kütük (prototip). Kökte collider yoksa
+// görünümü saran kutu eklenir (tutulabilsin).
 public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IHoldTarget
 {
     [Serializable]
@@ -26,6 +28,12 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
 
     [SerializeField] private float followSpeed = 10f;
     [SerializeField] private List<Recipe> recipes = new List<Recipe>();
+
+    [Header("Görünüm")]
+    [Tooltip("Kütüğün modeli (prefab ya da FBX; pivot hücrenin ortasında). Boşsa geçici silindir kütük çizilir.")]
+    [SerializeField] private GameObject model;
+    [Tooltip("Geçici kütüğün rengi (model yokken)")]
+    [SerializeField] private Color placeholderColor = new Color(0.55f, 0.38f, 0.24f);
 
     [Header("Yerleşim")]
     [Tooltip("Kütüğün üst yüzeyinin pivottan yüksekliği (birim). Parça bunun üstüne oturur (parçanın tabanı burada).")]
@@ -58,6 +66,7 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
     private void Awake()
     {
         drag = new GridDragMotor(this, followSpeed);
+        BuildVisual();
         var topObject = new GameObject("Top");
         topObject.transform.SetParent(transform, false);
         topObject.transform.localPosition = Vector3.up * (topHeight + 0.5f);
@@ -66,6 +75,42 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
         top = topObject.AddComponent<ChoppingBlockTop>();
         top.Init(this, box);
         box.enabled = false;
+    }
+
+    // Model ya da geçici silindir (hücrenin alt yarısı, üst yüzeyi topHeight'ta); kökte collider yoksa görünümü saran kutu
+    private void BuildVisual()
+    {
+        GameObject visual;
+        if (model != null)
+        {
+            visual = Instantiate(model, transform, false);
+        }
+        else
+        {
+            visual = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            Destroy(visual.GetComponent<Collider>());
+            visual.transform.SetParent(transform, false);
+            float height = Mathf.Max(0.1f, topHeight + 0.5f); // hücrenin tabanından üst yüzeye
+            visual.transform.localPosition = Vector3.up * (-0.5f + height * 0.5f);
+            visual.transform.localScale = new Vector3(0.8f, height * 0.5f, 0.8f); // silindir 2 birim boyunda
+            var renderer = visual.GetComponent<Renderer>();
+            renderer.material.color = placeholderColor;
+        }
+        visual.name = "Model";
+
+        if (GetComponent<Collider>() != null) return;
+        var box = gameObject.AddComponent<BoxCollider>();
+        Bounds bounds = default;
+        bool any = false;
+        foreach (Renderer r in visual.GetComponentsInChildren<Renderer>())
+        {
+            Bounds local = new Bounds(transform.InverseTransformPoint(r.bounds.center), r.bounds.size);
+            if (any) bounds.Encapsulate(local);
+            else bounds = local;
+            any = true;
+        }
+        box.center = any ? bounds.center : Vector3.down * 0.25f;
+        box.size = any ? bounds.size : new Vector3(0.9f, 0.5f, 0.9f);
     }
 
     private Recipe RecipeFor(GridPlaceable item)

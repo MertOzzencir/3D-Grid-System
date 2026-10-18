@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &4810322715330198301
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4810322715330198302}
+  - component: {fileID: 4810322715330198303}
+  m_Layer: 0
+  m_Name: ChoppingBlock
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4810322715330198302
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4810322715330198301}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4810322715330198303
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4810322715330198301}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a7d428e700e4bad9d72bc4ed79481f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChoppingBlock
+  data: {fileID: 11400000, guid: 403247c9d1cd457a9dac62bf3a60d8f9, type: 2}
+  rotation: 0
+  followSpeed: 10
+  recipes:
+  - input: {fileID: 11400000, guid: 5f5daab105376b0469679cbd768b4f69, type: 2}
+    output: {fileID: 11400000, guid: 476508ab5e205db4bb9161092b80479a, type: 2}
+    count: 2
+  - input: {fileID: 11400000, guid: 476508ab5e205db4bb9161092b80479a, type: 2}
+    output: {fileID: 11400000, guid: 86687191269744e8bd92a7454b06f3b6, type: 2}
+    count: 2
+  model: {fileID: 0}
+  placeholderColor: {r: 0.55, g: 0.38, b: 0.24, a: 1}
+  topHeight: 0
+  hitsToSplit: 1
+  axeDistance: 0.8
+  chopEffect: {fileID: 0}
+  jumpDuration: 0.35
+  jumpHeight: 0.6

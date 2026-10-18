@@ -16,6 +16,8 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
              "Yarım odun: (1, 2, 2).")]
     [SerializeField] private Vector3Int fineSize = new Vector3Int(1, 2, 2);
     [SerializeField] private float followSpeed = 18f;
+    [Tooltip("İsteğe bağlı model (pivot kutunun ortasında). Atanırsa prefab'taki geçici görünüm (kutu) gizlenir.")]
+    [SerializeField] private GameObject model;
 
     private List<Vector3Int> occupiedCells;   // GridManager'da kapladığı hücreler (yerleşikken)
     private Vector3Int fineMin;               // kapladığı kutunun küçük küp olarak alt köşesi
@@ -32,6 +34,13 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
     private readonly RaycastHit[] hits = new RaycastHit[16];
 
     public bool IsPlaced => occupiedCells != null;
+
+    private void Awake()
+    {
+        if (model == null) return;
+        foreach (Renderer r in GetComponentsInChildren<Renderer>()) r.enabled = false; // geçici kutu
+        Instantiate(model, transform, false).name = "Model";
+    }
 
     // Dönüşe göre boy (90° / 270°: X ile Z yer değiştirir)
     private Vector3Int Size => Rotation == GridMaskRotator.Rotation.Deg90 || Rotation == GridMaskRotator.Rotation.Deg270
