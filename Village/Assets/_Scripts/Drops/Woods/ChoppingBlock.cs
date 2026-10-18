@@ -42,8 +42,11 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
     [Header("Kesme")]
     [Tooltip("Kaç vuruşta bölünür")]
     [SerializeField, Min(1)] private int hitsToSplit = 1;
-    [Tooltip("Balta parçanın ortasından (kameraya göre sol yana) bu kadar uzakta durur")]
-    [SerializeField] private float axeDistance = 0.8f;
+    [Tooltip("Balta parçanın ortasının bu kadar (birim) üstünde durur (yukarıdan aşağı vurur)")]
+    [SerializeField] private float axeHeight = 0.8f;
+    [Tooltip("Baltanın eğimi (derece, kameraya bakan eksen etrafında): ağaçtaki yan duruşu yukarıdan aşağıya çevirir. " +
+             "Balta ters duruyorsa 90 / -90 / 180 dene.")]
+    [SerializeField] private float axeTilt = -90f;
     [Tooltip("Vuruşta oynar (isteğe bağlı). Particle'lar yerel +Z yönüne saçılmalı.")]
     [SerializeField] private ParticleSystem chopEffect;
     [SerializeField] private HitShake hitShake = new HitShake();
@@ -173,7 +176,7 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
         {
             if (held == null || heldRecipe == null || heldRecipe.output == null) return default;
             accept = true;
-            return HoldPoint + AxeFrame() * (Vector3.left * axeDistance);
+            return HoldPoint + Vector3.up * axeHeight;
         }
         if (interacted is GridPlaceable item && CanHold(item))
         {
@@ -183,10 +186,17 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
         return default;
     }
 
-    public Quaternion GetToolTargetRotation() => held != null ? AxeFrame() : transform.rotation;
+    public Quaternion GetToolTargetRotation() => held != null ? AxeFrame() * Quaternion.Euler(0f, 0f, axeTilt) : transform.rotation;
 
-    // Ağaçtaki oklar gibi: kameraya göre sol yanda, kamerayla 90° adımlarla döner
+    // Ağaçtaki oklar gibi kamerayla 90° adımlarla döner (balta kameraya göre aynı duruşta kalır)
     private static Quaternion AxeFrame() => Quaternion.Euler(0f, (float)CameraController.CurrentFacing, 0f);
+
+    // Kameranın sağı, grid eksenine yuvarlanmış (parçalar sağa / sola gider)
+    private static Vector3 CameraRight()
+    {
+        Vector3 right = Camera.main != null ? Camera.main.transform.right : Vector3.right;
+        return Mathf.Abs(right.x) >= Mathf.Abs(right.z) ? new Vector3(Mathf.Sign(right.x), 0f, 0f) : new Vector3(0f, 0f, Mathf.Sign(right.z));
+    }
 
     public bool IsStillTargeted(IInteractable interacted, Ray mouseRay)
     {
@@ -211,10 +221,10 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
     {
         if (held == null || heldRecipe == null || heldRecipe.output == null) return false;
 
-        Vector3 outward = AxeFrame() * Vector3.left; // baltanın durduğu yan
+        Vector3 outward = CameraRight(); // sarsılma yana
         if (chopEffect != null)
         {
-            chopEffect.transform.SetPositionAndRotation(HoldPoint + outward * 0.5f, Quaternion.LookRotation(outward));
+            chopEffect.transform.SetPositionAndRotation(HoldPoint + Vector3.up * 0.5f, Quaternion.LookRotation(Vector3.up));
             chopEffect.Play();
         }
         // Bölmeyen vuruşta parça, bölen vuruşta (parça siliniyor) kütüğün kendisi sarsılır
@@ -228,7 +238,8 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
         return true;
     }
 
-    // Parça bölünür: çıktılar kütüğün yanındaki boş yerlere zıplar; yer yoksa ilki kütükte kalır
+    // Parça bölünür: ilk iki çıktı kameraya göre tam sola ve sağa (yanındaki hücreye, ince yüzü kütüğe dönük), diğerleri
+    // ya da o hücreler doluysa yakındaki boş yerlere zıplar; yer yoksa ilki kütükte kalır
     private void Split()
     {
         Recipe recipe = heldRecipe;
@@ -241,7 +252,11 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
             if (!(recipe.output.Prefab is GridPlaceable prefab)) break;
             GridPlaceable piece = Instantiate(prefab, start, transform.rotation);
             piece.AssignData(recipe.output);
-            if (TryPlaceNearby(piece))
+            Vector3 right = CameraRight();
+            // Yarım odun Deg0'da X'te ince: sağ / sol X eksenindeyse Deg0, Z'deyse Deg90
+            piece.Rotation = Mathf.Abs(right.x) > 0.5f ? GridMaskRotator.Rotation.Deg0 : GridMaskRotator.Rotation.Deg90;
+            bool placed = i < 2 && TryPlaceAt(piece, transform.position + (i == 0 ? -right : right));
+            if (placed || TryPlaceNearby(piece))
             {
                 StartCoroutine(Jump(piece.transform, start, piece.transform.position, i));
                 continue;
@@ -250,6 +265,16 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
             Debug.LogWarning($"{name}: {recipe.output.name} için yer yok", this);
             Destroy(piece.gameObject);
         }
+    }
+
+    // Bir hücreye (ortası, sonra hücre içinde çeyrek birim kaydırarak)
+    private static bool TryPlaceAt(GridPlaceable piece, Vector3 cell)
+    {
+        Vector3[] offsets = { Vector3.zero, new Vector3(0.25f, 0, 0), new Vector3(-0.25f, 0, 0), new Vector3(0, 0, 0.25f), new Vector3(0, 0, -0.25f) };
+        foreach (Vector3 offset in offsets)
+            if (GridManager.Instance.CanPlaceablePlaceOn(piece, cell + offset) && GridManager.Instance.PlaceablePlaceOn(piece, cell + offset))
+                return true;
+        return false;
     }
 
     // Kütüğün yanındaki hücrelerde (önce kameraya bakan taraf) ilk uygun yer
