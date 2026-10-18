@@ -174,6 +174,16 @@ Sorun: bugünkü grid her hücrede tek placeable varsayıyor; yarım odun, süs 
 - **Üretim masaları:** farklı masalar olacak (ör. marangoz tezgahı, cam fırını; adalarla açılabilir). Üretim: gerekli malzemeler masanın üstüne konur, masa eşyayı verir (detayı sonra).
 - **Madencilikle ortak:** aynı 8 bitlik maske madende "kazılmamış küçük küp" demek; matkap değdiği küçük küpü kazar, maske 0 olunca blok kırılır. Tek sistem, iki kullanım.
 
+## Taslak: craft malzeme zincirleri (2026-10-18, kod yok)
+Craft sisteminin girdisi olan malzemeler (ürün değil). Her aile: doğadan gelen ham madde → işlendikçe daha ince / özel malzeme. Odun ve taş bölünerek (tam → yarım → çeyrek → levha), kil / cam / demir fırında ya da eritilerek dönüşür. Boyutlar sonra (kalas 0.5 kalınlık, ince grid'de 4 küp olabilir).
+- **Odun** (ada 1, balta): Ağaç → Odun → Yarım odun → Çeyrek odun → Kalas. (Odun ve yarım odun oyunda var.)
+- **Lif** (tarla, orak): Lif ekini → Lif → İp → Kumaş
+- **Toprak** (gemi, var): Toprak → Kil → Tuğla → Kiremit
+- **Taş** (ada 2, kazma / matkap): Kaya → Taş blok → Yarım taş → Kesme taş → Taş levha
+- **Kum** (kıyı, kürek): Kum → Cam → Cam levha
+- **Demir** (ada 3, maden): Cevher → Külçe → Demir çubuk → Levha → Çivi
+- Gösterim: kullanıcı bu zincir biçimini (yan yana kutular, oklarla) beğendi; malzeme listeleri böyle gösterilecek.
+
 ## Sonraya bırakılanlar
 - **Tarla ziyaretçileri:** kedi bir karede uyur (yol geçerken okşanır), kuş konar (ürküp tüy / tohum düşürür), eldivenle kovulabilir; engel değil hediye. Ana halka oturduktan sonra.
 
