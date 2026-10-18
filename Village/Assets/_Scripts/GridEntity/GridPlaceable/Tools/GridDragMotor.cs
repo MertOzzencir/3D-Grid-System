@@ -21,6 +21,9 @@ public class GridDragMotor
 
     private Transform Transform => owner.transform;
 
+    // Şu an üstünde durulan (kabul eden) hedef; yoksa null
+    public IToolTarget CurrentTarget => currentTarget;
+
     public GridDragMotor(GridPlaceable owner, float followSpeed)
     {
         this.owner = owner;

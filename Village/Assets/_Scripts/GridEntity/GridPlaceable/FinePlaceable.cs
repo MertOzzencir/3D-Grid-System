@@ -8,6 +8,8 @@ using UnityEngine;
 // Taşıma: sağ tık basılı tutulur, mouse'un baktığı yüzeye yarım hücre adımlarla yapışır (yüzeyin dışına, normali
 // yönünde); en az bir küçük küpü alttan destekli olmalı. Bırakınca oturur; uygun yer yoksa aldığı yere döner.
 // Build menüsü, silme ve kayıt GridManager üzerinden (PlaceablePlaceOn / PlaceableRemoveOn / GetAllPlaceables).
+// Mouse tutan bir hedefin (IHoldTarget + IToolTarget, örn. kesme kütüğü) üstündeyse ve hedef kabul ediyorsa ona yapışır,
+// bırakınca ona konur.
 public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
 {
     [Tooltip("Boyu, küçük küp (0.5 birim) cinsinden, döndürülmemiş halde: (genişlik X, yükseklik Y, derinlik Z). " +
@@ -26,6 +28,7 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
     private GridMaskRotator.Rotation startRotation;
     private bool hasTarget;
     private Vector3Int targetMin;
+    private IHoldTarget holdTarget; // mouse'un üstünde olduğu, kabul eden tutucu (kesme kütüğü)
     private readonly RaycastHit[] hits = new RaycastHit[16];
 
     public bool IsPlaced => occupiedCells != null;
@@ -91,6 +94,7 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
     public void InteractContractBeginnig()
     {
         holding = true;
+        holdTarget = null;
         startPlaced = IsPlaced;
         startMin = fineMin;
         startRotation = Rotation;
@@ -116,6 +120,21 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
         }
 
         Vector3 goal;
+        holdTarget = null;
+        if (nearest < float.MaxValue && hit.collider.TryGetComponent(out IHoldTarget hold) &&
+            hit.collider.TryGetComponent(out IToolTarget toolTarget))
+        {
+            Vector3 targetPosition = toolTarget.GetToolTargetPosition(this, out bool accept);
+            if (accept)
+            {
+                holdTarget = hold;
+                hasTarget = false;
+                float k = 1f - Mathf.Exp(-followSpeed * Time.deltaTime);
+                transform.SetPositionAndRotation(Vector3.Lerp(transform.position, targetPosition, k),
+                                                 Quaternion.Slerp(transform.rotation, toolTarget.GetToolTargetRotation(), k));
+                return;
+            }
+        }
         if (nearest < float.MaxValue)
         {
             Vector3Int size = Size;
@@ -148,6 +167,12 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
     public void ContractCancel()
     {
         holding = false;
+        if (holdTarget != null)
+        {
+            IHoldTarget hold = holdTarget;
+            holdTarget = null;
+            if (hold.TryHold(this)) return;
+        }
         if (hasTarget && Grid.CanFineOccupy(targetMin, Size, this))
         {
             Occupy(targetMin);

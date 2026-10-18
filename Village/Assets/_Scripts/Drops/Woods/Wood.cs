@@ -34,7 +34,16 @@ public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiec
 
     public void InteractContractBeginnig() => drag.Begin();
     public void InteractContract(out bool success) { success = true; drag.Tick(); }
-    public void ContractCancel() => drag.Cancel();
+    public void ContractCancel()
+    {
+        // Kesme kütüğü gibi tutan bir hedefin üstünde bırakıldı: ona konur
+        if (drag.CurrentTarget is IHoldTarget hold && hold.TryHold(this))
+        {
+            drag.Abort();
+            return;
+        }
+        drag.Cancel();
+    }
 
     // --- IToolTarget: başka bir odun bu oduna getirildiğinde ---
     public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept) => mergeTarget.GetToolTargetPosition(interacted, out accept);
