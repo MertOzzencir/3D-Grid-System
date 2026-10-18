@@ -127,7 +127,7 @@ code { font: 12px var(--mono); background: var(--bg); padding: 1px 5px; border-r
     </div>
     <aside id="panel" aria-live="polite"></aside>
   </div>
-  <p class="foot">Son güncelleme: 17 Ekim 2026 · Kaynak: repodaki <code>DESIGN.md</code> ve <code>CLAUDE.md</code>. Sistem eklendikçe ya da durum değiştikçe bu sayfa güncellenir.</p>
+  <p class="foot">Son güncelleme: 18 Ekim 2026 · Kaynak: repodaki <code>DESIGN.md</code> ve <code>CLAUDE.md</code>. Sistem eklendikçe ya da durum değiştikçe bu sayfa güncellenir.</p>
 </div>
 
 <script>
@@ -232,6 +232,12 @@ const NODES = [
     files: ["Tools/Axe.cs", "ResourceEntites/Tree.cs"],
     next: "Kaynakların sınırlı olması (spawn sınırı)." },
 
+  { id: "chopblock", name: "Kesme kütüğü", status: "done", x: 880, y: 300, tag: "ChoppingBlock",
+    what: "Odunu işleme zincirinin ilk istasyonu: 1BR odun → 2 yarım odun → 2 çeyrek odun. Grid'de taşınan placeable.",
+    how: ["Parça sağ tıkla kütüğe sürüklenir", "Balta kütüğün üstünde durur, sol tıkla vurulur", "Parçalar ekrana göre sağa ve sola zıplar", "Modeller dinamik: model alanı boşsa kodla geçici görünüm"],
+    files: ["Drops/Woods/ChoppingBlock.cs", "Drops/Woods/ChoppingBlockTop.cs"],
+    next: "Testere sehpası: çeyrek odun → kalas → çıta." },
+
   { id: "fine", name: "İnce grid (build)", status: "wip", x: 660, y: 590, tag: "FinePlaceable",
     what: "Her hücre 2×2×2 küçük küpe bölünür. Yarım odun, küçük eşya gibi şeyler bir hücreyi paylaşabilir. Prototip çalışıyor (kutuyla yarım odun).",
     how: ["Yapının iskeleti elle kurulur, süsler üretim masalarında yapılıp yerleştirilir", "Süsler de tutulup taşınır", "Aynı maske madencilikte kazılmamış küpleri tutacak"],
@@ -294,6 +300,8 @@ const EDGES = [
   ["island", "npc", "yeni NPC", "planned"],
   ["material", "build", "yapı malzemesi", "live"],
   ["chop", "material", "odun", "live"],
+  ["chop", "chopblock", "1BR odun", "live"],
+  ["chopblock", "fine", "yarım / çeyrek odun", "live"],
   ["build", "fishing", "iskele", "planned"],
   ["build", "farm", "kuyu, sera", "planned"],
   ["build", "cooking", "mutfak", "planned"],
