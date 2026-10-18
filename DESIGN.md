@@ -190,6 +190,10 @@ Craft sisteminin girdisi olan malzemeler (ürün değil). Her aile: doğadan gel
 - **Taş** (ada 2, kazma / matkap): Kaya → Taş blok → Yarım taş → Kesme taş → Taş levha
 - **Kum** (kıyı, kürek): Kum → Cam → Cam levha
 - **Demir** (ada 3, maden): Cevher → Külçe → Demir çubuk → Levha → Çivi
+- **Odunun işlenmesi (karar, 2026-10-18):**
+  - Odun → Yarım odun → Çeyrek odun: **kesme kütüğünde balta** ile. Odun kesme kütüğünün üstünde olmalı, öyle vurulur.
+  - Kalas ve Çıta (işlenmiş ürünler): **testere sehpası** gibi bir masada. Etkileşim testereyi elle ileri geri çekmek gibi; detayı sonra yazılacak.
+  - Otomasyon (su değirmeni bıçkı, toplu işleme): ileride, henüz erken.
 - Gösterim: kullanıcı bu zincir biçimini (yan yana kutular, oklarla) beğendi; malzeme listeleri böyle gösterilecek.
 
 ## Sonraya bırakılanlar
