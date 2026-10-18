@@ -13,9 +13,11 @@ public class HitShake
     [Tooltip("Saniyedeki sallanma sayısı")]
     [SerializeField] private float frequency = 5f;
 
-    // pushDirection: objenin yatacağı yön (dünya uzayında, yatay)
+    // pushDirection: objenin yatacağı yön (dünya uzayında, yatay). restRotation: yerel dönüş (bitince buna döner).
+    // Obje bu arada yok edilirse (örn. kesme kütüğünde bölünen odun) sessizce durur.
     public IEnumerator Play(Transform target, Quaternion restRotation, Vector3 pushDirection)
     {
+        if (target == null) yield break;
         // Yukarı ekseni pushDirection'a doğru yatıran dönme ekseni, parent uzayına çevrilmiş
         Vector3 axis = Vector3.Cross(Vector3.up, pushDirection).normalized;
         if (target.parent != null)
@@ -23,11 +25,12 @@ public class HitShake
 
         for (float elapsed = 0f; elapsed < duration; elapsed += Time.deltaTime)
         {
+            if (target == null) yield break;
             float remaining = 1f - elapsed / duration;
             float current = angle * remaining * remaining * Mathf.Cos(elapsed * frequency * 2f * Mathf.PI);
             target.localRotation = Quaternion.AngleAxis(current, axis) * restRotation;
             yield return null;
         }
-        target.localRotation = restRotation;
+        if (target != null) target.localRotation = restRotation;
     }
 }

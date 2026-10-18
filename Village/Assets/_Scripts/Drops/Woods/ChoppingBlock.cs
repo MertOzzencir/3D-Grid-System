@@ -56,6 +56,8 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
     private Recipe heldRecipe;
     private int hits;
     private ChoppingBlockTop top;
+    private Transform visual; // kütüğün görünümü (model ya da geçici silindir)
+    private Quaternion visualRest;
     private readonly List<Collider> disabledColliders = new List<Collider>();
 
     public GridPlaceable Held => held;
@@ -97,6 +99,8 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
             renderer.material.color = placeholderColor;
         }
         visual.name = "Model";
+        this.visual = visual.transform;
+        visualRest = visual.transform.localRotation;
 
         if (GetComponent<Collider>() != null) return;
         var box = gameObject.AddComponent<BoxCollider>();
@@ -213,9 +217,13 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
             chopEffect.transform.SetPositionAndRotation(HoldPoint + outward * 0.5f, Quaternion.LookRotation(outward));
             chopEffect.Play();
         }
-        StartCoroutine(hitShake.Play(held.transform, held.transform.rotation, -outward));
-
-        if (++hits < hitsToSplit) return true;
+        // Bölmeyen vuruşta parça, bölen vuruşta (parça siliniyor) kütüğün kendisi sarsılır
+        if (++hits < hitsToSplit)
+        {
+            StartCoroutine(hitShake.Play(held.transform, held.transform.localRotation, -outward));
+            return true;
+        }
+        if (visual != null) StartCoroutine(hitShake.Play(visual, visualRest, -outward));
         Split();
         return true;
     }
