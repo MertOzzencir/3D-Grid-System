@@ -16,6 +16,14 @@ public class WorkstationTop : MonoBehaviour, IInteractable, IStickyToolTarget, I
 
     public void SetActive(bool active) => box.enabled = active;
 
+    // Parçayı saracak şekilde: ortası center (dünya), yüksekliği height (birim; alçak parçada aletin altında kalsın,
+    // yoksa testere bu collider'ın içinde kalıp tutulamıyordu)
+    public void Fit(Vector3 center, float height)
+    {
+        transform.position = center;
+        box.size = new Vector3(1f, height, 1f);
+    }
+
     // --- IToolTarget / IHoldTarget: kütüğe yönlendirilir ---
     public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept) => block.GetToolTargetPosition(interacted, out accept);
     public Quaternion GetToolTargetRotation() => block.GetToolTargetRotation();

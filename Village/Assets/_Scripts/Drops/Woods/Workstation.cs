@@ -171,6 +171,7 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
                 c.enabled = false;
                 disabledColliders.Add(c);
             }
+        top.Fit(PiecePoint(item), HeightOf(item));
         top.SetActive(true);
         OnHeld();
         return true;
