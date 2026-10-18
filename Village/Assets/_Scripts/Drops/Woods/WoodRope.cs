@@ -100,6 +100,13 @@ public class WoodRope
             la.Add(b);
             lb.Add(a);
         }
+        // Zincir bu köşede bölünür: uç, kollara ayrılma ya da dönüş (ip her köşede ayrı parça, köşede düğüm; tek kapalı
+        // halka köşelerde yuvarlanırken içeri kısalıp oduna gömülüyordu). Sadece düz devam eden köşeden geçer.
+        bool IsBreak(Vector3Int node)
+        {
+            List<Vector3Int> n = adjacency[node];
+            return n.Count != 2 || Vector3.Dot(((Vector3)(n[0] - node)).normalized, ((Vector3)(n[1] - node)).normalized) > -0.9f;
+        }
         var used = new HashSet<(Vector3Int, Vector3Int)>();
         (Vector3Int, Vector3Int) EdgeKey(Vector3Int a, Vector3Int b) => Compare(a, b) <= 0 ? (a, b) : (b, a);
         List<Vector3Int> Walk(Vector3Int from, Vector3Int next)
@@ -110,7 +117,7 @@ public class WoodRope
             while (true)
             {
                 chain.Add(current);
-                if (current == from || adjacency[current].Count != 2) return chain;
+                if (current == from || IsBreak(current)) return chain;
                 Vector3Int following = adjacency[current][0] == previous ? adjacency[current][1] : adjacency[current][0];
                 if (!used.Add(EdgeKey(current, following))) return chain;
                 previous = current;
@@ -133,8 +140,8 @@ public class WoodRope
         }
         foreach (var node in adjacency)
         {
-            if (node.Value.Count == 2) continue;
-            knots.Add(positions[node.Key]); // uç ya da kollara ayrılma: düğüm
+            if (!IsBreak(node.Key)) continue;
+            knots.Add(positions[node.Key]); // uç, kollara ayrılma ya da dönüş: düğüm
             foreach (Vector3Int next in node.Value)
                 if (!used.Contains(EdgeKey(node.Key, next)))
                 {
