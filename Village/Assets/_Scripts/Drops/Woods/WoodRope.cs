@@ -86,7 +86,9 @@ public class WoodRope
         Layout(faces, out List<(Vector3Int a, Vector3Int b)> kept, out Dictionary<Vector3Int, Vector3> positions);
         if (kept.Count == 0) return null;
 
-        // Zincirler: derecesi 2 olmayan köşeler (uç, kollara ayrılma) zinciri böler; kalanlar kapalı halka
+        // Kollar: her köşede kenarlar ikişer eşleşir, ip eşinden devam eder (köşede yuvarlak döner). Üç-dört kolun buluştuğu
+        // köşede önce iki yatay kenar (üstteki kare), sonra karşılıklı olanlar (düz devam), sonra dik açı yapanlar eşleşir;
+        // eşi kalmayan kol orada biter. Önceden kollara ayrılan köşede ip bölünüyordu: o köşeler yuvarlanmıyordu.
         var adjacency = new Dictionary<Vector3Int, List<Vector3Int>>();
         foreach ((Vector3Int a, Vector3Int b) in kept)
         {
@@ -95,6 +97,34 @@ public class WoodRope
             la.Add(b);
             lb.Add(a);
         }
+        var partner = new Dictionary<(Vector3Int node, Vector3Int from), Vector3Int>();
+        var turnAt = new Dictionary<Vector3Int, (Vector3Int a, Vector3Int b)>(); // köşede eşleşen dönüş (eşsiz kolun bittiği yer için)
+        foreach (var node in adjacency)
+        {
+            var free = new List<Vector3Int>(node.Value);
+            Vector3 Dir(Vector3Int n) => ((Vector3)(n - node.Key)).normalized;
+            void Pair(System.Func<Vector3, Vector3, bool> match)
+            {
+                for (int i = 0; i < free.Count; i++)
+                    for (int j = i + 1; j < free.Count; j++)
+                    {
+                        if (!match(Dir(free[i]), Dir(free[j]))) continue;
+                        Vector3Int a = free[i], b = free[j];
+                        partner[(node.Key, a)] = b;
+                        partner[(node.Key, b)] = a;
+                        if (Vector3.Dot(Dir(a), Dir(b)) > -0.9f && !turnAt.ContainsKey(node.Key)) turnAt[node.Key] = (a, b);
+                        free.RemoveAt(j);
+                        free.RemoveAt(i);
+                        i = -1;
+                        break;
+                    }
+            }
+            if (free.Count == 2) Pair((x, y) => true);
+            Pair((x, y) => Mathf.Abs(x.y) < 0.1f && Mathf.Abs(y.y) < 0.1f && Mathf.Abs(Vector3.Dot(x, y)) < 0.1f);
+            Pair((x, y) => Vector3.Dot(x, y) < -0.9f);
+            Pair((x, y) => Mathf.Abs(Vector3.Dot(x, y)) < 0.1f);
+        }
+
         var used = new HashSet<(Vector3Int, Vector3Int)>();
         (Vector3Int, Vector3Int) EdgeKey(Vector3Int a, Vector3Int b) => Compare(a, b) <= 0 ? (a, b) : (b, a);
         List<Vector3Int> Walk(Vector3Int from, Vector3Int next)
@@ -105,12 +135,17 @@ public class WoodRope
             while (true)
             {
                 chain.Add(current);
-                if (current == from || adjacency[current].Count != 2) return chain;
-                Vector3Int following = adjacency[current][0] == previous ? adjacency[current][1] : adjacency[current][0];
+                if (current == from || !partner.TryGetValue((current, previous), out Vector3Int following)) return chain;
                 if (!used.Add(EdgeKey(current, following))) return chain;
                 previous = current;
                 current = following;
             }
+        }
+        // Eşsiz kolun bittiği yer: köşede bir dönüş varsa o dönüşün yayının tepesi (ip yaya bağlanır), yoksa köşenin kendisi
+        Vector3 EndPoint(Vector3Int node)
+        {
+            if (!turnAt.TryGetValue(node, out var turn)) return positions[node];
+            return ArcApex(positions[turn.a], positions[node], positions[turn.b]);
         }
 
         var vertices = new List<Vector3>();
@@ -120,11 +155,24 @@ public class WoodRope
         var knots = new List<Vector3>();
         foreach (var node in adjacency)
         {
-            if (node.Value.Count == 2) continue;
-            knots.Add(positions[node.Key]); // uç ya da kollara ayrılma: düğüm
+            bool knotted = false;
             foreach (Vector3Int next in node.Value)
-                if (!used.Contains(EdgeKey(node.Key, next)))
-                    AddRope(ToPoints(Walk(node.Key, next), positions), false, vertices, normals, uvs, triangles);
+            {
+                if (partner.ContainsKey((node.Key, next))) continue; // bu kol eşinden devam ediyor
+                // Eşsiz kol: ip burada başlar / biter, düğüm
+                if (!knotted)
+                {
+                    knots.Add(EndPoint(node.Key));
+                    knotted = true;
+                }
+                if (used.Contains(EdgeKey(node.Key, next))) continue;
+                List<Vector3Int> chain = Walk(node.Key, next);
+                List<Vector3> points = ToPoints(chain, positions);
+                points[0] = EndPoint(chain[0]);
+                if (!partner.ContainsKey((chain[chain.Count - 1], chain[chain.Count - 2])))
+                    points[points.Count - 1] = EndPoint(chain[chain.Count - 1]);
+                AddRope(points, false, vertices, normals, uvs, triangles);
+            }
         }
         foreach ((Vector3Int a, Vector3Int b) in kept)
         {
@@ -252,6 +300,28 @@ public class WoodRope
         return points;
     }
 
+    // a → p → b köşesindeki dönüş: iki kenara teğet, cornerRadius yarıçaplı çember yayı (teğet noktaları kenarın yarısını
+    // geçmez). center: çemberin merkezi, p1 / p2: teğet noktaları
+    private void Arc(Vector3 a, Vector3 p, Vector3 b, out Vector3 center, out Vector3 p1, out Vector3 p2, out float radius)
+    {
+        Vector3 toA = a - p, toB = b - p;
+        Vector3 da = toA.normalized, db = toB.normalized;
+        float half = Vector3.Angle(da, db) * 0.5f * Mathf.Deg2Rad; // köşenin iç açısının yarısı
+        // Teğet noktalarının köşeye uzaklığı = yarıçap / tan(yarım açı)
+        float cut = Mathf.Min(cornerRadius / Mathf.Tan(half), toA.magnitude * 0.5f, toB.magnitude * 0.5f);
+        radius = cut * Mathf.Tan(half);
+        p1 = p + da * cut;
+        p2 = p + db * cut;
+        center = p + (da + db).normalized * (radius / Mathf.Sin(half));
+    }
+
+    // Dönüş yayının köşeye en yakın noktası (tepesi)
+    private Vector3 ArcApex(Vector3 a, Vector3 p, Vector3 b)
+    {
+        Arc(a, p, b, out Vector3 center, out _, out _, out float radius);
+        return center + (p - center).normalized * radius;
+    }
+
     // Kırık çizgiyi ip yoluna çevirir: her köşe iki kenara teğet, cornerRadius yarıçaplı gerçek bir çember yayıyla döner
     // (yay kenarın yarısından uzun olamaz), sonra Step aralıkla örneklenir. closed: ilk ve son nokta aynı (köşeleri yuvarlanan kapalı halka)
     private List<Vector3> SmoothPath(List<Vector3> points)
@@ -262,13 +332,7 @@ public class WoodRope
             Vector3 a = points[i - 1], p = points[i], b = points[i + 1];
             Vector3 toA = a - p, toB = b - p;
             if (Vector3.Dot(toA.normalized, toB.normalized) < -0.99f) { rounded.Add(p); continue; } // düz devam
-            Vector3 da = toA.normalized, db = toB.normalized;
-            float half = Vector3.Angle(da, db) * 0.5f * Mathf.Deg2Rad; // köşenin iç açısının yarısı
-            // Teğet noktalarının köşeye uzaklığı = yarıçap / tan(yarım açı); kenarın yarısını geçmesin
-            float cut = Mathf.Min(cornerRadius / Mathf.Tan(half), toA.magnitude * 0.5f, toB.magnitude * 0.5f);
-            float radius = cut * Mathf.Tan(half);
-            Vector3 p1 = p + da * cut, p2 = p + db * cut;
-            Vector3 center = p + (da + db).normalized * (radius / Mathf.Sin(half));
+            Arc(a, p, b, out Vector3 center, out Vector3 p1, out Vector3 p2, out _);
             Vector3 from = p1 - center, to = p2 - center;
             for (int k = 0; k <= 16; k++)
                 rounded.Add(center + Vector3.Slerp(from, to, k / 16f)); // çember yayı
