@@ -194,6 +194,7 @@ Craft sisteminin girdisi olan malzemeler (ürün değil). Her aile: doğadan gel
   - Odun → Yarım odun → Çeyrek odun: **kesme kütüğünde balta** ile. Odun kesme kütüğünün üstünde olmalı, öyle vurulur.
   - Kalas ve Çıta (işlenmiş ürünler): **testere sehpası** gibi bir masada. Etkileşim testereyi elle ileri geri çekmek gibi; detayı sonra yazılacak.
   - Otomasyon (su değirmeni bıçkı, toplu işleme): ileride, henüz erken.
+  - Boyutlar (karar, 2026-10-18): ince grid 2'lik kalıyor. Kalas görünüşte 1 × 0.25 × 1, grid'de 0.5'lik katı tutar (4 küp); çıta 0.5 × 0.25 × 1 (2 küp). Üst üste kalaslar arasında 0.25 boşluk kalır, kabul edildi. Yarım odun → 2 kalas, kalas → 2 çıta (testere sehpası).
 - Gösterim: kullanıcı bu zincir biçimini (yan yana kutular, oklarla) beğendi; malzeme listeleri böyle gösterilecek.
 
 ## Sonraya bırakılanlar
