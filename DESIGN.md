@@ -176,7 +176,15 @@ Sorun: bugünkü grid her hücrede tek placeable varsayıyor; yarım odun, süs 
 
 ## Taslak: craft malzeme zincirleri (2026-10-18, kod yok)
 Craft sisteminin girdisi olan malzemeler (ürün değil). Her aile: doğadan gelen ham madde → işlendikçe daha ince / özel malzeme. Odun ve taş bölünerek (tam → yarım → çeyrek → levha), kil / cam / demir fırında ya da eritilerek dönüşür. Boyutlar sonra (kalas 0.5 kalınlık, ince grid'de 4 küp olabilir).
-- **Odun** (ada 1, balta): Ağaç → Odun → Yarım odun → Çeyrek odun → Kalas. (Odun ve yarım odun oyunda var.)
+- **Odun** (ada 1, balta): Ağaç → Odun → Yarım odun → Çeyrek odun → Kalas → Çıta. (Odun ve yarım odun oyunda var; ana zincir kullanıcıca uygun bulundu.)
+  - Odundan yan dallar (sadece fikir, **karar verilmedi**):
+    - Çeyrekten: Çeyrek odun → Sırık → Çubuk → Ahşap çivi
+    - Dal: Ağaç → Dal → Çalı çırpı → Sepet örgüsü
+    - Kabuk: Odun → Kabuk → Kabuk lifi → Kaba ip
+    - Reçine: Ağaç → Reçine → Zift → Vernik (suya dayanıklılık)
+    - Talaş: kesme / yontma artığı → Talaş → Kompost
+    - Kömür: Odun → Odun kömürü → Kül (fırın yakıtı: tuğla, cam, demir)
+    - Tohum: Ağaç → Kozalak / tohum → Fidan → Ağaç (yeniden dikim)
 - **Lif** (tarla, orak): Lif ekini → Lif → İp → Kumaş
 - **Toprak** (gemi, var): Toprak → Kil → Tuğla → Kiremit
 - **Taş** (ada 2, kazma / matkap): Kaya → Taş blok → Yarım taş → Kesme taş → Taş levha
