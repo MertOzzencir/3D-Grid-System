@@ -44,9 +44,9 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
     [SerializeField, Min(1)] private int hitsToSplit = 1;
     [Tooltip("Balta parçanın ortasının bu kadar (birim) üstünde durur (yukarıdan aşağı vurur)")]
     [SerializeField] private float axeHeight = 0.8f;
-    [Tooltip("Baltanın eğimi (derece, kameraya bakan eksen etrafında): ağaçtaki yan duruşu yukarıdan aşağıya çevirir. " +
-             "Balta ters duruyorsa 90 / -90 / 180 dene.")]
-    [SerializeField] private float axeTilt = -90f;
+    [Tooltip("Baltanın kütüğün üstündeki dönüşü (derece, kameraya göre: kamera döndükçe balta da döner). Play'deyken " +
+             "değiştirince anında görünür; istenen duruş bulununca prefab'a yazılır.")]
+    [SerializeField] private Vector3 axeRotation = new Vector3(0f, 0f, -90f);
     [Tooltip("Vuruşta oynar (isteğe bağlı). Particle'lar yerel +Z yönüne saçılmalı.")]
     [SerializeField] private ParticleSystem chopEffect;
     [SerializeField] private HitShake hitShake = new HitShake();
@@ -186,7 +186,7 @@ public class ChoppingBlock : GridPlaceable, IInteractable, IStickyToolTarget, IH
         return default;
     }
 
-    public Quaternion GetToolTargetRotation() => held != null ? AxeFrame() * Quaternion.Euler(0f, 0f, axeTilt) : transform.rotation;
+    public Quaternion GetToolTargetRotation() => held != null ? AxeFrame() * Quaternion.Euler(axeRotation) : transform.rotation;
 
     // Ağaçtaki oklar gibi kamerayla 90° adımlarla döner (balta kameraya göre aynı duruşta kalır)
     private static Quaternion AxeFrame() => Quaternion.Euler(0f, (float)CameraController.CurrentFacing, 0f);
