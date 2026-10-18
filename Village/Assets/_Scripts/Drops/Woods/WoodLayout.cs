@@ -106,6 +106,32 @@ public static class WoodLayout
     // Tepeye odun eklenince ana odun uzar; yan odunlar olduğu yükseklikte kalır, katman numaraları kayar.
     // Yüksekliğin (baseLength - layer) sabit kalması için: yeni katman = eski katman + eklenen uzunluk. Dört yan birlikte.
     // Örn. 2BR (katman 1: y=1, katman 2: y=0) + 1BR tepeye → 3BR: eski 1 → 2, eski 2 → 3, yeni 1 (y=2) boş.
+    // Ana odunun toplam boyu en fazla bu (doğal modeller 3BR'e kadar; üstü iple bağlanmış parçalar)
+    public const int MaxBaseLength = 6;
+    public const int MaxNaturalLength = 3;
+
+    // Ana odunun parçaları (aşağıdan yukarı): parça kaydı yoksa doğal modellerden en uzun olanlarla (örn. 5 → 3, 2)
+    public static int[] DefaultSegments(int baseLength)
+    {
+        var segments = new List<int>();
+        for (int left = baseLength; left > 0; left -= MaxNaturalLength)
+            segments.Add(Mathf.Min(left, MaxNaturalLength));
+        return segments.ToArray();
+    }
+
+    // Tepeye odun eklenince parçalar: üstteki parçayla toplamı 3'ü geçmiyorsa ve o boyda model varsa (1 + 2 = 3BR) tek
+    // parçaya birleşir (doğal model), yoksa üstüne yeni parça olur (aradaki ek yeri iple bağlanır)
+    public static int[] SegmentsAfterTopMerge(int[] segments, int addedLength, WoodCatalogSO catalog)
+    {
+        var result = new List<int>(segments);
+        int last = result.Count > 0 ? result[result.Count - 1] : 0;
+        if (last > 0 && last + addedLength <= MaxNaturalLength && catalog.GetWood(last + addedLength) != null)
+            result[result.Count - 1] = last + addedLength;
+        else
+            result.Add(addedLength);
+        return result.ToArray();
+    }
+
     public static int[][] SidesAfterTopMerge(IWoodStack stack, int addedLength)
     {
         int[][] sides = EmptySides(stack.BaseLength + addedLength);

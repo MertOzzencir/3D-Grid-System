@@ -7,6 +7,9 @@ public interface IWoodStack
     // Dik duran ana odunun uzunluğu = her yandaki katman sayısı
     int BaseLength { get; }
 
+    // Ana odunun parçaları, aşağıdan yukarı (doğal modeller; 3BR'i geçen ana odun iple bağlanmış parçalardır)
+    int[] BaseSegments { get; }
+
     // O yandaki katmanda duran odunun uzunluğu, 0 = boş. layer: 1..BaseLength
     int PieceAt(WoodSide side, int layer);
 

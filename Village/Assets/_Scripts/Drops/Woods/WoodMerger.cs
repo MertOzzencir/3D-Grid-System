@@ -41,12 +41,14 @@ public class WoodMerger : MonoBehaviour
         Vector3 position = target.OriginWorldPosition;
         GridMaskRotator.Rotation rotation = target.Rotation;
         int baseLength = stack.BaseLength;
+        int[] segments = stack.BaseSegments;
         int[][] sides;
 
         if (slot.IsTop)
         {
             baseLength += carried.Length;
             sides = WoodLayout.SidesAfterTopMerge(stack, carried.Length);
+            segments = WoodLayout.SegmentsAfterTopMerge(segments, carried.Length, catalog);
         }
         else
         {
@@ -62,10 +64,10 @@ public class WoodMerger : MonoBehaviour
         Destroy(carried.gameObject);
         GridManager.Instance.PlaceableRemoveOn(target, true);
 
-        // Yanlarda hiç odun yoksa sonuç sıradan (tek parça) bir odun
-        GridPlaceable result = WoodLayout.IsEmpty(sides)
+        // Yanlarda hiç odun yoksa ve ana odun tek parçaysa sonuç sıradan (tek parça) bir odun
+        GridPlaceable result = WoodLayout.IsEmpty(sides) && segments.Length == 1
             ? SpawnLongWood(baseLength)
-            : SpawnMergedWood(baseLength, sides);
+            : SpawnMergedWood(baseLength, sides, segments);
 
         result.Rotation = rotation;
         if (!GridManager.Instance.PlaceablePlaceOn(result, position))
@@ -98,7 +100,7 @@ public class WoodMerger : MonoBehaviour
         return wood;
     }
 
-    private GridPlaceable SpawnMergedWood(int baseLength, int[][] sides)
+    private GridPlaceable SpawnMergedWood(int baseLength, int[][] sides, int[] segments)
     {
         MergedWood merged;
         if (mergedWoodPrefab != null)
@@ -112,7 +114,7 @@ public class WoodMerger : MonoBehaviour
         }
 
         merged.name = $"MergedWood {baseLength}BR";
-        merged.Build(baseLength, sides, catalog);
+        merged.Build(baseLength, sides, catalog, segments);
         return merged;
     }
 }
