@@ -85,7 +85,12 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
     [Tooltip("Tarla güvertesinin üst yüzünün su seviyesinden yüksekliği ve güvertenin kalınlığı")]
     [SerializeField] private float deckHeight = 0.12f;
     [SerializeField] private float deckThickness = 0.3f;
+    [Tooltip("Tarla efektleri, kapak ve halat için malzeme rengi (eski düz güvertenin rengiydi; güverte artık grid göstergesi)")]
     [SerializeField] private Color deckColor = new Color(0.72f, 0.52f, 0.36f);
+    [Header("Tarla grid göstergesi (eski düz güverte yerine)")]
+    [Tooltip("'Village/Grid Fade' shader'ı (build'e girsin diye referansla)")]
+    [SerializeField] private Shader gridShader;
+    [SerializeField] private FarmGridIndicator gridIndicator = new FarmGridIndicator();
     [Tooltip("Gemi ile tarla arasındaki halat boşluğu (hücre, düz giderken). -1 = otomatik: dönüşlerde gemiyle çakışmayan " +
              "(tarla yarıçapı + 1 + gemi yarı genişliği). Daha kısa olursa dönüşlerde tarla geminin altına girer (o adım atılmaz).")]
     [SerializeField] private int towCells = -1;
@@ -764,7 +769,8 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         return null;
     }
 
-    // Tarla güvertesi (şimdilik düz bir sal; tarla parçaları sonra üstüne oturacak). Gövdenin malzemesinden kopya, dokusuz
+    // Tarla güvertesi: görünmez yüzey (collider, parçaların bırakıldığı yer) + grid göstergesi (FarmGridIndicator; eski düz
+    // sal kaldırıldı). Efekt / kapak / halat malzemesi gövdenin malzemesinden kopya, dokusuz
     private void CreateDeck(Transform model)
     {
         if (!HasFarm) return;
@@ -777,23 +783,16 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
         deckCollider.size = new Vector3(farmSize, deckThickness, farmSize);
         deckCollider.center = new Vector3(0f, -deckThickness * 0.5f, 0f);
 
-        GameObject plank = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        plank.name = "Farm Deck";
-        Destroy(plank.GetComponent<Collider>());
-        plank.transform.SetParent(deck, false);
-        plank.transform.localPosition = new Vector3(0f, -deckThickness * 0.5f, 0f);
-        plank.transform.localScale = new Vector3(farmSize, deckThickness, farmSize);
+        gridIndicator.Build(deck, farmSize, gridShader);
 
         Renderer hull = null;
         foreach (Renderer candidate in model.GetComponentsInChildren<Renderer>())
             { hull = candidate; break; }
-        var renderer = plank.GetComponent<Renderer>();
         if (hull != null)
         {
             var material = new Material(hull.sharedMaterial);
             if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", null);
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", deckColor);
-            renderer.sharedMaterial = material;
             farmFx.Setup(deck, material, effectShader);
             farmGrid.Fx = farmFx;
             FarmGrower grower = deck.gameObject.AddComponent<FarmGrower>();

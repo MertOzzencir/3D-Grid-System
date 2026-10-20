@@ -72,6 +72,7 @@ MonoBehaviour:
   showModelGizmo: 1
   seatOffset: {x: 0, y: -0.2, z: 0}
   effectShader: {fileID: 4800000, guid: ec496355df9a4cc89f9c7868ca47608b, type: 3}
+  gridShader: {fileID: 4800000, guid: b317ad98e09447918b482c81409b1681, type: 3}
   waterFx:
     wakeStern: 0.9
     wakeTime: 1.4
