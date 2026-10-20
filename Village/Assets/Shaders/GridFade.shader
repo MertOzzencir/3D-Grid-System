@@ -1,7 +1,8 @@
 // Tarla grid göstergesi (URP, dokusuz, saydam): hücre kenarlarından yükselen ince duvarlar ve tabandaki çizgiler.
 // Saydamlık yüksekliğe göre: UV.y = 0 tabanda en belirgin (_Color.a), UV.y = 1 tepede tamamen saydam; _Falloff geçişin
-// eğrisi (1 doğrusal, büyük = tabana daha yakın söner). Her hücre aynı (bottan bağımsız). FarmGridIndicator mesh'i kurar;
-// shader botun prefab'ında referansla tutulur (build'e girsin).
+// eğrisi (1 doğrusal, büyük = tabana daha yakın söner). Vertex rengi de çarpılır (A: hücre başına saydamlık, örn. elde
+// tutulan odunun çevresinde uzaklaştıkça söner; vertex rengi olmayan mesh'te beyaz). FarmGridIndicator ve
+// HeldGridIndicator mesh'leri kurar; shader botun prefab'ında referansla tutulur (build'e girsin).
 Shader "Village/Grid Fade"
 {
     Properties
@@ -37,12 +38,14 @@ Shader "Village/Grid Fade"
             {
                 float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
+                half4 color : COLOR;
             };
 
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                half4 color : COLOR;
             };
 
             Varyings Vert(Attributes input)
@@ -50,13 +53,14 @@ Shader "Village/Grid Fade"
                 Varyings output;
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
                 output.uv = input.uv;
+                output.color = input.color;
                 return output;
             }
 
             half4 Frag(Varyings input) : SV_Target
             {
                 half fade = pow(saturate(1.0 - input.uv.y), _Falloff);
-                return half4(_Color.rgb, _Color.a * fade);
+                return half4(_Color.rgb * input.color.rgb, _Color.a * input.color.a * fade);
             }
             ENDHLSL
         }

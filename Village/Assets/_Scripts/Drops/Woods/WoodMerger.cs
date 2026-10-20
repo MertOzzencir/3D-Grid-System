@@ -20,6 +20,8 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private float targetReleaseDistance = 5f;
     [Tooltip("Yan parçaların ana oduna bağlandığı yere sarılan ip")]
     [SerializeField] private WoodRope rope = new WoodRope();
+    [Tooltip("Odun elde tutulurken çevresindeki hücrelerin 3 boyutlu göstergesi")]
+    [SerializeField] private HeldGridIndicator heldGrid = new HeldGridIndicator();
 
     public WoodCatalogSO Catalog => catalog;
     public DitherFade FrontFade => frontFade;
@@ -31,6 +33,8 @@ public class WoodMerger : MonoBehaviour
     {
         if (Instance == null) Instance = this;
     }
+
+    private void Update() => heldGrid.Tick(Time.deltaTime);
 
     // target hem GridPlaceable hem IWoodStack olmalı (Wood ya da MergedWood)
     public void Merge(GridPlaceable target, Wood carried, WoodSlot slot)

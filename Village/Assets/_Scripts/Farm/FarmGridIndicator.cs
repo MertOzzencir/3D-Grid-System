@@ -61,6 +61,9 @@ public class FarmGridIndicator
         var mesh = new Mesh { name = "Farm Grid" };
         mesh.SetVertices(vertices);
         mesh.SetUVs(0, uvs);
+        var colors = new List<Color>(vertices.Count);
+        for (int i = 0; i < vertices.Count; i++) colors.Add(Color.white); // vertex rengi beyaz (shader çarpar)
+        mesh.SetColors(colors);
         mesh.SetTriangles(triangles, 0);
         mesh.RecalculateBounds();
 
