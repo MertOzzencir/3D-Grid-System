@@ -3,14 +3,13 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Elde tutulan odunun (Wood, MergedWood) çevresinde 3 boyutlu grid göstergesi: odunun şu an üstünde durduğu hücrelerden
-// her yöne (yanlar, köşe çaprazları, yukarı, aşağı) `range` hücreye kadar, odunun konabileceği her hücre bir küp: içi çok
-// şeffaf dolgu (`fillAlpha`), sadece yatay kenarları çizgi (`edgeAlpha`; dış çerçeve yok, çizgiler açık uçlu söner). Merkezden uzaklaştıkça ikisi de
+// her yöne (yanlar, köşe çaprazları, yukarı, aşağı) `range` hücreye kadar, odunun konabileceği her hücrenin sadece yatay
+// kenarları çizgi (`edgeAlpha`; içi boş, dikey kenar yok, dış çerçeve yok: çizgiler açık uçlu söner). Merkezden uzaklaştıkça
 // saydamlaşır (vertex rengi: odunun hücresinde tam, range + 1 uzakta 0). Sadece odunun konabileceği hücreler çizilir: odun
 // o hücreye (origin olarak) konunca bütün şekli sığar (GridManager.CanPlaceablePlaceOn: hücreler boş, CanOccupy, ince
 // parça yok), hiçbir hücresi base'in içinde değil ve (requireSupport) en alt hücrelerinden birinin altında base ya da
-// obje var (sürükleyerek havaya konamaz). Komşu küplerin ortak yüzü ve kenarı bir kez
-// (en belirgin saydamlıkla), yoksa üst üste binip koyulaşırdı. Kenarlar çizgi (MeshTopology.Lines), yüzler üçgen; tek mesh,
-// iki alt mesh, "Village/Grid Fade" (UV.y 0: yukarı doğru sönme yok). Odun hücre değiştirince mesh yeniden kurulur.
+// obje var (sürükleyerek havaya konamaz). Komşu hücrelerin ortak kenarı bir kez
+// (en belirgin saydamlıkla), yoksa üst üste binip koyulaşırdı. Çizgiler MeshTopology.Lines, tek mesh, "Village/Grid Fade" (UV.y 0: yukarı doğru sönme yok). Odun hücre değiştirince mesh yeniden kurulur.
 // Ayarları WoodMerger'da ("Held Grid"), WoodMerger.Update her kare Tick'i çağırır.
 [Serializable]
 public class HeldGridIndicator
@@ -23,8 +22,6 @@ public class HeldGridIndicator
     [SerializeField] private bool requireSupport = true;
     [Tooltip("Renk (A kullanılmaz; saydamlık aşağıdaki iki ayardan)")]
     [SerializeField] private Color color = Color.white;
-    [Tooltip("Küplerin içinin saydamlığı odunun hücresinde (0.2 = %80 şeffaf)")]
-    [SerializeField, Range(0f, 1f)] private float fillAlpha = 0.3f;
     [Tooltip("Küp kenarlarının saydamlığı odunun hücresinde")]
     [SerializeField, Range(0f, 1f)] private float edgeAlpha = 1f;
     [Tooltip("Belirme / sönme hızı (saniyede)")]
@@ -121,19 +118,10 @@ public class HeldGridIndicator
                 }
 
         // Yüzler ve kenarlar (köşe koordinatları × 2); ortak olanlar bir kez, en belirgin saydamlıkla
-        var faces = new Dictionary<Vector3Int, (Vector3Int axis, float alpha)>(); // yüzün ortası (× 2) → normal ekseni
         var edges = new Dictionary<(Vector3Int, Vector3Int), float>();
-        Vector3Int[] axes = { Vector3Int.right, Vector3Int.up, new Vector3Int(0, 0, 1) };
         foreach (var pair in cells)
         {
             Vector3Int c2 = pair.Key * 2;
-            foreach (Vector3Int axis in axes)
-                foreach (int sign in new[] { -1, 1 })
-                {
-                    Vector3Int center = c2 + axis * sign;
-                    float existing = faces.TryGetValue(center, out var face) ? face.alpha : 0f;
-                    faces[center] = (axis, Mathf.Max(existing, pair.Value));
-                }
             // Sadece yatay kenarlar (alt ve üst yüzün kenarları; dikey kenar yok). Odunun hücrelerinin dışındaki hücrede,
             // merkezden uzak taraftaki (merkeze paralel) kenar çizilmez: çizgiler dışarı doğru açık uçlu uzanıp söner,
             // dış çerçeve kapanmaz (klasik yapı göstergesi). Ötesinde gösterilen hücre varsa o kenar onun yakın kenarı olur.
@@ -153,10 +141,7 @@ public class HeldGridIndicator
 
         var vertices = new List<Vector3>();
         var colors = new List<Color>();
-        var triangles = new List<int>();
         var lines = new List<int>();
-        foreach (var pair in faces)
-            AddFace(pair.Key, pair.Value.axis, fillAlpha * pair.Value.alpha, vertices, colors, triangles);
         foreach (var pair in edges)
         {
             lines.Add(vertices.Count);
@@ -171,12 +156,10 @@ public class HeldGridIndicator
 
         mesh.Clear();
         if (vertices.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        mesh.subMeshCount = 2;
         mesh.SetVertices(vertices);
         mesh.SetUVs(0, uvs);
         mesh.SetColors(colors);
-        mesh.SetIndices(triangles, MeshTopology.Triangles, 0);
-        mesh.SetIndices(lines, MeshTopology.Lines, 1);
+        mesh.SetIndices(lines, MeshTopology.Lines, 0);
         mesh.RecalculateBounds();
     }
 
@@ -206,24 +189,5 @@ public class HeldGridIndicator
     {
         var key = (a, b);
         edges[key] = Mathf.Max(edges.TryGetValue(key, out float e) ? e : 0f, alpha);
-    }
-
-    // Küpün bir yüzü: ortası center2 / 2, normali axis ekseninde (kenar uzunluğu 1)
-    private static void AddFace(Vector3Int center2, Vector3Int axis, float alpha, List<Vector3> vertices, List<Color> colors, List<int> triangles)
-    {
-        Vector3 center = (Vector3)center2 * 0.5f;
-        Vector3 u = axis.x != 0 ? Vector3.up : Vector3.right;
-        Vector3 v = axis.z != 0 ? Vector3.up : Vector3.forward;
-        if (axis.y != 0) { u = Vector3.right; v = Vector3.forward; }
-        u *= 0.5f;
-        v *= 0.5f;
-        int start = vertices.Count;
-        vertices.Add(center - u - v);
-        vertices.Add(center + u - v);
-        vertices.Add(center + u + v);
-        vertices.Add(center - u + v);
-        Color c = new Color(1f, 1f, 1f, alpha);
-        for (int i = 0; i < 4; i++) colors.Add(c);
-        triangles.AddRange(new[] { start, start + 1, start + 2, start, start + 2, start + 3 });
     }
 }
