@@ -5,7 +5,8 @@ using UnityEngine;
 // Tarlanın grid göstergesi (eski düz güverte yerine): her hücre kenarından yükselen ince saydam duvarlar + tabanda ince
 // çizgiler, "Village/Grid Fade" shader'ıyla tabanda belirgin, yukarı doğru saydamlaşır. Her hücre aynı (bottan bağımsız);
 // ortak kenarlar bir kez çizilir. Ayarları Boat'ta ("Tarla grid göstergesi"), Boat.CreateDeck kurar. Collider'ı yok
-// (parçaların bırakıldığı yüzey güvertenin kendi collider'ı).
+// (parçaların bırakıldığı yüzey güvertenin kendi collider'ı). Hep görünmez: Boat her kare SetVisible ile söyler (bota
+// binilince ya da elde tarla parçası varken); fadeSpeed hızıyla belirir / söner.
 [Serializable]
 public class FarmGridIndicator
 {
@@ -19,6 +20,12 @@ public class FarmGridIndicator
     [SerializeField, Range(0.2f, 6f)] private float falloff = 1.6f;
     [Tooltip("Tabandaki çizgilerin genişliği (birim; 0 = çizgi yok)")]
     [SerializeField] private float lineWidth = 0.04f;
+    [Tooltip("Belirme / sönme hızı (saniyede, 1 = bir saniyede tam)")]
+    [SerializeField] private float fadeSpeed = 4f;
+
+    private Material material;
+    private Renderer renderer;
+    private float visibility;
 
     private static readonly int ColorId = Shader.PropertyToID("_Color");
     private static readonly int FalloffId = Shader.PropertyToID("_Falloff");
@@ -60,14 +67,33 @@ public class FarmGridIndicator
         var grid = new GameObject("Farm Grid");
         grid.transform.SetParent(parent, false);
         grid.AddComponent<MeshFilter>().sharedMesh = mesh;
-        var material = new Material(shader) { name = "Farm Grid (generated)" };
-        material.SetColor(ColorId, color);
+        material = new Material(shader) { name = "Farm Grid (generated)" };
         material.SetFloat(FalloffId, falloff);
-        var renderer = grid.AddComponent<MeshRenderer>();
+        renderer = grid.AddComponent<MeshRenderer>();
         renderer.sharedMaterial = material;
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         renderer.receiveShadows = false;
+        visibility = 0f;
+        Apply();
         return grid;
+    }
+
+    // visible: görünmesi gerekiyor mu; yavaşça oraya gider
+    public void SetVisible(bool visible, float deltaTime)
+    {
+        if (material == null) return;
+        float target = visible ? 1f : 0f;
+        if (Mathf.Approximately(visibility, target)) return;
+        visibility = Mathf.MoveTowards(visibility, target, fadeSpeed * deltaTime);
+        Apply();
+    }
+
+    private void Apply()
+    {
+        Color c = color;
+        c.a *= visibility;
+        material.SetColor(ColorId, c);
+        renderer.enabled = visibility > 0.001f;
     }
 
     // a → b boyunca dik duvar (UV.y: tabanda 0, tepede 1)

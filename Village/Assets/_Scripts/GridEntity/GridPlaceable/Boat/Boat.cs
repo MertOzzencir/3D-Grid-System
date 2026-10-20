@@ -443,6 +443,10 @@ public class Boat : GridPlaceable, ISaveState, IGlovePassThrough, IWalkerExtraCe
 
     private void Update()
     {
+        // Tarla grid'i: bota binilince ya da elde tarla parçası varken (adadan getirirken, tarlada düzenlerken)
+        InteractableController controller = InteractableController.Instance;
+        gridIndicator.SetVisible(riding || (controller != null && controller.Held is FarmPiece), Time.deltaTime);
+
         if (!walker.IsPlaced)
         {
             // Grid'e konan bot OnPlaced'da yerini alır; sahneye elle konmuşsa (test) yakındaki suya yerleşir
