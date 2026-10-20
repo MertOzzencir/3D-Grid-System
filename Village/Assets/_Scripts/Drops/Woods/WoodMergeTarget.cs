@@ -9,12 +9,14 @@ public class WoodMergeTarget
     private readonly GridPlaceable owner;
     private readonly IWoodStack stack;
     private readonly List<SnapPoint> snapPoints = new List<SnapPoint>();
-    private readonly List<Vector3Int[]> candidateCells = new List<Vector3Int[]>(); // snapPoints ile aynı sırada: parçanın hücreleri
+    private readonly List<Vector3Int[]> candidateCells = new List<Vector3Int[]>(); // snapPoints ile aynı sırada: parçanın hücreleri (başından ucuna)
+    private readonly List<Vector3Int> candidateDirections = new List<Vector3Int>(); // parçanın ana odundan dışarı uzandığı yön (dünya)
 
     // Taşınan odunun şu an üstünde durduğu (bağlantı yeri seçili) hedef; grid göstergesi (HeldGridIndicator) bağlantı
     // yerlerinin hücrelerini gösterir (eskiden ok göstergeleri vardı)
     public static WoodMergeTarget Active { get; private set; }
     public IReadOnlyList<Vector3Int[]> CandidateCells => candidateCells;
+    public IReadOnlyList<Vector3Int> CandidateDirections => candidateDirections;
     public bool IsAlive => owner != null; // sahibi birleştirmede silinmiş olabilir
     public int SelectedIndex => snapSelector != null ? snapSelector.SelectedIndex : -1;
 
@@ -59,6 +61,7 @@ public class WoodMergeTarget
         WoodSide facing = GetFacingSide();
         snapPoints.Clear();
         candidateCells.Clear();
+        candidateDirections.Clear();
         CollectSnapPoints(carried, facing, snapPoints);
 
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -198,6 +201,7 @@ public class WoodMergeTarget
         foreach (Vector3Int cell in WoodLayout.PieceCells(baseLength, slot, pieceLength))
             cells.Add(owner.OriginWorldPosition + GridMaskRotator.RotateOffset(cell, owner.Rotation));
         candidateCells.Add(cells.ToArray());
+        candidateDirections.Add(slot.IsTop ? Vector3Int.up : GridMaskRotator.RotateOffset(WoodLayout.SideDirection(slot.Side), owner.Rotation));
     }
 
     private bool ArePieceCellsFree(int baseLength, WoodSlot slot, int pieceLength)

@@ -12,8 +12,10 @@ using UnityEngine;
 // obje var (sürükleyerek havaya konamaz). Komşu hücrelerin ortak kenarı bir kez
 // (en belirgin saydamlıkla), yoksa üst üste binip koyulaşırdı. Tek mesh, "Village/Grid Fade" (UV.y 0: yukarı doğru sönme yok). Odun hücre değiştirince mesh yeniden kurulur.
 // Birleştirme: taşınan odun başka bir oduna yapışınca (WoodMergeTarget.Active) çevre yerine sadece bağlantı yerlerinin
-// hücreleri gösterilir (eski ok göstergelerinin yerine): her uygun yerin parçasının kaplayacağı hücrelerin yatay kenarları,
-// mouse'un seçtiği yer `selectedAlpha`, diğerleri `optionAlpha`, uzaklıkla sönme yok.
+// hücreleri gösterilir (eski ok göstergelerinin yerine), dışarı doğru açık: parçanın ana oduna değdiği yüzde kapalı bir
+// çerçeve (dört kenar; yan parçada dikey kenarlar dahil), çerçevenin köşelerinden parçanın uzandığı yönde ucuna kadar
+// çizgiler (ucunda tamamen şeffaf, `fadePower`); dışarı bakan uç ve parçanın içindeki hücre sınırları çizilmez. Mouse'un
+// seçtiği yer `selectedAlpha`, diğerleri `optionAlpha`. Dikey çizgiler kameraya dönük şerit, yataylar yatay şerit.
 // Ayarları WoodMerger'da ("Held Grid"), WoodMerger.Update her kare Tick'i çağırır.
 [Serializable]
 public class HeldGridIndicator
@@ -208,28 +210,37 @@ public class HeldGridIndicator
     // Birleştirme: her bağlantı yerinin hücrelerinin bütün yatay kenarları (ortak olan bir kez, en belirgin saydamlıkla)
     private void RebuildMerge(WoodMergeTarget merge)
     {
-        var edges = new Dictionary<(Vector3Int, Vector3Int), float>();
-        int selected = merge.SelectedIndex;
-        for (int i = 0; i < merge.CandidateCells.Count; i++)
-        {
-            float alpha = i == selected ? selectedAlpha : optionAlpha;
-            foreach (Vector3Int cell in merge.CandidateCells[i])
-            {
-                Vector3Int c2 = cell * 2;
-                foreach (int y in new[] { -1, 1 })
-                    foreach (int s in new[] { -1, 1 })
-                    {
-                        AddEdge(edges, c2 + new Vector3Int(-1, y, s), c2 + new Vector3Int(1, y, s), alpha);
-                        AddEdge(edges, c2 + new Vector3Int(s, y, -1), c2 + new Vector3Int(s, y, 1), alpha);
-                    }
-            }
-        }
-
         var vertices = new List<Vector3>();
         var colors = new List<Color>();
         var triangles = new List<int>();
-        foreach (var pair in edges)
-            AddRibbon((Vector3)pair.Key.Item1 * 0.5f, (Vector3)pair.Key.Item2 * 0.5f, _ => pair.Value, vertices, colors, triangles);
+        int selected = merge.SelectedIndex;
+        for (int i = 0; i < merge.CandidateCells.Count; i++)
+        {
+            Vector3Int[] cells = merge.CandidateCells[i];
+            if (cells.Length == 0) continue;
+            float alpha = i == selected ? selectedAlpha : optionAlpha;
+            Vector3 direction = merge.CandidateDirections[i];
+            // Yüzün iki kenar yönü (uzanma yönüne dik)
+            Vector3 u = Mathf.Abs(direction.y) > 0.5f ? Vector3.right : Vector3.up;
+            Vector3 v = Vector3.Cross(direction, u).normalized;
+            Vector3 nearCenter = (Vector3)cells[0] - direction * 0.5f;
+            Vector3[] corners =
+            {
+                nearCenter + (u + v) * 0.5f, nearCenter + (u - v) * 0.5f, nearCenter + (-u - v) * 0.5f, nearCenter + (-u + v) * 0.5f
+            };
+            // Başlangıçta kapalı çerçeve
+            for (int k = 0; k < 4; k++)
+                AddRibbon(corners[k], corners[(k + 1) % 4], _ => alpha, vertices, colors, triangles);
+            // Köşelerden dışarı, ucunda tamamen şeffaf
+            float length = cells.Length;
+            foreach (Vector3 corner in corners)
+            {
+                Vector3 start = corner;
+                AddRibbon(start, start + direction * length,
+                    p => alpha * Mathf.Pow(Mathf.Clamp01(1f - Vector3.Dot(p - start, direction) / length), fadePower),
+                    vertices, colors, triangles);
+            }
+        }
         SetMesh(vertices, colors, triangles);
     }
 
@@ -248,7 +259,12 @@ public class HeldGridIndicator
     private void AddRibbon(Vector3 a, Vector3 b, Func<Vector3, float> alphaAt, List<Vector3> vertices, List<Color> colors, List<int> triangles)
     {
         const int parts = 4;
-        Vector3 across = Vector3.Cross(Vector3.up, (b - a).normalized) * (lineWidth * 0.5f);
+        // Yatay çizgi yatay şerit; dikey çizgi kameraya dönük şerit (yoksa genişliği sıfır olurdu)
+        Vector3 along = (b - a).normalized;
+        Vector3 across = Mathf.Abs(along.y) > 0.9f
+            ? Vector3.Cross(along, Camera.main != null ? -Camera.main.transform.forward : Vector3.back).normalized
+            : Vector3.Cross(Vector3.up, along).normalized;
+        across *= lineWidth * 0.5f;
         int start = vertices.Count;
         for (int i = 0; i <= parts; i++)
         {
