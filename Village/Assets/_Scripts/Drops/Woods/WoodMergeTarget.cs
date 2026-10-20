@@ -9,6 +9,27 @@ public class WoodMergeTarget
     private readonly GridPlaceable owner;
     private readonly IWoodStack stack;
     private readonly List<SnapPoint> snapPoints = new List<SnapPoint>();
+    private readonly List<Vector3Int[]> candidateCells = new List<Vector3Int[]>(); // snapPoints ile aynı sırada: parçanın hücreleri
+
+    // Taşınan odunun şu an üstünde durduğu (bağlantı yeri seçili) hedef; grid göstergesi (HeldGridIndicator) bağlantı
+    // yerlerinin hücrelerini gösterir (eskiden ok göstergeleri vardı)
+    public static WoodMergeTarget Active { get; private set; }
+    public IReadOnlyList<Vector3Int[]> CandidateCells => candidateCells;
+    public bool IsAlive => owner != null; // sahibi birleştirmede silinmiş olabilir
+    public int SelectedIndex => snapSelector != null ? snapSelector.SelectedIndex : -1;
+
+    // Hücreler ve seçim değişince değişir (gösterge yeniden kurulsun)
+    public int CandidatesKey
+    {
+        get
+        {
+            int key = SelectedIndex + 17;
+            foreach (Vector3Int[] cells in candidateCells)
+                foreach (Vector3Int cell in cells)
+                    key = key * 31 + cell.GetHashCode();
+            return key;
+        }
+    }
     private SnapPointSelector snapSelector;
 
     // Kameraya bakan yandaki parçalar noktaları kapatmasın diye yarı saydam yapılır (bkz. DitherFade)
@@ -19,7 +40,7 @@ public class WoodMergeTarget
 
     // WoodMerger'ın Awake'i sahibinkinden sonra çalışabilir, o yüzden ilk ihtiyaçta oluşturuyoruz
     private SnapPointSelector SnapSelector
-        => snapSelector ??= new SnapPointSelector(WoodMerger.Instance.SnapIndicatorPrefab, owner.transform);
+        => snapSelector ??= new SnapPointSelector(null, owner.transform); // ok yok: yerler grid göstergesiyle
 
     public WoodMergeTarget(GridPlaceable owner)
     {
@@ -37,10 +58,16 @@ public class WoodMergeTarget
 
         WoodSide facing = GetFacingSide();
         snapPoints.Clear();
+        candidateCells.Clear();
         CollectSnapPoints(carried, facing, snapPoints);
 
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        if (!SnapSelector.UpdateSelection(snapPoints, ray)) return default;
+        if (!SnapSelector.UpdateSelection(snapPoints, ray))
+        {
+            if (Active == this) Active = null;
+            return default;
+        }
+        Active = this;
 
         // Seçim yokken GridDragMotor her kare OnToolTargetExit çağırır; o yüzden sadece seçim varken saydamlaştır
         FadeFrontPieces(facing);
@@ -71,6 +98,7 @@ public class WoodMergeTarget
 
     public void OnToolTargetExit()
     {
+        if (Active == this) Active = null;
         snapSelector?.Hide();
         RestoreFrontPieces();
     }
@@ -78,6 +106,7 @@ public class WoodMergeTarget
     public bool OnToolUsed(IInteractable tool)
     {
         if (!(tool is Wood carried) || snapSelector == null || !snapSelector.HasSelection) return false;
+        if (Active == this) Active = null;
 
         WoodSlot slot = WoodSlot.FromId(snapSelector.Selected.Layer);
         snapSelector.Hide();
@@ -165,6 +194,10 @@ public class WoodMergeTarget
         Vector3Int start = GridMaskRotator.RotateOffset(WoodLayout.PieceStart(baseLength, slot), owner.Rotation);
         Quaternion rotation = owner.GridRotation * WoodLayout.PieceRotation(slot);
         result.Add(new SnapPoint(slot.ToId(), owner.OriginWorldPosition + start, rotation));
+        var cells = new List<Vector3Int>();
+        foreach (Vector3Int cell in WoodLayout.PieceCells(baseLength, slot, pieceLength))
+            cells.Add(owner.OriginWorldPosition + GridMaskRotator.RotateOffset(cell, owner.Rotation));
+        candidateCells.Add(cells.ToArray());
     }
 
     private bool ArePieceCellsFree(int baseLength, WoodSlot slot, int pieceLength)

@@ -14,6 +14,7 @@ public class SnapPointSelector
     private int selectedIndex = -1;
 
     public bool HasSelection => selectedIndex >= 0;
+    public int SelectedIndex => selectedIndex;
     public SnapPoint Selected => points[selectedIndex];
 
     // indicatorPrefab null olabilir: o zaman ok gösterilmez ama seçim yine çalışır

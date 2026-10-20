@@ -11,6 +11,9 @@ using UnityEngine;
 // parça yok), hiçbir hücresi base'in içinde değil ve (requireSupport) en alt hücrelerinden birinin altında base ya da
 // obje var (sürükleyerek havaya konamaz). Komşu hücrelerin ortak kenarı bir kez
 // (en belirgin saydamlıkla), yoksa üst üste binip koyulaşırdı. Tek mesh, "Village/Grid Fade" (UV.y 0: yukarı doğru sönme yok). Odun hücre değiştirince mesh yeniden kurulur.
+// Birleştirme: taşınan odun başka bir oduna yapışınca (WoodMergeTarget.Active) çevre yerine sadece bağlantı yerlerinin
+// hücreleri gösterilir (eski ok göstergelerinin yerine): her uygun yerin parçasının kaplayacağı hücrelerin yatay kenarları,
+// mouse'un seçtiği yer `selectedAlpha`, diğerleri `optionAlpha`, uzaklıkla sönme yok.
 // Ayarları WoodMerger'da ("Held Grid"), WoodMerger.Update her kare Tick'i çağırır.
 [Serializable]
 public class HeldGridIndicator
@@ -30,6 +33,10 @@ public class HeldGridIndicator
     [Tooltip("Sönme eğrisi: çizgi odunun hücrelerinden uzaklaştıkça söner, ucunda tamamen şeffaf. 1 doğrusal, büyük = " +
              "merkezden çıkınca daha çabuk söner.")]
     [SerializeField, Range(0.3f, 5f)] private float fadePower = 1.5f;
+    [Tooltip("Birleştirmede seçili bağlantı yerinin çizgilerinin saydamlığı")]
+    [SerializeField, Range(0f, 1f)] private float selectedAlpha = 1f;
+    [Tooltip("Birleştirmede diğer bağlantı yerlerinin çizgilerinin saydamlığı")]
+    [SerializeField, Range(0f, 1f)] private float optionAlpha = 0.4f;
     [Tooltip("Belirme / sönme hızı (saniyede)")]
     [SerializeField] private float fadeSpeed = 6f;
 
@@ -43,6 +50,7 @@ public class HeldGridIndicator
     private GridPlaceable shownFor;
     private Vector3Int shownOrigin;
     private GridMaskRotator.Rotation shownRotation;
+    private int? shownMergeKey; // birleştirme gösteriliyorsa hücrelerin / seçimin anahtarı
 
     // Her kare: elde odun varsa onun çevresi gösterilir, yoksa söner
     public void Tick(float deltaTime)
@@ -53,13 +61,29 @@ public class HeldGridIndicator
 
         if (held != null && EnsureRoot())
         {
-            Vector3Int origin = Vector3Int.RoundToInt(held.transform.position);
-            if (held != shownFor || origin != shownOrigin || held.Rotation != shownRotation)
+            WoodMergeTarget merge = held is Wood ? WoodMergeTarget.Active : null;
+            if (merge != null && merge.IsAlive && merge.CandidateCells.Count > 0)
             {
-                Rebuild(held, origin);
-                shownFor = held;
-                shownOrigin = origin;
-                shownRotation = held.Rotation;
+                // Birleştirme: sadece bağlantı yerlerinin hücreleri
+                int key = merge.CandidatesKey;
+                if (shownMergeKey != key)
+                {
+                    RebuildMerge(merge);
+                    shownMergeKey = key;
+                    shownFor = null;
+                }
+            }
+            else
+            {
+                Vector3Int origin = Vector3Int.RoundToInt(held.transform.position);
+                if (shownMergeKey != null || held != shownFor || origin != shownOrigin || held.Rotation != shownRotation)
+                {
+                    Rebuild(held, origin);
+                    shownMergeKey = null;
+                    shownFor = held;
+                    shownOrigin = origin;
+                    shownRotation = held.Rotation;
+                }
             }
         }
         if (material == null) return;
@@ -71,7 +95,11 @@ public class HeldGridIndicator
             material.SetColor(ColorId, new Color(color.r, color.g, color.b, visibility));
         }
         renderer.enabled = visibility > 0.001f;
-        if (held == null && visibility <= 0.001f) shownFor = null; // sonraki tutuşta yeniden kurulsun
+        if (held == null && visibility <= 0.001f)
+        {
+            shownFor = null; // sonraki tutuşta yeniden kurulsun
+            shownMergeKey = null;
+        }
     }
 
     private bool EnsureRoot()
@@ -151,16 +179,8 @@ public class HeldGridIndicator
         var colors = new List<Color>();
         var triangles = new List<int>();
         foreach (var pair in edges)
-            AddRibbon((Vector3)pair.Key.Item1 * 0.5f, (Vector3)pair.Key.Item2 * 0.5f, boxMin, boxMax, vertices, colors, triangles);
-        var uvs = new List<Vector2>(new Vector2[vertices.Count]); // UV.y 0: yukarı doğru sönme yok
-
-        mesh.Clear();
-        if (vertices.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        mesh.SetVertices(vertices);
-        mesh.SetUVs(0, uvs);
-        mesh.SetColors(colors);
-        mesh.SetTriangles(triangles, 0);
-        mesh.RecalculateBounds();
+            AddRibbon((Vector3)pair.Key.Item1 * 0.5f, (Vector3)pair.Key.Item2 * 0.5f, p => Fade(p, boxMin, boxMax), vertices, colors, triangles);
+        SetMesh(vertices, colors, triangles);
     }
 
     // Odun bu hücreye (origin olarak) konabilir mi: bütün şekli sığar, base'e girmez, (requireSupport) altı dolu
@@ -185,8 +205,47 @@ public class HeldGridIndicator
         return false;
     }
 
+    // Birleştirme: her bağlantı yerinin hücrelerinin bütün yatay kenarları (ortak olan bir kez, en belirgin saydamlıkla)
+    private void RebuildMerge(WoodMergeTarget merge)
+    {
+        var edges = new Dictionary<(Vector3Int, Vector3Int), float>();
+        int selected = merge.SelectedIndex;
+        for (int i = 0; i < merge.CandidateCells.Count; i++)
+        {
+            float alpha = i == selected ? selectedAlpha : optionAlpha;
+            foreach (Vector3Int cell in merge.CandidateCells[i])
+            {
+                Vector3Int c2 = cell * 2;
+                foreach (int y in new[] { -1, 1 })
+                    foreach (int s in new[] { -1, 1 })
+                    {
+                        AddEdge(edges, c2 + new Vector3Int(-1, y, s), c2 + new Vector3Int(1, y, s), alpha);
+                        AddEdge(edges, c2 + new Vector3Int(s, y, -1), c2 + new Vector3Int(s, y, 1), alpha);
+                    }
+            }
+        }
+
+        var vertices = new List<Vector3>();
+        var colors = new List<Color>();
+        var triangles = new List<int>();
+        foreach (var pair in edges)
+            AddRibbon((Vector3)pair.Key.Item1 * 0.5f, (Vector3)pair.Key.Item2 * 0.5f, _ => pair.Value, vertices, colors, triangles);
+        SetMesh(vertices, colors, triangles);
+    }
+
+    private void SetMesh(List<Vector3> vertices, List<Color> colors, List<int> triangles)
+    {
+        mesh.Clear();
+        if (vertices.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        mesh.SetVertices(vertices);
+        mesh.SetUVs(0, new List<Vector2>(new Vector2[vertices.Count])); // UV.y 0: yukarı doğru sönme yok
+        mesh.SetColors(colors);
+        mesh.SetTriangles(triangles, 0);
+        mesh.RecalculateBounds();
+    }
+
     // a → b boyunca yatay şerit, saydamlık uzaklığa göre (eğri sönsün diye 4 parçaya bölünür)
-    private void AddRibbon(Vector3 a, Vector3 b, Vector3 boxMin, Vector3 boxMax, List<Vector3> vertices, List<Color> colors, List<int> triangles)
+    private void AddRibbon(Vector3 a, Vector3 b, Func<Vector3, float> alphaAt, List<Vector3> vertices, List<Color> colors, List<int> triangles)
     {
         const int parts = 4;
         Vector3 across = Vector3.Cross(Vector3.up, (b - a).normalized) * (lineWidth * 0.5f);
@@ -194,7 +253,7 @@ public class HeldGridIndicator
         for (int i = 0; i <= parts; i++)
         {
             Vector3 p = Vector3.Lerp(a, b, i / (float)parts);
-            Color c = new Color(1f, 1f, 1f, Fade(p, boxMin, boxMax));
+            Color c = new Color(1f, 1f, 1f, alphaAt(p));
             vertices.Add(p - across);
             vertices.Add(p + across);
             colors.Add(c);
