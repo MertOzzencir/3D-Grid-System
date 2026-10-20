@@ -2400,6 +2400,15 @@ MonoBehaviour:
     looseness: 0.45
     knotPopDuration: 0.25
     knotFibers: 10
+  heldGrid:
+    enabled: 1
+    range: 1
+    requireSupport: 1
+    color: {r: 1, g: 1, b: 1, a: 0.55}
+    edgeAlpha: 0.8
+    lineWidth: 0.05
+    fadePower: 1.5
+    fadeSpeed: 6
 --- !u!4 &1126745012
 Transform:
   m_ObjectHideFlags: 0

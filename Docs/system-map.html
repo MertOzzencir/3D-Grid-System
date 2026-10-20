@@ -143,7 +143,7 @@ const NODES = [
   // --- Yüzen tarla (sol sütun) ---
   { id: "boat", name: "Gemi + tarla treni", status: "done", x: 125, y: 95, tag: "Boat",
     what: "Gemiye binip WASD ile suda gezersin. Gemi 3×5 hücre kaplar. Arkasında halatla çekilen tek sayılı kare bir tarla var (3×3 → 5×5 → 7×7); tarla geminin adımıyla birlikte, izinden gelir. Gemide toprak deposu var: her toprak birimi bir torba.",
-    how: ["Mouse geminin gövdesine gelince eldiven zıplayıp biner", "Geri gitme yok; yana basınca dönerken bir kare ilerler", "Sıkışınca H: limana dön (şimdilik)", "Kenarın ötesi karaysa eldiven iner", "Toprak: şimdilik elle; torbalar depoda piramit gibi dizilir"],
+    how: ["Mouse geminin gövdesine gelince eldiven zıplayıp biner", "Geri gitme yok; yana basınca dönerken bir kare ilerler", "Sıkışınca H: limana dön (şimdilik)", "Kenarın ötesi karaysa eldiven iner", "Toprak: şimdilik elle; torbalar depoda piramit gibi dizilir", "Tarla düz güverte değil: bota binince ya da elde tarla parçası varken beliren saydam grid göstergesi"],
     files: ["Boat/Boat.cs", "Creatures/Movement/GridWalker.cs"],
     next: "Toprak + tarla parçası yapımı (çalışma masası, yapım platformu). Ada ile gemi arası geçiş cilası. Limana dönüş için iskele / UI." },
   { id: "pieces", name: "Tarla parçaları", status: "done", x: 125, y: 190, tag: "FarmPiece",
@@ -234,7 +234,7 @@ const NODES = [
 
   { id: "chopblock", name: "Kesme kütüğü", status: "done", x: 880, y: 300, tag: "ChoppingBlock",
     what: "Odunu işleme zincirinin ilk istasyonu: 1BR odun → 2 yarım odun → 2 çeyrek odun. Grid'de taşınan placeable.",
-    how: ["Parça sağ tıkla kütüğe sürüklenir", "Balta kütüğün üstünde durur, sol tıkla vurulur", "Parçalar ekrana göre sağa ve sola zıplar", "Modeller dinamik: model alanı boşsa kodla geçici görünüm"],
+    how: ["Parça sağ tıkla kütüğe sürüklenir", "Balta kütüğün üstünde durur, sol tıkla vurulur", "Parçalar ekrana göre sağa ve sola zıplar", "Modeller dinamik: model alanı boşsa kodla geçici görünüm", "Odun elde tutulurken çevresinde konabilen hücrelerin çizgi göstergesi; birleştirirken bağlantı yerleri (oklar kalktı)"],
     files: ["Drops/Woods/ChoppingBlock.cs", "Drops/Woods/ChoppingBlockTop.cs"],
     next: "Gerçek modeller (kütük, yarım ve çeyrek odun)." },
   { id: "sawbench", name: "Testere sehpası", status: "done", x: 880, y: 545, tag: "SawBench",
