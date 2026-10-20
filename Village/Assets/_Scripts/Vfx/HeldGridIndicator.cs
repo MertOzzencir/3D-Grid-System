@@ -4,12 +4,13 @@ using UnityEngine;
 
 // Elde tutulan odunun (Wood, MergedWood) çevresinde 3 boyutlu grid göstergesi: odunun şu an üstünde durduğu hücrelerden
 // her yöne (yanlar, köşe çaprazları, yukarı, aşağı) `range` hücreye kadar, odunun konabileceği her hücrenin sadece yatay
-// kenarları çizgi (`edgeAlpha`; içi boş, dikey kenar yok, dış çerçeve yok: çizgiler açık uçlu söner). Merkezden uzaklaştıkça
-// saydamlaşır (vertex rengi: odunun hücresinde tam, range + 1 uzakta 0). Sadece odunun konabileceği hücreler çizilir: odun
+// kenarları çizgi (`edgeAlpha`, `lineWidth` kalınlığında yatay şerit; içi boş, dikey kenar yok, dış çerçeve yok: çizgiler açık
+// uçlu söner). Saydamlık çizgi boyunca sürekli (vertex rengi): odunun hücrelerinin kutusunda tam, kutudan range uzakta
+// tamamen şeffaf (`fadePower` eğrisi). Sadece odunun konabileceği hücreler çizilir: odun
 // o hücreye (origin olarak) konunca bütün şekli sığar (GridManager.CanPlaceablePlaceOn: hücreler boş, CanOccupy, ince
 // parça yok), hiçbir hücresi base'in içinde değil ve (requireSupport) en alt hücrelerinden birinin altında base ya da
 // obje var (sürükleyerek havaya konamaz). Komşu hücrelerin ortak kenarı bir kez
-// (en belirgin saydamlıkla), yoksa üst üste binip koyulaşırdı. Çizgiler MeshTopology.Lines, tek mesh, "Village/Grid Fade" (UV.y 0: yukarı doğru sönme yok). Odun hücre değiştirince mesh yeniden kurulur.
+// (en belirgin saydamlıkla), yoksa üst üste binip koyulaşırdı. Tek mesh, "Village/Grid Fade" (UV.y 0: yukarı doğru sönme yok). Odun hücre değiştirince mesh yeniden kurulur.
 // Ayarları WoodMerger'da ("Held Grid"), WoodMerger.Update her kare Tick'i çağırır.
 [Serializable]
 public class HeldGridIndicator
@@ -24,6 +25,11 @@ public class HeldGridIndicator
     [SerializeField] private Color color = Color.white;
     [Tooltip("Küp kenarlarının saydamlığı odunun hücresinde")]
     [SerializeField, Range(0f, 1f)] private float edgeAlpha = 1f;
+    [Tooltip("Çizgilerin kalınlığı (birim; yatay şerit)")]
+    [SerializeField] private float lineWidth = 0.05f;
+    [Tooltip("Sönme eğrisi: çizgi odunun hücrelerinden uzaklaştıkça söner, ucunda tamamen şeffaf. 1 doğrusal, büyük = " +
+             "merkezden çıkınca daha çabuk söner.")]
+    [SerializeField, Range(0.3f, 5f)] private float fadePower = 1.5f;
     [Tooltip("Belirme / sönme hızı (saniyede)")]
     [SerializeField] private float fadeSpeed = 6f;
 
@@ -139,19 +145,13 @@ public class HeldGridIndicator
                 }
         }
 
+        // Çizgiler yatay şerit; saydamlık çizgi boyunca sürekli: odunun hücrelerinin kutusunda tam, kutudan range uzakta 0
+        Vector3 boxMin = (Vector3)min - Vector3.one * 0.5f, boxMax = (Vector3)max + Vector3.one * 0.5f;
         var vertices = new List<Vector3>();
         var colors = new List<Color>();
-        var lines = new List<int>();
+        var triangles = new List<int>();
         foreach (var pair in edges)
-        {
-            lines.Add(vertices.Count);
-            vertices.Add((Vector3)pair.Key.Item1 * 0.5f);
-            lines.Add(vertices.Count);
-            vertices.Add((Vector3)pair.Key.Item2 * 0.5f);
-            Color c = new Color(1f, 1f, 1f, edgeAlpha * pair.Value);
-            colors.Add(c);
-            colors.Add(c);
-        }
+            AddRibbon((Vector3)pair.Key.Item1 * 0.5f, (Vector3)pair.Key.Item2 * 0.5f, boxMin, boxMax, vertices, colors, triangles);
         var uvs = new List<Vector2>(new Vector2[vertices.Count]); // UV.y 0: yukarı doğru sönme yok
 
         mesh.Clear();
@@ -159,7 +159,7 @@ public class HeldGridIndicator
         mesh.SetVertices(vertices);
         mesh.SetUVs(0, uvs);
         mesh.SetColors(colors);
-        mesh.SetIndices(lines, MeshTopology.Lines, 0);
+        mesh.SetTriangles(triangles, 0);
         mesh.RecalculateBounds();
     }
 
@@ -183,6 +183,36 @@ public class HeldGridIndicator
             if (below.Base != null || below.HasFine || (below.Placeable != null && below.Placeable != held)) return true;
         }
         return false;
+    }
+
+    // a → b boyunca yatay şerit, saydamlık uzaklığa göre (eğri sönsün diye 4 parçaya bölünür)
+    private void AddRibbon(Vector3 a, Vector3 b, Vector3 boxMin, Vector3 boxMax, List<Vector3> vertices, List<Color> colors, List<int> triangles)
+    {
+        const int parts = 4;
+        Vector3 across = Vector3.Cross(Vector3.up, (b - a).normalized) * (lineWidth * 0.5f);
+        int start = vertices.Count;
+        for (int i = 0; i <= parts; i++)
+        {
+            Vector3 p = Vector3.Lerp(a, b, i / (float)parts);
+            Color c = new Color(1f, 1f, 1f, Fade(p, boxMin, boxMax));
+            vertices.Add(p - across);
+            vertices.Add(p + across);
+            colors.Add(c);
+            colors.Add(c);
+        }
+        for (int i = 0; i < parts; i++)
+        {
+            int k = start + i * 2;
+            triangles.AddRange(new[] { k, k + 1, k + 3, k, k + 3, k + 2 });
+        }
+    }
+
+    // Noktanın odunun hücrelerinin kutusuna uzaklığına (her eksende en büyüğü) göre saydamlık: kutuda edgeAlpha, range'de 0
+    private float Fade(Vector3 p, Vector3 boxMin, Vector3 boxMax)
+    {
+        Vector3 outside = Vector3.Max(Vector3.zero, Vector3.Max(boxMin - p, p - boxMax));
+        float distance = Mathf.Max(outside.x, Mathf.Max(outside.y, outside.z));
+        return edgeAlpha * Mathf.Pow(Mathf.Clamp01(1f - distance / range), fadePower);
     }
 
     private static void AddEdge(Dictionary<(Vector3Int, Vector3Int), float> edges, Vector3Int a, Vector3Int b, float alpha)
