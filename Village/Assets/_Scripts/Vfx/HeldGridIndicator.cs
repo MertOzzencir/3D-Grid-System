@@ -5,8 +5,10 @@ using UnityEngine;
 // Elde tutulan odunun (Wood, MergedWood) çevresinde 3 boyutlu grid göstergesi: odunun şu an üstünde durduğu hücrelerden
 // her yöne (yanlar, köşe çaprazları, yukarı, aşağı) `range` hücreye kadar, odunun konabileceği her hücre bir küp: içi çok
 // şeffaf dolgu (`fillAlpha`, %80 şeffaf), kenarları belirgin çizgiler (`edgeAlpha`). Merkezden uzaklaştıkça ikisi de
-// saydamlaşır (vertex rengi: odunun hücresinde tam, range + 1 uzakta 0). Konamayan hücre (içinde base, başka obje ya da
-// ince parça var, ya da odunun hücre kuralı izin vermiyor: örn. su) çizilmez. Komşu küplerin ortak yüzü ve kenarı bir kez
+// saydamlaşır (vertex rengi: odunun hücresinde tam, range + 1 uzakta 0). Sadece odunun konabileceği hücreler çizilir: odun
+// o hücreye (origin olarak) konunca bütün şekli sığar (GridManager.CanPlaceablePlaceOn: hücreler boş, CanOccupy, ince
+// parça yok), hiçbir hücresi base'in içinde değil ve (requireSupport) en alt hücrelerinden birinin altında base ya da
+// obje var (sürükleyerek havaya konamaz). Komşu küplerin ortak yüzü ve kenarı bir kez
 // (en belirgin saydamlıkla), yoksa üst üste binip koyulaşırdı. Kenarlar çizgi (MeshTopology.Lines), yüzler üçgen; tek mesh,
 // iki alt mesh, "Village/Grid Fade" (UV.y 0: yukarı doğru sönme yok). Odun hücre değiştirince mesh yeniden kurulur.
 // Ayarları WoodMerger'da ("Held Grid"), WoodMerger.Update her kare Tick'i çağırır.
@@ -17,6 +19,8 @@ public class HeldGridIndicator
     [SerializeField] private bool enabled = true;
     [Tooltip("Odunun hücrelerinden her yöne kaç hücre öteye kadar")]
     [SerializeField, Range(1, 4)] private int range = 2;
+    [Tooltip("Açıksa sadece altı dolu (base ya da obje) yerler gösterilir: odun sürüklenerek havaya konamıyor")]
+    [SerializeField] private bool requireSupport = true;
     [Tooltip("Renk (A kullanılmaz; saydamlık aşağıdaki iki ayardan)")]
     [SerializeField] private Color color = Color.white;
     [Tooltip("Küplerin içinin saydamlığı odunun hücresinde (0.2 = %80 şeffaf)")]
@@ -172,14 +176,26 @@ public class HeldGridIndicator
         mesh.RecalculateBounds();
     }
 
-    // Odun bu hücreye konabilir mi: grid'de, base yok, başka obje / ince parça yok, odunun hücre kuralı izin veriyor
-    private static bool CanHoldAt(GridPlaceable held, Vector3Int cell)
+    // Odun bu hücreye (origin olarak) konabilir mi: bütün şekli sığar, base'e girmez, (requireSupport) altı dolu
+    private bool CanHoldAt(GridPlaceable held, Vector3Int cell)
     {
         GridManager grid = GridManager.Instance;
-        if (grid == null || !grid.TryGetCell(cell, out GridData data)) return false;
-        if (data.Base != null || data.HasFine) return false;
-        if (data.Placeable != null && data.Placeable != held) return false;
-        return held.CanOccupy(cell);
+        if (grid == null || !grid.CanPlaceablePlaceOn(held, cell)) return false;
+        IReadOnlyList<Vector3Int> footprint = held.GetFootprint().FilledCells();
+        int bottom = int.MaxValue;
+        foreach (Vector3Int offset in footprint)
+        {
+            if (!grid.TryGetCell(cell + offset, out GridData data) || data.Base != null) return false;
+            bottom = Mathf.Min(bottom, offset.y);
+        }
+        if (!requireSupport) return true;
+        foreach (Vector3Int offset in footprint)
+        {
+            if (offset.y != bottom) continue;
+            if (!grid.TryGetCell(cell + offset + Vector3Int.down, out GridData below)) continue;
+            if (below.Base != null || below.HasFine || (below.Placeable != null && below.Placeable != held)) return true;
+        }
+        return false;
     }
 
     // Küpün bir yüzü: ortası center2 / 2, normali axis ekseninde (kenar uzunluğu 1)
