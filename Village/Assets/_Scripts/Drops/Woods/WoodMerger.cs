@@ -34,7 +34,13 @@ public class WoodMerger : MonoBehaviour
         if (Instance == null) Instance = this;
     }
 
-    private void Update() => heldGrid.Tick(Time.deltaTime);
+    private void Update()
+    {
+        heldGrid.Tick(Time.deltaTime);
+        // Birleştirirken kamera hedef odunu yavaşça ortalar (E / Q onun etrafında döner)
+        WoodMergeTarget active = WoodMergeTarget.Active;
+        CameraController.SetFocus(active != null && active.IsAlive ? active.FocusPoint : (Vector3?)null);
+    }
 
     // target hem GridPlaceable hem IWoodStack olmalı (Wood ya da MergedWood)
     public void Merge(GridPlaceable target, Wood carried, WoodSlot slot)

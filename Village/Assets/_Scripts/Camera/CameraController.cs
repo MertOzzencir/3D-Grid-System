@@ -20,6 +20,8 @@ public class CameraController : MonoBehaviour
 
     [Tooltip("Takip edilen (bot) ekranın ortasına bu hızla oturur")]
     [SerializeField] private float followSharpness = 6f;
+    [Tooltip("Odak noktasına (örn. birleştirilen odun) kayma hızı")]
+    [SerializeField] private float focusSharpness = 3f;
 
     [Header("Rotation")]
     [SerializeField] private float rotationAngle = 90f;
@@ -42,6 +44,11 @@ public class CameraController : MonoBehaviour
     // Takip edilen (örn. binilen bot): WASD kamerayı kaydırmaz. Kamera onunla birlikte kayar ve onu ekranın ortasına
     // yumuşakça oturtur (zoom bakış yönünde olduğu için ortadaki şey ortada kalır); Q/E onun etrafında döner.
     private static Transform followTarget;
+    private static Vector3? focusPoint;
+
+    // Yumuşak odak: verilirse kamera o noktayı yavaşça ekranın ortasına alır ve E / Q onun etrafında döndürür (örn. odun
+    // birleştirirken hedef odun). null = odak yok. Her kare çağrılabilir.
+    public static void SetFocus(Vector3? point) => focusPoint = point;
     private static Vector3 lastFollowPosition;
 
     public static void Follow(Transform target)
@@ -109,6 +116,20 @@ public class CameraController : MonoBehaviour
             return;
         }
 
+        // Odak: bakış ışınının odağın yüksekliğindeki düzlemi kestiği nokta odağa doğru yavaşça kayar
+        if (focusPoint.HasValue && !isRotating)
+        {
+            Vector3 view = transform.forward;
+            if (view.y < -0.01f)
+            {
+                Vector3 focus = focusPoint.Value;
+                Vector3 center = transform.position + view * ((focus.y - transform.position.y) / view.y);
+                Vector3 offset = focus - center;
+                offset.y = 0f;
+                transform.position += offset * (1f - Mathf.Exp(-focusSharpness * Time.deltaTime));
+            }
+        }
+
         Vector2 movement = InputManager.MovementVectorNormalized();
 
         Vector3 forward = Quaternion.Euler(0, currentYaw, 0) * Vector3.forward;
@@ -138,9 +159,19 @@ public class CameraController : MonoBehaviour
         Ray ray = new Ray(transform.position, fullForward);
         Plane groundPlane = new Plane(Vector3.up, new Vector3(0f, pivotFallbackHeight, 0f));
 
+        Component held = InteractableController.Instance != null ? InteractableController.Instance.Held as Component : null;
         if (followTarget != null)
         {
             pivotPoint = followTarget.position; // takip edilen ortada: onun etrafında dön
+        }
+        else if (focusPoint.HasValue)
+        {
+            pivotPoint = focusPoint.Value; // odak (birleştirilen odun) ortada: onun etrafında dön
+        }
+        else if (held != null)
+        {
+            // Elde obje varken ekranın ortasındaki ışın onu (ya da eldiveni) vurup merkezi kaydırıyordu: tutulanın etrafında dön
+            pivotPoint = held.transform.position;
         }
         else if (Physics.Raycast(ray, out RaycastHit hit, maxPivotDistance, pivotMask, QueryTriggerInteraction.Ignore))
         {

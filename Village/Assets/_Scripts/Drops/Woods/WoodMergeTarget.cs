@@ -18,6 +18,9 @@ public class WoodMergeTarget
     public IReadOnlyList<Vector3Int[]> CandidateCells => candidateCells;
     public IReadOnlyList<Vector3Int> CandidateDirections => candidateDirections;
     public bool IsAlive => owner != null; // sahibi birleştirmede silinmiş olabilir
+
+    // Kameranın ortalayacağı nokta: ana odunun ortası
+    public Vector3 FocusPoint => (Vector3)owner.OriginWorldPosition + Vector3.up * ((stack.BaseLength - 1) * 0.5f);
     public int SelectedIndex => snapSelector != null ? snapSelector.SelectedIndex : -1;
 
     // Hücreler ve seçim değişince değişir (gösterge yeniden kurulsun)
