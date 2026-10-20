@@ -4,7 +4,7 @@ using UnityEngine;
 
 // Elde tutulan odunun (Wood, MergedWood) çevresinde 3 boyutlu grid göstergesi: odunun şu an üstünde durduğu hücrelerden
 // her yöne (yanlar, köşe çaprazları, yukarı, aşağı) `range` hücreye kadar, odunun konabileceği her hücre bir küp: içi çok
-// şeffaf dolgu (`fillAlpha`, %80 şeffaf), kenarları belirgin çizgiler (`edgeAlpha`). Merkezden uzaklaştıkça ikisi de
+// şeffaf dolgu (`fillAlpha`), sadece yatay kenarları çizgi (`edgeAlpha`; dış çerçeve yok, çizgiler açık uçlu söner). Merkezden uzaklaştıkça ikisi de
 // saydamlaşır (vertex rengi: odunun hücresinde tam, range + 1 uzakta 0). Sadece odunun konabileceği hücreler çizilir: odun
 // o hücreye (origin olarak) konunca bütün şekli sığar (GridManager.CanPlaceablePlaceOn: hücreler boş, CanOccupy, ince
 // parça yok), hiçbir hücresi base'in içinde değil ve (requireSupport) en alt hücrelerinden birinin altında base ya da
@@ -24,9 +24,9 @@ public class HeldGridIndicator
     [Tooltip("Renk (A kullanılmaz; saydamlık aşağıdaki iki ayardan)")]
     [SerializeField] private Color color = Color.white;
     [Tooltip("Küplerin içinin saydamlığı odunun hücresinde (0.2 = %80 şeffaf)")]
-    [SerializeField, Range(0f, 1f)] private float fillAlpha = 0.2f;
+    [SerializeField, Range(0f, 1f)] private float fillAlpha = 0.3f;
     [Tooltip("Küp kenarlarının saydamlığı odunun hücresinde")]
-    [SerializeField, Range(0f, 1f)] private float edgeAlpha = 0.8f;
+    [SerializeField, Range(0f, 1f)] private float edgeAlpha = 1f;
     [Tooltip("Belirme / sönme hızı (saniyede)")]
     [SerializeField] private float fadeSpeed = 6f;
 
@@ -134,17 +134,21 @@ public class HeldGridIndicator
                     float existing = faces.TryGetValue(center, out var face) ? face.alpha : 0f;
                     faces[center] = (axis, Mathf.Max(existing, pair.Value));
                 }
-            for (int i = 0; i < 8; i++)
-            {
-                Vector3Int corner = c2 + new Vector3Int((i & 1) * 2 - 1, ((i >> 1) & 1) * 2 - 1, ((i >> 2) & 1) * 2 - 1);
-                foreach (Vector3Int axis in axes)
+            // Sadece yatay kenarlar (alt ve üst yüzün kenarları; dikey kenar yok). Odunun hücrelerinin dışındaki hücrede,
+            // merkezden uzak taraftaki (merkeze paralel) kenar çizilmez: çizgiler dışarı doğru açık uçlu uzanıp söner,
+            // dış çerçeve kapanmaz (klasik yapı göstergesi). Ötesinde gösterilen hücre varsa o kenar onun yakın kenarı olur.
+            Vector3Int c = pair.Key;
+            int outX = c.x < min.x ? -1 : c.x > max.x ? 1 : 0; // merkezden hangi yana dışarıda
+            int outZ = c.z < min.z ? -1 : c.z > max.z ? 1 : 0;
+            foreach (int y in new[] { -1, 1 })
+                foreach (int s in new[] { -1, 1 })
                 {
-                    Vector3Int other = corner + axis * 2;
-                    if (Vector3.Dot(other - c2, axis) > 1.5f) continue; // küpün dışına çıkıyor
-                    var key = (corner, other);
-                    edges[key] = Mathf.Max(edges.TryGetValue(key, out float e) ? e : 0f, pair.Value);
+                    // X boyunca uzanan kenar (z = c.z + s / 2) ve Z boyunca uzanan kenar (x = c.x + s / 2)
+                    if (outZ == 0 || s != outZ)
+                        AddEdge(edges, c2 + new Vector3Int(-1, y, s), c2 + new Vector3Int(1, y, s), pair.Value);
+                    if (outX == 0 || s != outX)
+                        AddEdge(edges, c2 + new Vector3Int(s, y, -1), c2 + new Vector3Int(s, y, 1), pair.Value);
                 }
-            }
         }
 
         var vertices = new List<Vector3>();
@@ -196,6 +200,12 @@ public class HeldGridIndicator
             if (below.Base != null || below.HasFine || (below.Placeable != null && below.Placeable != held)) return true;
         }
         return false;
+    }
+
+    private static void AddEdge(Dictionary<(Vector3Int, Vector3Int), float> edges, Vector3Int a, Vector3Int b, float alpha)
+    {
+        var key = (a, b);
+        edges[key] = Mathf.Max(edges.TryGetValue(key, out float e) ? e : 0f, alpha);
     }
 
     // Küpün bir yüzü: ortası center2 / 2, normali axis ekseninde (kenar uzunluğu 1)
