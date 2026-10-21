@@ -1,7 +1,8 @@
 // Toon denemesinin kontur çizgileri: ekran üzerinden (URP "Full Screen Pass Renderer Feature" ile çizilir; Requirements:
 // Depth + Normal, Fetch Color Buffer açık, Injection Point: Before Rendering Transparents). Komşu piksellerin derinlik
 // farkı (objenin dış hattı) ya da normal farkı (keskin köşe) eşiği geçince piksel o yerin renginin koyusu olur
-// (renk × _VillageOutlineColor; siyah değil, Arc System Works'teki gibi renkli çizgi). Toon kapalıyken
+// (renk × _VillageOutlineColor; siyah değil, Arc System Works'teki gibi renkli çizgi). İç çizgiler (sadece normal
+// farkı: köşeler, zemin karolarının araları) _VillageOutlineCrease gücünde, dış hatlar tam: objeler zeminden ayrışır. Toon kapalıyken
 // (_VillageToon = 0, ToonStyle) görüntüye dokunmaz. Ayarlar global (ToonStyle yazar).
 Shader "Village/Toon Outline"
 {
@@ -31,6 +32,7 @@ Shader "Village/Toon Outline"
             float _VillageOutlineDepth;   // derinlik farkı eşiği (kameraya uzaklığa oranla)
             float _VillageOutlineNormal;  // normal farkı eşiği (0-2)
             half4 _VillageOutlineColor;   // rgb: çizgi = renk × bu, a: güç
+            float _VillageOutlineCrease;  // iç çizgilerin (sadece normal farkı) gücü, dış hatta göre
 
             float EyeDepth(float2 uv)
             {
@@ -65,7 +67,7 @@ Shader "Village/Toon Outline"
                 float facing = abs(dot(normal, forward));
                 float depthThreshold = _VillageOutlineDepth * (1.0 + 4.0 * (1.0 - facing));
 
-                float edge = max(step(depthThreshold, depthDifference), step(_VillageOutlineNormal, normalDifference));
+                float edge = max(step(depthThreshold, depthDifference), step(_VillageOutlineNormal, normalDifference) * _VillageOutlineCrease);
                 color.rgb = lerp(color.rgb, color.rgb * _VillageOutlineColor.rgb, edge * _VillageOutlineColor.a);
                 return color;
             }

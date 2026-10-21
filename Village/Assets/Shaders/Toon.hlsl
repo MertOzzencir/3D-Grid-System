@@ -5,7 +5,9 @@
 //   (_VillageToonThreshold, geçiş genişliği _VillageToonSoftness), gölgede albedo × _VillageToonShadowColor ve doygunluğu
 //   artırılmış (_VillageToonShadowSaturation: gölge kirli griye değil canlı, tonu kaymış renge döner), parlama keskin
 //   kenarlı leke (_VillageToonSpecSize, _VillageToonSpecStrength; sadece smoothness'ı _VillageToonSpecMinSmoothness'tan
-//   büyük materyallerde: çim, toprak, odun mat kalır), ortam ışığı (SH) payı _VillageToonAmbient. Gerçek zamanlı gölgeler de aynı eşikle sertleşir. SSAO toon'da kullanılmaz (yumuşak leke yapar).
+//   büyük materyallerde: çim, toprak, odun mat kalır), ortam ışığı (SH) payı _VillageToonAmbient, kenar ışığı: objenin
+//   kameraya göre kenarında sert, ince parlak şerit (_VillageToonRimColor, a = güç; genişlik _VillageToonRimWidth;
+//   _VillageToonRimLitOnly kadarı sadece ana ışığın aydınlattığı tarafta). Gerçek zamanlı gölgeler de aynı eşikle sertleşir. SSAO toon'da kullanılmaz (yumuşak leke yapar).
 // Ayarların hepsi global (materyal başına değil): ToonStyle bileşeni yazar.
 #ifndef VILLAGE_TOON_INCLUDED
 #define VILLAGE_TOON_INCLUDED
@@ -19,6 +21,9 @@ float _VillageToonSpecMinSmoothness;
 float _VillageToonSpecSize;
 float _VillageToonSpecStrength;
 float _VillageToonAmbient;
+half4 _VillageToonRimColor;
+float _VillageToonRimWidth;
+float _VillageToonRimLitOnly;
 
 half ToonStep(half value, half threshold)
 {
@@ -71,6 +76,11 @@ half4 ToonFragment(InputData inputData, SurfaceData surfaceData)
         half3 light = mainLight.color * mainLight.distanceAttenuation;
         color += light * lerp(ToonShadowAlbedo(albedo), albedo, lit);
         color += ToonSpecular(mainLight, inputData, surfaceData, lit) * mainLight.distanceAttenuation;
+
+        // Kenar ışığı: yüzey kameraya yan döndükçe (kenarda) sert bir şerit
+        half edge = 1.0 - saturate(dot(inputData.normalWS, inputData.viewDirectionWS));
+        half rim = ToonStep(edge, 1.0 - _VillageToonRimWidth) * lerp(1.0, lit, _VillageToonRimLitOnly);
+        color += _VillageToonRimColor.rgb * (_VillageToonRimColor.a * rim);
     }
 
     // Ek ışıklar (lamba vb.): sadece aydınlık kısmı eklenir
