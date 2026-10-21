@@ -49,6 +49,9 @@ public class CameraController : MonoBehaviour
     // Yumuşak odak: verilirse kamera o noktayı yavaşça ekranın ortasına alır ve E / Q onun etrafında döndürür (örn. odun
     // birleştirirken hedef odun). null = odak yok. Her kare çağrılabilir.
     public static void SetFocus(Vector3? point) => focusPoint = point;
+
+    // Açıkken WASD kamerayı oynatmaz (örn. odun birleştirirken WASD bağlantı yerlerini gezer)
+    public static bool MovementLocked { get; set; }
     private static Vector3 lastFollowPosition;
 
     public static void Follow(Transform target)
@@ -130,7 +133,7 @@ public class CameraController : MonoBehaviour
             }
         }
 
-        Vector2 movement = InputManager.MovementVectorNormalized();
+        Vector2 movement = MovementLocked ? Vector2.zero : InputManager.MovementVectorNormalized();
 
         Vector3 forward = Quaternion.Euler(0, currentYaw, 0) * Vector3.forward;
         Vector3 right = Quaternion.Euler(0, currentYaw, 0) * Vector3.right;

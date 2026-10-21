@@ -15,9 +15,9 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private JellyWobble mergeWobble = new JellyWobble();
     [Tooltip("Hedef odunun kameraya bakan yanındaki parçalar, odun getirilince yarı saydam olur (aynı shader).")]
     [SerializeField] private DitherFade frontFade = new DitherFade();
-    [Tooltip("Taşınan odun bir hedefe yapıştıktan sonra mouse, hedefin ekseninden bu kadar (birim) uzaklaşınca bırakılır. " +
-             "Mouse collider'dan çıksa da hedef kaybolmaz.")]
-    [SerializeField] private float targetReleaseDistance = 5f;
+    [Tooltip("Taşınan odun bir hedefe yapıştıktan sonra (bağlantı yeri WASD ile seçilir) mouse, yapıştığı andaki yerinden " +
+             "ekranda bu kadar (piksel) uzaklaşınca bırakılır: birleştirmekten vazgeçildi.")]
+    [SerializeField] private float targetReleasePixels = 150f;
     [Tooltip("Yan parçaların ana oduna bağlandığı yere sarılan ip")]
     [SerializeField] private WoodRope rope = new WoodRope();
     [Tooltip("Odun elde tutulurken çevresindeki hücrelerin 3 boyutlu göstergesi")]
@@ -26,7 +26,7 @@ public class WoodMerger : MonoBehaviour
     public WoodCatalogSO Catalog => catalog;
     public DitherFade FrontFade => frontFade;
     public WoodRope Rope => rope;
-    public float TargetReleaseDistance => targetReleaseDistance;
+    public float TargetReleasePixels => targetReleasePixels;
     public GameObject SnapIndicatorPrefab => snapIndicatorPrefab;
 
     private void Awake()
@@ -39,7 +39,10 @@ public class WoodMerger : MonoBehaviour
         heldGrid.Tick(Time.deltaTime);
         // Birleştirirken kamera hedef odunu yavaşça ortalar (E / Q onun etrafında döner)
         WoodMergeTarget active = WoodMergeTarget.Active;
-        CameraController.SetFocus(active != null && active.IsAlive ? active.FocusPoint : (Vector3?)null);
+        bool merging = active != null && active.IsAlive;
+        CameraController.SetFocus(merging ? active.FocusPoint : (Vector3?)null);
+        // Birleştirirken WASD bağlantı yerlerini gezer: kamera hareket etmesin
+        CameraController.MovementLocked = merging;
     }
 
     // target hem GridPlaceable hem IWoodStack olmalı (Wood ya da MergedWood)

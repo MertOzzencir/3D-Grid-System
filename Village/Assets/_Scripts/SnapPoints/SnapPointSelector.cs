@@ -36,6 +36,16 @@ public class SnapPointSelector
         return HasSelection;
     }
 
+    // Seçimi doğrudan verir (örn. klavyeyle gezilen nokta)
+    public void Select(IReadOnlyList<SnapPoint> newPoints, int index)
+    {
+        points.Clear();
+        for (int i = 0; i < newPoints.Count; i++)
+            points.Add(newPoints[i]);
+        selectedIndex = index >= 0 && index < points.Count ? index : -1;
+        RefreshIndicators();
+    }
+
     public void Hide()
     {
         points.Clear();

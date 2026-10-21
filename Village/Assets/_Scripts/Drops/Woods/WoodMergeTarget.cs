@@ -37,6 +37,12 @@ public class WoodMergeTarget
     }
     private SnapPointSelector snapSelector;
 
+    // Yapışma: ilk bağlantı yeri mouse'a en yakın olan, sonrası WASD ile (mouse seçimi değiştirmez); mouse yapıştığı
+    // andaki yerinden TargetReleasePixels uzaklaşınca bırakılır
+    private int lockedId = -1;
+    private Vector3 attachMouse;
+    private Vector2 lastInput;
+
     // Kameraya bakan yandaki parçalar noktaları kapatmasın diye yarı saydam yapılır (bkz. DitherFade)
     private bool frontFaded;
     private WoodSide fadedSide;
@@ -67,12 +73,25 @@ public class WoodMergeTarget
         candidateDirections.Clear();
         CollectSnapPoints(carried, facing, snapPoints);
 
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        if (!SnapSelector.UpdateSelection(snapPoints, ray))
+        int index = lockedId >= 0 ? snapPoints.FindIndex(p => p.Layer == lockedId) : -1;
+        if (index >= 0)
         {
-            if (Active == this) Active = null;
-            return default;
+            index = StepWithKeys(index);
+            SnapSelector.Select(snapPoints, index);
         }
+        else
+        {
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (!SnapSelector.UpdateSelection(snapPoints, ray))
+            {
+                if (Active == this) Active = null;
+                lockedId = -1;
+                return default;
+            }
+            attachMouse = Input.mousePosition;
+            lastInput = InputManager.MovementVectorNormalized(); // basılı tuş hemen kaydırmasın
+        }
+        lockedId = SnapSelector.Selected.Layer;
         Active = this;
 
         // Seçim yokken GridDragMotor her kare OnToolTargetExit çağırır; o yüzden sadece seçim varken saydamlaştır
@@ -81,22 +100,44 @@ public class WoodMergeTarget
         return SnapSelector.Selected.Position;
     }
 
-    // Yapışkan hedef: taşınan odun bu oduna bir kez yapıştıysa, mouse collider'dan çıksa da bırakılmaz.
-    // Mouse, hedefin kameraya bakan düzlemine yansıtılır; nokta ana odunun ekseninden (dikey çizgi) belli
-    // mesafeden fazla uzaklaşınca bırakılır. Noktalar zaten mouse ışınına göre seçildiği için collider gerekmez.
+    // Yapışkan hedef: taşınan odun bu oduna bir kez yapıştıysa, mouse collider'dan çıksa da bırakılmaz; mouse yapıştığı
+    // andaki yerinden ekranda TargetReleasePixels'ten fazla uzaklaşınca bırakılır (birleştirmekten vazgeçildi)
     public bool IsStillTargeted(IInteractable interacted, Ray mouseRay)
     {
-        if (!(interacted is Wood carried) || ReferenceEquals(carried, owner)) return false;
+        if (!(interacted is Wood carried) || ReferenceEquals(carried, owner) || lockedId < 0) return false;
+        Vector2 moved = Input.mousePosition - attachMouse;
+        return moved.magnitude <= WoodMerger.Instance.TargetReleasePixels;
+    }
 
-        Transform cameraTransform = Camera.main.transform;
-        Vector3 bottom = owner.OriginWorldPosition;
-        Vector3 top = bottom + Vector3.up * (stack.BaseLength - 1);
-        var plane = new Plane(-cameraTransform.forward, (bottom + top) * 0.5f);
-        if (!plane.Raycast(mouseRay, out float enter)) return false;
+    // WASD (kameraya göre: A/D ekranda sol/sağ, W/S yukarı/aşağı) bir basışta o yöndeki en yakın bağlantı yerine geçer
+    private int StepWithKeys(int index)
+    {
+        Vector2 input = InputManager.MovementVectorNormalized();
+        bool pressed = input.magnitude > 0.5f && lastInput.magnitude <= 0.5f;
+        lastInput = input;
+        if (!pressed) return index;
 
-        Vector3 point = mouseRay.GetPoint(enter);
-        Vector3 closestOnAxis = bottom + Vector3.up * Mathf.Clamp(point.y - bottom.y, 0f, top.y - bottom.y);
-        return Vector3.Distance(point, closestOnAxis) <= WoodMerger.Instance.TargetReleaseDistance;
+        Camera camera = Camera.main;
+        Vector2 from = camera.WorldToScreenPoint(snapPoints[index].Position);
+        Vector2 direction = input.normalized;
+        int best = index;
+        float bestScore = float.MaxValue;
+        for (int i = 0; i < snapPoints.Count; i++)
+        {
+            if (i == index) continue;
+            Vector2 delta = (Vector2)camera.WorldToScreenPoint(snapPoints[i].Position) - from;
+            float along = Vector2.Dot(delta, direction);
+            if (along <= 1f) continue; // o yönde değil
+            float sideways = Mathf.Abs(delta.x * direction.y - delta.y * direction.x);
+            if (sideways > along * 1.5f) continue; // çok yanda
+            float score = along + sideways * 2f; // yöne yakın ve yakın olan
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = i;
+            }
+        }
+        return best;
     }
 
     public Quaternion GetToolTargetRotation()
@@ -105,6 +146,7 @@ public class WoodMergeTarget
     public void OnToolTargetExit()
     {
         if (Active == this) Active = null;
+        lockedId = -1;
         snapSelector?.Hide();
         RestoreFrontPieces();
     }
