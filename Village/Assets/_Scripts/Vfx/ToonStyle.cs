@@ -14,10 +14,6 @@ public class ToonStyle : MonoBehaviour
     private static readonly int ShadowSaturationId = Shader.PropertyToID("_VillageToonShadowSaturation");
     private static readonly int SpecMinSmoothnessId = Shader.PropertyToID("_VillageToonSpecMinSmoothness");
     private static readonly int OutlineFadeDistanceId = Shader.PropertyToID("_VillageOutlineFadeDistance");
-    private static readonly int OutlineCreaseId = Shader.PropertyToID("_VillageOutlineCrease");
-    private static readonly int RimColorId = Shader.PropertyToID("_VillageToonRimColor");
-    private static readonly int RimWidthId = Shader.PropertyToID("_VillageToonRimWidth");
-    private static readonly int RimLitOnlyId = Shader.PropertyToID("_VillageToonRimLitOnly");
     private static readonly int SpecSizeId = Shader.PropertyToID("_VillageToonSpecSize");
     private static readonly int SpecStrengthId = Shader.PropertyToID("_VillageToonSpecStrength");
     private static readonly int AmbientId = Shader.PropertyToID("_VillageToonAmbient");
@@ -46,14 +42,6 @@ public class ToonStyle : MonoBehaviour
     [Tooltip("Sadece Smoothness'ı bundan büyük materyaller parlar (metal, ıslak). Çim, toprak, odun mat kalsın diye.")]
     [SerializeField, Range(0f, 1f)] private float specularMinSmoothness = 0.6f;
 
-    [Header("Kenar ışığı")]
-    [Tooltip("Objenin kameraya göre kenarındaki ince parlak şeridin rengi. A: gücü, 0 = yok.")]
-    [SerializeField] private Color rimColor = new Color(1f, 0.95f, 0.85f, 0.35f);
-    [Tooltip("Şeridin genişliği (0 = yok, büyüdükçe objenin içine doğru genişler)")]
-    [SerializeField, Range(0f, 0.6f)] private float rimWidth = 0.2f;
-    [Tooltip("1 = şerit sadece ışığın vurduğu tarafta, 0 = her tarafta")]
-    [SerializeField, Range(0f, 1f)] private float rimLitOnly = 0.7f;
-
     [Header("Kontur")]
     [Tooltip("Çizgi rengi = altındaki renk × bu (koyu = belirgin çizgi). A: çizginin gücü, 0 = kontur yok.")]
     [SerializeField] private Color outlineColor = new Color(0.3f, 0.25f, 0.3f, 1f);
@@ -65,8 +53,6 @@ public class ToonStyle : MonoBehaviour
     [SerializeField, Range(0.01f, 1f)] private float outlineDepth = 0.1f;
     [Tooltip("Köşe hassasiyeti: komşu yüzeylerin yön farkı (0-2) bunu geçince çizgi. Küçük = daha çok çizgi.")]
     [SerializeField, Range(0.1f, 2f)] private float outlineNormal = 0.6f;
-    [Tooltip("İç çizgilerin (köşeler, zemin karolarının araları) gücü; dış hatlar hep tam. Düşük = objeler zeminden ayrışır.")]
-    [SerializeField, Range(0f, 1f)] private float outlineCrease = 0.4f;
 
     private void OnEnable() => Apply();
     private void OnValidate() => Apply();
@@ -84,10 +70,6 @@ public class ToonStyle : MonoBehaviour
         Shader.SetGlobalFloat(ShadowSaturationId, shadowSaturation);
         Shader.SetGlobalFloat(SpecMinSmoothnessId, specularMinSmoothness);
         Shader.SetGlobalFloat(OutlineFadeDistanceId, outlineFadeDistance);
-        Shader.SetGlobalFloat(OutlineCreaseId, outlineCrease);
-        Shader.SetGlobalColor(RimColorId, rimColor);
-        Shader.SetGlobalFloat(RimWidthId, rimWidth);
-        Shader.SetGlobalFloat(RimLitOnlyId, rimLitOnly);
         Shader.SetGlobalFloat(AmbientId, ambient);
         Shader.SetGlobalFloat(SpecSizeId, specularSize);
         Shader.SetGlobalFloat(SpecStrengthId, specularStrength);
