@@ -1553,17 +1553,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ToonStyle
   threshold: 0.1
   softness: 0.02
-  shadowColor: {r: 0.55, g: 0.5, b: 0.65, a: 1}
+  shadowColor: {r: 0.5, g: 0.52, b: 0.75, a: 1}
   shadowSaturation: 0.5
   ambient: 0.35
   specularSize: 0.05
   specularStrength: 0.4
   specularMinSmoothness: 0.6
+  rimColor: {r: 1, g: 0.95, b: 0.85, a: 0.35}
+  rimWidth: 0.2
+  rimLitOnly: 0.7
   outlineColor: {r: 0.3, g: 0.25, b: 0.3, a: 1}
   outlineWidth: 1
   outlineFadeDistance: 40
   outlineDepth: 0.1
   outlineNormal: 0.6
+  outlineCrease: 0.4
 --- !u!4 &730291125
 Transform:
   m_ObjectHideFlags: 0
