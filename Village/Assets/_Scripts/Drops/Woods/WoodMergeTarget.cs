@@ -122,7 +122,7 @@ public class WoodMergeTarget
     // WASD bir basışta bir adım. Bağlantı yerleri mantıksal ızgarada: sütun = yan (tepe ayrı sütun), satır = yükseklik.
     // W / S: aynı yanda bir üst / alt kat (kat atlamaz; o katta yan odun varsa yer o odunun ucudur); en üst kattan W tepeye
     // çıkar, tepeden S en son bulunulan yanın (yoksa en yakın yanın) en üst katına iner. A / D: karşı tarafa doğru basınca aynı
-    // katta karşı yan (doluysa karşı yanda yukarı doğru, o da yoksa tepe), kendi tarafına doğru basınca W / S gibi.
+    // katta karşı yan (doluysa karşı yanda yukarı doğru, o da yoksa tepe), kendi tarafına doğru basınca hiçbir şey.
     private int StepWithKeys(int index)
     {
         Vector2 input = InputManager.MovementVectorNormalized();
@@ -156,8 +156,8 @@ public class WoodMergeTarget
         }
 
         // A / D (ekrana göre yönlü): karşı tarafa doğru basınca bulunduğu katta karşı yana; orası doluysa karşı yanda bir üst
-        // kattan yukarı doğru; o da yoksa tepe; o da yoksa bir şey yapma. Kendi tarafına doğru basınca W / S gibi (önce
-        // yukarı, olmazsa aşağı). Tepedeyken: A ekranda soldaki, D sağdaki yanın en üst katına.
+        // kattan yukarı doğru; o da yoksa tepe; o da yoksa bir şey yapma. Kendi tarafına doğru basınca hiçbir şey yapma.
+        // Tepedeyken: A ekranda soldaki, D sağdaki yanın en üst katına.
         if (column < 0)
         {
             Camera camera = Camera.main;
@@ -174,13 +174,9 @@ public class WoodMergeTarget
             return best >= 0 ? best : index;
         }
 
-        // Kendi tarafına doğru (soldayken A, sağdayken D): W / S gibi, önce yukarı, olmazsa aşağı
+        // Kendi tarafına doğru (soldayken A, sağdayken D): hiçbir şey yapma (yukarı / aşağı sadece W / S ile)
         float side = Camera.main.WorldToScreenPoint(snapPoints[index].Position).x - Camera.main.WorldToScreenPoint(FocusPoint).x;
-        if (side * input.x > 0f)
-        {
-            int moved = VerticalStep(index, column, row, 1);
-            return moved != index ? moved : VerticalStep(index, column, row, -1);
-        }
+        if (side * input.x > 0f) return index;
 
         // Karşı tarafa doğru: aynı katta karşı yan
         int opposite = (column + 2) % WoodLayout.SideCount;
