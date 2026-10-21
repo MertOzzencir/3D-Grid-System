@@ -37,9 +37,10 @@ public class WoodMergeTarget
     }
     private SnapPointSelector snapSelector;
 
-    // Yapışma: ilk bağlantı yeri mouse'a en yakın olan, sonrası WASD ile (mouse seçimi değiştirmez); mouse yapıştığı
-    // andaki yerinden TargetReleasePixels uzaklaşınca bırakılır
+    // Yapışma: ilk bağlantı yeri ana odunun tepesi (yoksa mouse'a en yakın olan), sonrası WASD ile (mouse seçimi
+    // değiştirmez); mouse yapıştığı andaki yerinden TargetReleasePixels uzaklaşınca bırakılır
     private int lockedId = -1;
+    private int lastSideColumn = -1; // en son bulunulan yan (tepeden S ile oraya inilir)
     private Vector3 attachMouse;
     private Vector2 lastInput;
 
@@ -81,13 +82,22 @@ public class WoodMergeTarget
         }
         else
         {
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if (!SnapSelector.UpdateSelection(snapPoints, ray))
+            int top = snapPoints.FindIndex(p => p.Layer == WoodSlot.Top.ToId());
+            if (top >= 0)
             {
-                if (Active == this) Active = null;
-                lockedId = -1;
-                return default;
+                SnapSelector.Select(snapPoints, top); // hep ana odunun tepesinden (uzunlamasına) başlar
             }
+            else
+            {
+                Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+                if (!SnapSelector.UpdateSelection(snapPoints, ray))
+                {
+                    if (Active == this) Active = null;
+                    lockedId = -1;
+                    return default;
+                }
+            }
+            lastSideColumn = -1;
             attachMouse = Input.mousePosition;
             lastInput = InputManager.MovementVectorNormalized(); // basılı tuş hemen kaydırmasın
         }
@@ -109,7 +119,10 @@ public class WoodMergeTarget
         return moved.magnitude <= WoodMerger.Instance.TargetReleasePixels;
     }
 
-    // WASD (kameraya göre: A/D ekranda sol/sağ, W/S yukarı/aşağı) bir basışta o yöndeki en yakın bağlantı yerine geçer
+    // WASD bir basışta bir adım. Bağlantı yerleri mantıksal ızgarada: sütun = yan (tepe ayrı sütun), satır = yükseklik.
+    // W / S: aynı yanda bir üst / alt kat (kat atlamaz; o katta yan odun varsa yer o odunun ucudur); en üst kattan W tepeye
+    // çıkar, tepeden S en son bulunulan yanın (yoksa en yakın yanın) en üst katına iner. A / D: ekranda o yöndeki bir
+    // sonraki yan, aynı yükseklikte (yoksa en yakın kat).
     private int StepWithKeys(int index)
     {
         Vector2 input = InputManager.MovementVectorNormalized();
@@ -117,27 +130,82 @@ public class WoodMergeTarget
         lastInput = input;
         if (!pressed) return index;
 
+        Slot(index, out int column, out int row);
+        if (column >= 0) lastSideColumn = column;
+
+        if (Mathf.Abs(input.y) >= Mathf.Abs(input.x))
+        {
+            int up = input.y > 0f ? 1 : -1;
+            if (column < 0) // tepeden aşağı
+            {
+                if (up > 0) return index;
+                int best = -1, bestRow = int.MinValue;
+                foreach (int candidate in new[] { lastSideColumn, -2 })
+                {
+                    for (int i = 0; i < snapPoints.Count; i++)
+                    {
+                        Slot(i, out int c, out int r);
+                        if (c < 0 || (candidate >= 0 && c != candidate)) continue;
+                        if (r > bestRow) { bestRow = r; best = i; }
+                    }
+                    if (best >= 0) return best;
+                }
+                return index;
+            }
+            // Aynı yanda bir sonraki kat (en yakın)
+            int next = -1, nextDistance = int.MaxValue;
+            for (int i = 0; i < snapPoints.Count; i++)
+            {
+                Slot(i, out int c, out int r);
+                int distance = (r - row) * up;
+                if (c == column && distance > 0 && distance < nextDistance) { nextDistance = distance; next = i; }
+            }
+            if (next >= 0) return next;
+            if (up > 0) // en üst kattan tepeye
+            {
+                int top = snapPoints.FindIndex(p => p.Layer == WoodSlot.Top.ToId());
+                if (top >= 0) return top;
+            }
+            return index;
+        }
+
+        // A / D: ekranda o yöndeki en yakın başka yan (tepe ortada sayılır), o yanda aynı yüksekliğe en yakın kat
         Camera camera = Camera.main;
-        Vector2 from = camera.WorldToScreenPoint(snapPoints[index].Position);
-        Vector2 direction = input.normalized;
-        int best = index;
-        float bestScore = float.MaxValue;
+        float x = camera.WorldToScreenPoint(snapPoints[index].Position).x;
+        float direction = input.x > 0f ? 1f : -1f;
+        int bestColumn = int.MinValue;
+        float bestDx = float.MaxValue;
         for (int i = 0; i < snapPoints.Count; i++)
         {
-            if (i == index) continue;
-            Vector2 delta = (Vector2)camera.WorldToScreenPoint(snapPoints[i].Position) - from;
-            float along = Vector2.Dot(delta, direction);
-            if (along <= 1f) continue; // o yönde değil
-            float sideways = Mathf.Abs(delta.x * direction.y - delta.y * direction.x);
-            if (sideways > along * 1.5f) continue; // çok yanda
-            float score = along + sideways * 2f; // yöne yakın ve yakın olan
-            if (score < bestScore)
-            {
-                bestScore = score;
-                best = i;
-            }
+            Slot(i, out int c, out _);
+            if (c == column) continue;
+            float dx = (camera.WorldToScreenPoint(snapPoints[i].Position).x - x) * direction;
+            if (dx > 1f && dx < bestDx) { bestDx = dx; bestColumn = c; }
         }
-        return best;
+        if (bestColumn == int.MinValue) return index;
+        int chosen = index, chosenGap = int.MaxValue;
+        for (int i = 0; i < snapPoints.Count; i++)
+        {
+            Slot(i, out int c, out int r);
+            if (c != bestColumn) continue;
+            int gap = Mathf.Abs(r - row);
+            if (gap < chosenGap) { chosenGap = gap; chosen = i; }
+        }
+        return chosen;
+    }
+
+    // Bağlantı yerinin sütunu (yan; tepe -1) ve satırı (yüksekliği)
+    private void Slot(int index, out int column, out int row)
+    {
+        WoodSlot slot = WoodSlot.FromId(snapPoints[index].Layer);
+        if (slot.IsTop)
+        {
+            column = -1;
+            row = stack.BaseLength;
+            return;
+        }
+        column = (int)slot.Side;
+        row = WoodLayout.SideRow(stack.BaseLength, slot.Layer);
     }
 
     public Quaternion GetToolTargetRotation()
