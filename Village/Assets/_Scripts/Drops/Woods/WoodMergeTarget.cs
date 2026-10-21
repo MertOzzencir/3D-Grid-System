@@ -121,8 +121,8 @@ public class WoodMergeTarget
 
     // WASD bir basışta bir adım. Bağlantı yerleri mantıksal ızgarada: sütun = yan (tepe ayrı sütun), satır = yükseklik.
     // W / S: aynı yanda bir üst / alt kat (kat atlamaz; o katta yan odun varsa yer o odunun ucudur); en üst kattan W tepeye
-    // çıkar, tepeden S en son bulunulan yanın (yoksa en yakın yanın) en üst katına iner. A / D: aynı katta karşı yan (doluysa
-    // karşı yanda yukarı doğru, o da yoksa tepe).
+    // çıkar, tepeden S en son bulunulan yanın (yoksa en yakın yanın) en üst katına iner. A / D: karşı tarafa doğru basınca aynı
+    // katta karşı yan (doluysa karşı yanda yukarı doğru, o da yoksa tepe), kendi tarafına doğru basınca W / S gibi.
     private int StepWithKeys(int index)
     {
         Vector2 input = InputManager.MovementVectorNormalized();
@@ -152,25 +152,12 @@ public class WoodMergeTarget
                 }
                 return index;
             }
-            // Aynı yanda bir sonraki kat (en yakın)
-            int next = -1, nextDistance = int.MaxValue;
-            for (int i = 0; i < snapPoints.Count; i++)
-            {
-                Slot(i, out int c, out int r);
-                int distance = (r - row) * up;
-                if (c == column && distance > 0 && distance < nextDistance) { nextDistance = distance; next = i; }
-            }
-            if (next >= 0) return next;
-            if (up > 0) // en üst kattan tepeye
-            {
-                int top = snapPoints.FindIndex(p => p.Layer == WoodSlot.Top.ToId());
-                if (top >= 0) return top;
-            }
-            return index;
+            return VerticalStep(index, column, row, up);
         }
 
-        // A / D: bulunduğu katta karşı yana; orası doluysa karşı yanda bir üst kattan yukarı doğru; o da yoksa tepe; o da
-        // yoksa bir şey yapma. Tepedeyken: A ekranda soldaki, D sağdaki yanın en üst katına.
+        // A / D (ekrana göre yönlü): karşı tarafa doğru basınca bulunduğu katta karşı yana; orası doluysa karşı yanda bir üst
+        // kattan yukarı doğru; o da yoksa tepe; o da yoksa bir şey yapma. Kendi tarafına doğru basınca W / S gibi (önce
+        // yukarı, olmazsa aşağı). Tepedeyken: A ekranda soldaki, D sağdaki yanın en üst katına.
         if (column < 0)
         {
             Camera camera = Camera.main;
@@ -187,6 +174,15 @@ public class WoodMergeTarget
             return best >= 0 ? best : index;
         }
 
+        // Kendi tarafına doğru (soldayken A, sağdayken D): W / S gibi, önce yukarı, olmazsa aşağı
+        float side = Camera.main.WorldToScreenPoint(snapPoints[index].Position).x - Camera.main.WorldToScreenPoint(FocusPoint).x;
+        if (side * input.x > 0f)
+        {
+            int moved = VerticalStep(index, column, row, 1);
+            return moved != index ? moved : VerticalStep(index, column, row, -1);
+        }
+
+        // Karşı tarafa doğru: aynı katta karşı yan
         int opposite = (column + 2) % WoodLayout.SideCount;
         int found = -1, foundRow = int.MaxValue;
         for (int i = 0; i < snapPoints.Count; i++)
@@ -197,6 +193,25 @@ public class WoodMergeTarget
         if (found >= 0) return found;
         int topIndex = snapPoints.FindIndex(p => p.Layer == WoodSlot.Top.ToId());
         return topIndex >= 0 ? topIndex : index;
+    }
+
+    // Aynı yanda bir sonraki kat (en yakın, kat atlamaz); en üst kattan yukarı tepeye
+    private int VerticalStep(int index, int column, int row, int up)
+    {
+        int next = -1, nextDistance = int.MaxValue;
+        for (int i = 0; i < snapPoints.Count; i++)
+        {
+            Slot(i, out int c, out int r);
+            int distance = (r - row) * up;
+            if (c == column && distance > 0 && distance < nextDistance) { nextDistance = distance; next = i; }
+        }
+        if (next >= 0) return next;
+        if (up > 0)
+        {
+            int top = snapPoints.FindIndex(p => p.Layer == WoodSlot.Top.ToId());
+            if (top >= 0) return top;
+        }
+        return index;
     }
 
     // Bağlantı yerinin sütunu (yan; tepe -1) ve satırı (yüksekliği)
