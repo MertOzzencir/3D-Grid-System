@@ -7,29 +7,42 @@ using UnityEngine;
 // Sıra önemli: bir 90° dönüş (Deg0 → Deg90) forward'daki parçayı right'a taşır, yani F→R→B→L.
 public enum WoodSide { Forward = 0, Right = 1, Back = 2, Left = 3 }
 
-// Odunun bir bağlantı yeri: tepe (uzatır) ya da bir yandaki katman.
+// Odunun bir bağlantı yeri: tepe (uzatır), bir yandaki katman ya da yandaki odunun dış ucu (o yan odunu uzatır).
 // Yan katmanlar yukarıdan aşağı numaralanır: katman 1 en üst hücre, katman L en alt hücre.
 public readonly struct WoodSlot
 {
     private const int MaxLayers = 64;
 
     public readonly bool IsTop;
+    public readonly bool IsEnd; // yandaki (Side, Layer) odunun dış ucu
     public readonly WoodSide Side;
     public readonly int Layer;
 
-    public static WoodSlot Top => new WoodSlot(true, default, 0);
-    public static WoodSlot At(WoodSide side, int layer) => new WoodSlot(false, side, layer);
+    public static WoodSlot Top => new WoodSlot(true, false, default, 0);
+    public static WoodSlot At(WoodSide side, int layer) => new WoodSlot(false, false, side, layer);
+    public static WoodSlot EndOf(WoodSide side, int layer) => new WoodSlot(false, true, side, layer);
 
-    private WoodSlot(bool isTop, WoodSide side, int layer)
+    private WoodSlot(bool isTop, bool isEnd, WoodSide side, int layer)
     {
         IsTop = isTop;
+        IsEnd = isEnd;
         Side = side;
         Layer = layer;
     }
 
-    // SnapPoint'e tek bir sayı olarak koyup geri okumak için
-    public int ToId() => IsTop ? 0 : 1 + (int)Side * MaxLayers + (Layer - 1);
-    public static WoodSlot FromId(int id) => id == 0 ? Top : At((WoodSide)((id - 1) / MaxLayers), (id - 1) % MaxLayers + 1);
+    // SnapPoint'e tek bir sayı olarak koyup geri okumak için (uçlar katmanlardan sonra)
+    public int ToId() => IsTop ? 0 : 1 + (IsEnd ? WoodLayout.SideCount * MaxLayers : 0) + (int)Side * MaxLayers + (Layer - 1);
+
+    public static WoodSlot FromId(int id)
+    {
+        if (id == 0) return Top;
+        int rest = id - 1;
+        bool end = rest >= WoodLayout.SideCount * MaxLayers;
+        if (end) rest -= WoodLayout.SideCount * MaxLayers;
+        var side = (WoodSide)(rest / MaxLayers);
+        int layer = rest % MaxLayers + 1;
+        return end ? EndOf(side, layer) : At(side, layer);
+    }
 }
 
 // Odun katmanlarının geometrisi ve şekil kuralları. Hepsi ana odunun pivot'una (alt hücresi) göre, döndürülmemiş.
@@ -130,6 +143,33 @@ public static class WoodLayout
         else
             result.Add(addedLength);
         return result.ToArray();
+    }
+
+    // Yan odunların parçaları: segs[yan][katman - 1] = o yan odunun parçaları (içten dışa) ya da null (tek parça / boş)
+    public static int[][][] CopySideSegments(IWoodStack stack)
+    {
+        var segs = new int[SideCount][][];
+        for (int s = 0; s < SideCount; s++)
+        {
+            segs[s] = new int[stack.BaseLength][];
+            for (int layer = 1; layer <= stack.BaseLength; layer++)
+                segs[s][layer - 1] = stack.SideSegments((WoodSide)s, layer);
+        }
+        return segs;
+    }
+
+    // Tepeye odun eklenince katman numaraları kayar (yan odunlar aynı yükseklikte kalır), parçaları da onlarla
+    public static int[][][] SideSegmentsAfterTopMerge(IWoodStack stack, int addedLength)
+    {
+        int[][][] old = CopySideSegments(stack);
+        var segs = new int[SideCount][][];
+        for (int s = 0; s < SideCount; s++)
+        {
+            segs[s] = new int[stack.BaseLength + addedLength][];
+            for (int layer = 1; layer <= stack.BaseLength; layer++)
+                segs[s][layer + addedLength - 1] = old[s][layer - 1];
+        }
+        return segs;
     }
 
     public static int[][] SidesAfterTopMerge(IWoodStack stack, int addedLength)

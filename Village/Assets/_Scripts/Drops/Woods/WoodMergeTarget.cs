@@ -137,6 +137,15 @@ public class WoodMergeTarget
             for (int layer = 1; layer <= baseLength; layer++)
                 if (stack.PieceAt(side, layer) == 0)
                     TryAddSnapPoint(WoodSlot.At(side, layer), baseLength, carried.Length, result);
+
+        // Yan odunların dış uçları (dört yan): toplam boy WoodLayout.MaxBaseLength'i geçmesin
+        for (int s = 0; s < WoodLayout.SideCount; s++)
+            for (int layer = 1; layer <= baseLength; layer++)
+            {
+                int length = stack.PieceAt((WoodSide)s, layer);
+                if (length > 0 && length + carried.Length <= WoodLayout.MaxBaseLength)
+                    TryAddEndSnapPoint((WoodSide)s, layer, baseLength, length, carried.Length, result);
+            }
     }
 
     // Kameraya en çok bakan yan "ön" sayılır.
@@ -205,6 +214,25 @@ public class WoodMergeTarget
             cells.Add(owner.OriginWorldPosition + GridMaskRotator.RotateOffset(cell, owner.Rotation));
         candidateCells.Add(cells.ToArray());
         candidateDirections.Add(slot.IsTop ? Vector3Int.up : GridMaskRotator.RotateOffset(WoodLayout.SideDirection(slot.Side), owner.Rotation));
+    }
+
+    // Yan odunun ucu: eklenen odun o yan odunun devamında, aynı dönüşle
+    private void TryAddEndSnapPoint(WoodSide side, int layer, int baseLength, int length, int pieceLength, List<SnapPoint> result)
+    {
+        WoodSlot pieceSlot = WoodSlot.At(side, layer);
+        Vector3Int outward = WoodLayout.SideDirection(side);
+        Vector3Int startLocal = WoodLayout.PieceStart(baseLength, pieceSlot) + outward * length;
+        var cells = new List<Vector3Int>();
+        for (int i = 0; i < pieceLength; i++)
+        {
+            Vector3Int world = owner.OriginWorldPosition + GridMaskRotator.RotateOffset(startLocal + outward * i, owner.Rotation);
+            if (!GridManager.Instance.IsPlaceableCellFree(world)) return;
+            cells.Add(world);
+        }
+        Quaternion rotation = owner.GridRotation * WoodLayout.PieceRotation(pieceSlot);
+        result.Add(new SnapPoint(WoodSlot.EndOf(side, layer).ToId(), cells[0], rotation));
+        candidateCells.Add(cells.ToArray());
+        candidateDirections.Add(GridMaskRotator.RotateOffset(outward, owner.Rotation));
     }
 
     private bool ArePieceCellsFree(int baseLength, WoodSlot slot, int pieceLength)

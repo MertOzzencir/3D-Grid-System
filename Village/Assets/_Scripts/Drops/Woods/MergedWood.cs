@@ -11,6 +11,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     private class Side
     {
         public int[] layers; // [katman - 1] = o katmandaki odunun uzunluğu, 0 = boş
+        public string[] segments; // [katman - 1] = o odunun parçaları "3,2" (içten dışa); boş = tek parça (eski kayıtta yok)
     }
 
     // Kayıttaki durumu: prefab'ı boş, görseli bu değerlerden yeniden kurulur
@@ -66,6 +67,35 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         return result;
     }
 
+    public int[] SideSegments(WoodSide side, int layer)
+    {
+        int s = (int)side;
+        if (s >= sides.Length || sides[s]?.segments == null || layer < 1 || layer > sides[s].segments.Length) return null;
+        return ParseSegments(sides[s].segments[layer - 1]);
+    }
+
+    private static int[] ParseSegments(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return null;
+        string[] parts = text.Split(',');
+        var result = new int[parts.Length];
+        for (int i = 0; i < parts.Length; i++)
+            if (!int.TryParse(parts[i], out result[i])) return null;
+        return result;
+    }
+
+    // Yan odunun parçaları: kayıtlı ve toplamı uzunluğa eşitse o, yoksa doğal modellerden
+    private static int[] SegmentsFor(int[] stored, int length)
+    {
+        if (stored != null)
+        {
+            int sum = 0;
+            foreach (int segment in stored) sum += segment;
+            if (sum == length) return stored;
+        }
+        return WoodLayout.DefaultSegments(length);
+    }
+
     public int PieceAt(WoodSide side, int layer)
     {
         int s = (int)side;
@@ -103,13 +133,23 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
 
     // sides: WoodLayout.EmptySides biçiminde, [yan][katman - 1] = uzunluk (0 = boş)
     // segments: ana odunun parçaları, aşağıdan yukarı (toplamı baseLength); null ise doğal modellerden
-    public void Build(int baseLength, int[][] sides, WoodCatalogSO catalog, int[] segments = null)
+    // sideSegments: [yan][katman - 1] = yan odunun parçaları (içten dışa) ya da null (doğal modellerden)
+    public void Build(int baseLength, int[][] sides, WoodCatalogSO catalog, int[] segments = null, int[][][] sideSegments = null)
     {
         this.baseLength = baseLength;
         this.segments = segments != null && segments.Length > 0 ? (int[])segments.Clone() : WoodLayout.DefaultSegments(baseLength);
         this.sides = new Side[WoodLayout.SideCount];
         for (int s = 0; s < WoodLayout.SideCount; s++)
-            this.sides[s] = new Side { layers = (int[])sides[s].Clone() };
+        {
+            this.sides[s] = new Side { layers = (int[])sides[s].Clone(), segments = new string[sides[s].Length] };
+            for (int layer = 1; layer <= sides[s].Length; layer++)
+            {
+                int[] stored = sideSegments != null && s < sideSegments.Length && sideSegments[s] != null && layer <= sideSegments[s].Length
+                    ? sideSegments[s][layer - 1] : null;
+                if (sides[s][layer - 1] > 0 && stored != null && stored.Length > 1)
+                    this.sides[s].segments[layer - 1] = string.Join(",", SegmentsFor(stored, sides[s][layer - 1]));
+            }
+        }
         footprints = null;
         signature = null;
 
@@ -134,9 +174,24 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         }
         foreach ((WoodSlot slot, int length) in FilledSlots())
         {
-            GameObject visual = AddPiece(catalog.GetWood(length), WoodLayout.PieceStart(baseLength, slot), WoodLayout.PieceRotation(slot), length);
+            // Yan odun parçalardan (içten dışa); parçaların ek yerleri de ipe bağlanır
+            Vector3Int start = WoodLayout.PieceStart(baseLength, slot);
+            Vector3Int outward = WoodLayout.SideDirection(slot.Side);
+            GameObject visual = null;
+            int offset = 0;
+            foreach (int segment in SegmentsFor(SideSegments(slot.Side, slot.Layer), length))
+            {
+                GameObject segmentVisual = AddPiece(catalog.GetWood(segment), start + outward * offset, WoodLayout.PieceRotation(slot), segment);
+                if (segmentVisual != null)
+                {
+                    visual ??= segmentVisual;
+                    sideRenderers[(int)slot.Side].AddRange(segmentVisual.GetComponentsInChildren<Renderer>());
+                }
+                if (offset > 0)
+                    ropeFaces.Add(new WoodRope.Face { center = start + (Vector3)outward * (offset - 0.5f), normal = outward, up = Vector3.up });
+                offset += segment;
+            }
             if (visual == null) continue;
-            sideRenderers[(int)slot.Side].AddRange(visual.GetComponentsInChildren<Renderer>());
 
             // Ana odunla değdiği yüz (ip buraya)
             Vector3 direction = WoodLayout.SideDirection(slot.Side);
@@ -263,12 +318,21 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     {
         State loaded = JsonUtility.FromJson<State>(state);
         int[][] loadedSides = WoodLayout.EmptySides(loaded.baseLength);
+        var loadedSegments = new int[WoodLayout.SideCount][][];
 
         if (loaded.sides != null && loaded.sides.Length == WoodLayout.SideCount)
         {
             for (int s = 0; s < WoodLayout.SideCount; s++)
+            {
                 if (loaded.sides[s]?.layers != null)
                     Array.Copy(loaded.sides[s].layers, loadedSides[s], Mathf.Min(loaded.sides[s].layers.Length, loaded.baseLength));
+                if (loaded.sides[s]?.segments != null)
+                {
+                    loadedSegments[s] = new int[loaded.baseLength][];
+                    for (int layer = 1; layer <= Mathf.Min(loaded.sides[s].segments.Length, loaded.baseLength); layer++)
+                        loadedSegments[s][layer - 1] = ParseSegments(loaded.sides[s].segments[layer - 1]);
+                }
+            }
         }
         else if (loaded.layers != null)
         {
@@ -277,7 +341,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
                 loadedSides[(int)WoodSide.Right][layer - 1] = loaded.layers[layer];
         }
 
-        Build(loaded.baseLength, loadedSides, WoodMerger.Instance.Catalog, loaded.segments);
+        Build(loaded.baseLength, loadedSides, WoodMerger.Instance.Catalog, loaded.segments, loadedSegments);
     }
 
     // --- IToolTarget: boş bir katmana tek parça odun getirildiğinde ---

@@ -53,16 +53,29 @@ public class WoodMerger : MonoBehaviour
         int baseLength = stack.BaseLength;
         int[] segments = stack.BaseSegments;
         int[][] sides;
+        int[][][] sideSegments;
 
         if (slot.IsTop)
         {
             baseLength += carried.Length;
             sides = WoodLayout.SidesAfterTopMerge(stack, carried.Length);
+            sideSegments = WoodLayout.SideSegmentsAfterTopMerge(stack, carried.Length);
             segments = WoodLayout.SegmentsAfterTopMerge(segments, carried.Length, catalog);
+        }
+        else if (slot.IsEnd)
+        {
+            // Yan odunun ucuna: o yan odun uzar (tepedeki gibi: 3'ü geçmiyorsa doğal model, geçiyorsa iple bağlı parça)
+            sides = WoodLayout.CopySides(stack);
+            sideSegments = WoodLayout.CopySideSegments(stack);
+            int length = sides[(int)slot.Side][slot.Layer - 1];
+            int[] old = sideSegments[(int)slot.Side][slot.Layer - 1] ?? new[] { length };
+            sideSegments[(int)slot.Side][slot.Layer - 1] = WoodLayout.SegmentsAfterTopMerge(old, carried.Length, catalog);
+            sides[(int)slot.Side][slot.Layer - 1] = length + carried.Length;
         }
         else
         {
             sides = WoodLayout.CopySides(stack);
+            sideSegments = WoodLayout.CopySideSegments(stack);
             sides[(int)slot.Side][slot.Layer - 1] = carried.Length;
         }
 
@@ -77,7 +90,7 @@ public class WoodMerger : MonoBehaviour
         // Yanlarda hiç odun yoksa ve ana odun tek parçaysa sonuç sıradan (tek parça) bir odun
         GridPlaceable result = WoodLayout.IsEmpty(sides) && segments.Length == 1
             ? SpawnLongWood(baseLength)
-            : SpawnMergedWood(baseLength, sides, segments);
+            : SpawnMergedWood(baseLength, sides, segments, sideSegments);
 
         result.Rotation = rotation;
         if (!GridManager.Instance.PlaceablePlaceOn(result, position))
@@ -110,7 +123,7 @@ public class WoodMerger : MonoBehaviour
         return wood;
     }
 
-    private GridPlaceable SpawnMergedWood(int baseLength, int[][] sides, int[] segments)
+    private GridPlaceable SpawnMergedWood(int baseLength, int[][] sides, int[] segments, int[][][] sideSegments)
     {
         MergedWood merged;
         if (mergedWoodPrefab != null)
@@ -124,7 +137,7 @@ public class WoodMerger : MonoBehaviour
         }
 
         merged.name = $"MergedWood {baseLength}BR";
-        merged.Build(baseLength, sides, catalog, segments);
+        merged.Build(baseLength, sides, catalog, segments, sideSegments);
         return merged;
     }
 }

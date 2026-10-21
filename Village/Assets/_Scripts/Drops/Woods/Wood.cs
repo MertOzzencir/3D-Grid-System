@@ -15,6 +15,7 @@ public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiec
     public int BaseLength => Length;
     public int[] BaseSegments => new[] { Length };
     public int PieceAt(WoodSide side, int layer) => 0;
+    public int[] SideSegments(WoodSide side, int layer) => null;
     public Renderer[] PieceRenderers(WoodSide side) => System.Array.Empty<Renderer>();
 
     private GridDragMotor drag;

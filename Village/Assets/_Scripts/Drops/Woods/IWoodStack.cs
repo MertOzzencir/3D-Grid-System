@@ -13,6 +13,9 @@ public interface IWoodStack
     // O yandaki katmanda duran odunun uzunluğu, 0 = boş. layer: 1..BaseLength
     int PieceAt(WoodSide side, int layer);
 
+    // O yandaki odunun parçaları (içten dışa; 3BR'i geçen yan odun iple bağlanmış parçalardır); boş ya da kayıt yoksa null
+    int[] SideSegments(WoodSide side, int layer);
+
     // O yandaki yatık parçaların renderer'ları (örn. kamerayı kapatınca saydamlaştırmak için); yoksa boş dizi
     Renderer[] PieceRenderers(WoodSide side);
 }
