@@ -1,12 +1,13 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Sabah ışık huzmeleri (godlight): güneşin geldiği yönden adaya eğik inen, yarı saydam, uçları sönen ışık şeritleri.
-// Gün saatine bağlı (DayCycle.Time01): şafakta belirir, gün doğumunda en güçlü, kuşlukta söner (strength eğrisi).
-// Huzmeler bu objenin çevresinde (area) rastgele yerlerde; her biri kendi hızında belirip kaybolur, kaybolunca başka
-// bir yerde yeniden doğar ve bu arada yavaşça kayar. Her huzme kendi ekseni etrafında kameraya döner (yassı şerit hep
-// geniş yüzüyle görünür), zemine doğru biraz genişler. Rengi güneşin o anki rengi; saydamlık / ton "Village/God Ray"
-// materyalinden (tint). Tek mesh, her kare yeniden kurulur. Objeyi adanın ortasına koy.
+// Sabah ışık huzmeleri: sabah pusunun (DayCycle) içinde, güneşin geldiği yönden adaya eğik inen az sayıda, geniş, çok
+// hafif ışık huzmesi. Gücü DayCycle.Morning (pusla aynı anda gelir, gider). Huzmeler kaybolmaz: sadece nefes alır gibi
+// parlaklıkları hafifçe oynar (breatheAmount) ve alanın içinde çok yavaş kayar (kenara gelince geri döner, sıçramaz).
+// Her huzme ekseni etrafında eşit aralıklı `planes` düzlemden kurulur; her düzlem kameraya baktığı kadar görünür (yandan
+// bakılan düzlem söner): hangi açıdan bakılırsa bakılsın hacimli görünür, ince çizgiye dönmez. İçindeki toz çizgileri ve
+// yumuşak kenarlar shader'da ("Village/God Ray"). Rengi güneşin o anki rengi × tint. Tek mesh, her kare kurulur.
+// Objeyi adanın ortasına koy.
 public class GodRays : MonoBehaviour
 {
     private struct Beam
@@ -14,46 +15,56 @@ public class GodRays : MonoBehaviour
         public Vector2 offset;   // objeye göre (x, z)
         public float width;
         public float length;
-        public float phase;      // 0..1 yaşam döngüsü
-        public float speed;      // döngü hızı çarpanı
+        public float phase;      // nefesin başlangıcı (0..1)
+        public float speed;      // nefes hızı çarpanı
         public Vector2 drift;    // kayma yönü
+        public float seed;       // toz desenini ayırır
     }
 
     [Tooltip("Village/God Ray. Referansla tutulur ki build'e girsin.")]
     [SerializeField] private Shader shader;
     [Tooltip("Boşsa RenderSettings.sun")]
     [SerializeField] private Light sun;
-    [Tooltip("Gün saatine göre güç (DayCycle: 0 gün doğumu, 0.25 öğle, ~0.95 şafak). DayCycle yoksa 1.")]
-    [SerializeField] private AnimationCurve strength = new AnimationCurve(
-        new Keyframe(0f, 1f), new Keyframe(0.08f, 0.7f), new Keyframe(0.15f, 0f), new Keyframe(0.93f, 0f), new Keyframe(1f, 1f));
-    [Tooltip("Huzmelerin tonu (güneşin rengiyle çarpılır). A: genel saydamlık.")]
-    [SerializeField] private Color tint = new Color(1f, 0.92f, 0.75f, 0.3f);
+    [Tooltip("Huzmelerin tonu (güneşin rengiyle çarpılır). A: genel saydamlık (çok düşük tut: üst üste binerler).")]
+    [SerializeField] private Color tint = new Color(1f, 0.92f, 0.75f, 0.12f);
 
     [Header("Huzmeler")]
-    [SerializeField, Range(1, 24)] private int count = 8;
+    [SerializeField, Range(1, 16)] private int count = 5;
+    [Tooltip("Bir huzmenin kaç düzlemden kurulduğu (çok = her açıdan daha dolgun)")]
+    [SerializeField, Range(1, 4)] private int planes = 3;
     [Tooltip("Huzmelerin indiği alan, objenin çevresinde (genişlik x, derinlik z)")]
     [SerializeField] private Vector2 area = new Vector2(14f, 14f);
     [Tooltip("Huzmelerin indiği yükseklik (dünya y): adanın üstü")]
     [SerializeField] private float groundHeight = 0.5f;
     [Tooltip("En (en az, en çok)")]
-    [SerializeField] private Vector2 width = new Vector2(0.6f, 1.8f);
+    [SerializeField] private Vector2 width = new Vector2(2.5f, 5f);
     [Tooltip("Boy (en az, en çok)")]
-    [SerializeField] private Vector2 length = new Vector2(8f, 14f);
+    [SerializeField] private Vector2 length = new Vector2(10f, 16f);
     [Tooltip("Zemine doğru genişleme (zemindeki en = en × bu)")]
-    [SerializeField] private float spread = 1.4f;
-    [Tooltip("Bir huzmenin belirip kaybolma süresi (saniye, ortalama)")]
-    [SerializeField] private float lifetime = 9f;
+    [SerializeField] private float spread = 1.5f;
+    [Tooltip("Nefes: parlaklığın ne kadar oynadığı (0 = sabit) ve bir nefesin süresi (saniye, ortalama)")]
+    [SerializeField, Range(0f, 1f)] private float breatheAmount = 0.35f;
+    [SerializeField] private float breathePeriod = 8f;
     [Tooltip("Kayma hızı (birim/saniye)")]
-    [SerializeField] private float driftSpeed = 0.15f;
+    [SerializeField] private float driftSpeed = 0.08f;
+
+    [Header("Görünüm (shader)")]
     [Tooltip("Zemine / objelere değdiği yerde yumuşak sönme mesafesi (birim)")]
-    [SerializeField] private float depthFade = 1f;
+    [SerializeField] private float depthFade = 1.5f;
+    [Tooltip("İçindeki toz çizgilerinin belirginliği (0 = düz ışık)")]
+    [SerializeField, Range(0f, 1f)] private float dustAmount = 0.5f;
+    [Tooltip("Toz çizgilerinin süzülme hızı")]
+    [SerializeField] private float dustSpeed = 0.04f;
 
     private static readonly int ColorId = Shader.PropertyToID("_Color");
     private static readonly int DepthFadeId = Shader.PropertyToID("_DepthFade");
+    private static readonly int DustAmountId = Shader.PropertyToID("_DustAmount");
+    private static readonly int DustSpeedId = Shader.PropertyToID("_DustSpeed");
 
     private readonly List<Beam> beams = new List<Beam>();
     private readonly List<Vector3> vertices = new List<Vector3>();
     private readonly List<Vector2> uvs = new List<Vector2>();
+    private readonly List<Vector2> seeds = new List<Vector2>();
     private readonly List<Color> colors = new List<Color>();
     private readonly List<int> triangles = new List<int>();
     private Mesh mesh;
@@ -84,46 +95,43 @@ public class GodRays : MonoBehaviour
 
         for (int i = 0; i < count; i++)
         {
-            Beam beam = NewBeam();
-            beam.phase = Random.value; // başta hepsi aynı anda doğmasın
-            beams.Add(beam);
+            float angle = Random.value * Mathf.PI * 2f;
+            beams.Add(new Beam
+            {
+                offset = new Vector2((Random.value - 0.5f) * area.x, (Random.value - 0.5f) * area.y),
+                width = Random.Range(width.x, width.y),
+                length = Random.Range(length.x, length.y),
+                phase = Random.value,
+                speed = Random.Range(0.7f, 1.3f),
+                drift = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)),
+                seed = Random.value,
+            });
         }
-    }
-
-    private Beam NewBeam()
-    {
-        float angle = Random.value * Mathf.PI * 2f;
-        return new Beam
-        {
-            offset = new Vector2((Random.value - 0.5f) * area.x, (Random.value - 0.5f) * area.y),
-            width = Random.Range(width.x, width.y),
-            length = Random.Range(length.x, length.y),
-            phase = 0f,
-            speed = Random.Range(0.7f, 1.3f),
-            drift = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)),
-        };
     }
 
     private void Update()
     {
-        float power = DayCycle.Instance != null ? strength.Evaluate(DayCycle.Instance.Time01) : 1f;
+        float power = DayCycle.Instance != null ? DayCycle.Instance.Morning : 1f;
         bool visible = power > 0.001f && sun != null && Camera.main != null;
         meshRenderer.enabled = visible;
 
-        // Huzmeler görünmezken de yaşar (birden hepsi aynı yerde belirmesin)
+        // Kayma: alanın kenarına gelen huzme geri döner (sıçramaz)
         float dt = Time.deltaTime;
+        Vector2 half = area * 0.5f;
         for (int i = 0; i < beams.Count; i++)
         {
             Beam beam = beams[i];
-            beam.phase += dt * beam.speed / Mathf.Max(lifetime, 0.1f);
             beam.offset += beam.drift * (driftSpeed * dt);
-            if (beam.phase >= 1f) beam = NewBeam();
+            if (Mathf.Abs(beam.offset.x) > half.x) beam.drift.x = -Mathf.Sign(beam.offset.x) * Mathf.Abs(beam.drift.x);
+            if (Mathf.Abs(beam.offset.y) > half.y) beam.drift.y = -Mathf.Sign(beam.offset.y) * Mathf.Abs(beam.drift.y);
             beams[i] = beam;
         }
         if (!visible) return;
 
         material.SetColor(ColorId, tint);
         material.SetFloat(DepthFadeId, depthFade);
+        material.SetFloat(DustAmountId, dustAmount);
+        material.SetFloat(DustSpeedId, dustSpeed);
         Rebuild(power);
     }
 
@@ -131,39 +139,60 @@ public class GodRays : MonoBehaviour
     {
         vertices.Clear();
         uvs.Clear();
+        seeds.Clear();
         colors.Clear();
         triangles.Clear();
 
-        Vector3 down = sun.transform.forward; // ışığın gittiği yön
+        Vector3 axis = sun.transform.forward; // ışığın gittiği yön (güneşten zemine)
         Vector3 cameraPosition = Camera.main.transform.position;
         Color sunColor = sun.color;
         Transform holder = meshRenderer.transform;
+        // Eksene dik ilk yön; diğer düzlemler bunun eksen etrafında döndürülmüşü
+        Vector3 baseSide = Vector3.Cross(axis, Vector3.up);
+        if (baseSide.sqrMagnitude < 0.001f) baseSide = Vector3.right;
+        baseSide.Normalize();
+        float time = Time.time;
 
         foreach (Beam beam in beams)
         {
             Vector3 bottom = new Vector3(transform.position.x + beam.offset.x, groundHeight, transform.position.z + beam.offset.y);
-            Vector3 top = bottom - down * beam.length;
-            // Şerit kendi ekseni etrafında kameraya döner
-            Vector3 side = Vector3.Cross(down, cameraPosition - (top + bottom) * 0.5f).normalized * (beam.width * 0.5f);
-            float alpha = Mathf.Sin(Mathf.PI * beam.phase) * power;
-            var color = new Color(sunColor.r, sunColor.g, sunColor.b, alpha);
+            Vector3 top = bottom - axis * beam.length;
+            Vector3 view = (cameraPosition - (top + bottom) * 0.5f).normalized;
+            float breathe = 1f - breatheAmount * 0.5f * (1f + Mathf.Sin(2f * Mathf.PI * (time * beam.speed / Mathf.Max(breathePeriod, 0.1f) + beam.phase)));
 
-            int start = vertices.Count;
-            vertices.Add(holder.InverseTransformPoint(top - side));
-            vertices.Add(holder.InverseTransformPoint(top + side));
-            vertices.Add(holder.InverseTransformPoint(bottom - side * spread));
-            vertices.Add(holder.InverseTransformPoint(bottom + side * spread));
-            uvs.Add(new Vector2(0f, 0f));
-            uvs.Add(new Vector2(1f, 0f));
-            uvs.Add(new Vector2(0f, 1f));
-            uvs.Add(new Vector2(1f, 1f));
-            for (int k = 0; k < 4; k++) colors.Add(color);
-            triangles.AddRange(new[] { start, start + 1, start + 3, start, start + 3, start + 2 });
+            for (int k = 0; k < planes; k++)
+            {
+                Vector3 side = Quaternion.AngleAxis(180f * k / planes, axis) * baseSide;
+                Vector3 normal = Vector3.Cross(axis, side);
+                // Kameraya baktığı kadar görünür; düzlemlerin toplamı açıdan bağımsız olsun diye ortalanır
+                float facing = Vector3.Dot(normal, view);
+                float alpha = power * breathe * facing * facing * (planes > 1 ? 2f / planes : 1f);
+                Vector3 halfWidth = side * (beam.width * 0.5f);
+                var color = new Color(sunColor.r, sunColor.g, sunColor.b, alpha);
+                var seed = new Vector2(beam.seed + k * 0.37f, 0f);
+
+                int start = vertices.Count;
+                vertices.Add(holder.InverseTransformPoint(top - halfWidth));
+                vertices.Add(holder.InverseTransformPoint(top + halfWidth));
+                vertices.Add(holder.InverseTransformPoint(bottom - halfWidth * spread));
+                vertices.Add(holder.InverseTransformPoint(bottom + halfWidth * spread));
+                uvs.Add(new Vector2(0f, 0f));
+                uvs.Add(new Vector2(1f, 0f));
+                uvs.Add(new Vector2(0f, 1f));
+                uvs.Add(new Vector2(1f, 1f));
+                for (int v = 0; v < 4; v++)
+                {
+                    colors.Add(color);
+                    seeds.Add(seed);
+                }
+                triangles.AddRange(new[] { start, start + 1, start + 3, start, start + 3, start + 2 });
+            }
         }
 
         mesh.Clear();
         mesh.SetVertices(vertices);
         mesh.SetUVs(0, uvs);
+        mesh.SetUVs(1, seeds);
         mesh.SetColors(colors);
         mesh.SetTriangles(triangles, 0);
         mesh.RecalculateBounds();

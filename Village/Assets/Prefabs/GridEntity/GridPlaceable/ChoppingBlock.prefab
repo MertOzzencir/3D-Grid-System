@@ -56,7 +56,7 @@ MonoBehaviour:
     count: 2
   model: {fileID: 919132149155446097, guid: 0722114dd9c17ad489b550f35117ffcd, type: 3}
   placeholderColor: {r: 0.55, g: 0.38, b: 0.24, a: 1}
-  topHeight: 0
+  topHeight: 0.5
   jumpDuration: 0.35
   jumpHeight: 0.6
   hitsToSplit: 1
