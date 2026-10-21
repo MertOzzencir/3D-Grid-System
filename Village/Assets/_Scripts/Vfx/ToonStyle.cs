@@ -11,6 +11,9 @@ public class ToonStyle : MonoBehaviour
     private static readonly int ThresholdId = Shader.PropertyToID("_VillageToonThreshold");
     private static readonly int SoftnessId = Shader.PropertyToID("_VillageToonSoftness");
     private static readonly int ShadowColorId = Shader.PropertyToID("_VillageToonShadowColor");
+    private static readonly int ShadowSaturationId = Shader.PropertyToID("_VillageToonShadowSaturation");
+    private static readonly int SpecMinSmoothnessId = Shader.PropertyToID("_VillageToonSpecMinSmoothness");
+    private static readonly int OutlineFadeDistanceId = Shader.PropertyToID("_VillageOutlineFadeDistance");
     private static readonly int SpecSizeId = Shader.PropertyToID("_VillageToonSpecSize");
     private static readonly int SpecStrengthId = Shader.PropertyToID("_VillageToonSpecStrength");
     private static readonly int AmbientId = Shader.PropertyToID("_VillageToonAmbient");
@@ -24,22 +27,28 @@ public class ToonStyle : MonoBehaviour
     [SerializeField, Range(-1f, 1f)] private float threshold = 0.1f;
     [Tooltip("Aydınlık-gölge geçişinin genişliği. 0'a yakın = bıçak gibi keskin.")]
     [SerializeField, Range(0f, 0.5f)] private float softness = 0.02f;
-    [Tooltip("Gölgede yüzeyin rengi bununla çarpılır (siyaha yakın = koyu gölge; hafif mor / mavi gölgeye renk katar)")]
-    [SerializeField] private Color shadowColor = new Color(0.55f, 0.5f, 0.65f);
+    [Tooltip("Gölgede yüzeyin rengi bununla çarpılır (siyaha yakın = koyu gölge; hafif mor / mavi gölgenin tonunu kaydırır)")]
+    [SerializeField] private Color shadowColor = new Color(0.5f, 0.52f, 0.75f);
+    [Tooltip("Gölgede doygunluk artışı: 0 = sadece koyulaşır (kirli), büyüdükçe gölge canlı renkli olur")]
+    [SerializeField, Range(0f, 1.5f)] private float shadowSaturation = 0.5f;
     [Tooltip("Ortam ışığının (gökyüzü) payı: gölgeli tarafların ne kadar aydınlanacağı")]
     [SerializeField, Range(0f, 1.5f)] private float ambient = 0.35f;
 
     [Header("Parlama")]
     [Tooltip("Parlama lekesinin büyüklüğü (0 = yok)")]
     [SerializeField, Range(0f, 0.5f)] private float specularSize = 0.05f;
-    [Tooltip("Parlamanın gücü (materyalin Smoothness'ı ile çarpılır)")]
+    [Tooltip("Parlamanın gücü")]
     [SerializeField, Range(0f, 2f)] private float specularStrength = 0.4f;
+    [Tooltip("Sadece Smoothness'ı bundan büyük materyaller parlar (metal, ıslak). Çim, toprak, odun mat kalsın diye.")]
+    [SerializeField, Range(0f, 1f)] private float specularMinSmoothness = 0.6f;
 
     [Header("Kontur")]
     [Tooltip("Çizgi rengi = altındaki renk × bu (koyu = belirgin çizgi). A: çizginin gücü, 0 = kontur yok.")]
     [SerializeField] private Color outlineColor = new Color(0.3f, 0.25f, 0.3f, 1f);
-    [Tooltip("Çizgi kalınlığı (piksel)")]
+    [Tooltip("Çizgi kalınlığı (piksel, 1080p'de; ekran çözünürlüğüyle ölçeklenir, her çözünürlükte aynı görünür)")]
     [SerializeField, Range(0.5f, 4f)] private float outlineWidth = 1f;
+    [Tooltip("Bu uzaklıkta (birim) çizgi yarı kalınlığa iner: uzaktakiler incelir")]
+    [SerializeField, Range(5f, 100f)] private float outlineFadeDistance = 40f;
     [Tooltip("Dış hat hassasiyeti: derinlik farkı (kameraya uzaklığa oranla) bunu geçince çizgi. Küçük = daha çok çizgi.")]
     [SerializeField, Range(0.01f, 1f)] private float outlineDepth = 0.1f;
     [Tooltip("Köşe hassasiyeti: komşu yüzeylerin yön farkı (0-2) bunu geçince çizgi. Küçük = daha çok çizgi.")]
@@ -58,6 +67,9 @@ public class ToonStyle : MonoBehaviour
         Shader.SetGlobalFloat(ThresholdId, threshold);
         Shader.SetGlobalFloat(SoftnessId, softness);
         Shader.SetGlobalColor(ShadowColorId, shadowColor);
+        Shader.SetGlobalFloat(ShadowSaturationId, shadowSaturation);
+        Shader.SetGlobalFloat(SpecMinSmoothnessId, specularMinSmoothness);
+        Shader.SetGlobalFloat(OutlineFadeDistanceId, outlineFadeDistance);
         Shader.SetGlobalFloat(AmbientId, ambient);
         Shader.SetGlobalFloat(SpecSizeId, specularSize);
         Shader.SetGlobalFloat(SpecStrengthId, specularStrength);

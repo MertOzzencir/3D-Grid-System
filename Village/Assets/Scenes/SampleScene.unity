@@ -979,6 +979,7 @@ MonoBehaviour:
   speed: 25
   acceleration: 120
   followSharpness: 6
+  focusSharpness: 3
   rotationAngle: 90
   rotationSpeed: 400
   fallbackOrbitDistance: 10
@@ -1521,6 +1522,63 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 610817384}
   m_CullTransparentMesh: 1
+--- !u!1 &730291123
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730291125}
+  - component: {fileID: 730291124}
+  m_Layer: 0
+  m_Name: Toon Style
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &730291124
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730291123}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d7c8ee1eb727104985406271aeee132, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ToonStyle
+  threshold: 0.1
+  softness: 0.02
+  shadowColor: {r: 0.55, g: 0.5, b: 0.65, a: 1}
+  shadowSaturation: 0.5
+  ambient: 0.35
+  specularSize: 0.05
+  specularStrength: 0.4
+  specularMinSmoothness: 0.6
+  outlineColor: {r: 0.3, g: 0.25, b: 0.3, a: 1}
+  outlineWidth: 1
+  outlineFadeDistance: 40
+  outlineDepth: 0.1
+  outlineNormal: 0.6
+--- !u!4 &730291125
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730291123}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 15.94699, y: 0, z: 11.95637}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &749121992 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 2984795487404248383, guid: 80897ecfd66f6fe468307a6643299be8, type: 3}
@@ -2380,7 +2438,7 @@ MonoBehaviour:
   frontFade:
     visibleAmount: 0.3
     duration: 0.15
-  targetReleaseDistance: 3
+  targetReleasePixels: 150
   rope:
     enabled: 1
     material: {fileID: 0}
@@ -2408,7 +2466,14 @@ MonoBehaviour:
     edgeAlpha: 0.8
     lineWidth: 0.05
     fadePower: 1.5
+    selectedAlpha: 1
+    optionAlpha: 0.4
     fadeSpeed: 6
+  detachAxeOffset: {x: 0, y: 0.5, z: -1}
+  detachAxeRotation: {x: 45, y: 0, z: 0}
+  detachSearchRange: 3
+  detachHopDuration: 0.5
+  detachHopHeight: 1
 --- !u!4 &1126745012
 Transform:
   m_ObjectHideFlags: 0
@@ -5571,3 +5636,4 @@ SceneRoots:
   - {fileID: 212021607}
   - {fileID: 476046125}
   - {fileID: 1435347456}
+  - {fileID: 730291125}

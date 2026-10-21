@@ -2,9 +2,10 @@
 // ForwardLit fragment'ı LitPassFragment yerine ToonLitPassFragment'ı çağırır:
 //   _VillageToon = 0 (ToonStyle kapalı ya da sahnede yok) → birebir URP'nin LitPassFragment'ı (eski görünüm)
 //   _VillageToon = 1 → yüzey aynı (doku, renk, normal map), ışık sert geçişli: ışık eşikte birden gölgeye döner
-//   (_VillageToonThreshold, geçiş genişliği _VillageToonSoftness), gölgede albedo × _VillageToonShadowColor, parlama
-//   keskin kenarlı leke (_VillageToonSpecSize, _VillageToonSpecStrength × smoothness), ortam ışığı (SH) payı
-//   _VillageToonAmbient. Gerçek zamanlı gölgeler de aynı eşikle sertleşir. SSAO toon'da kullanılmaz (yumuşak leke yapar).
+//   (_VillageToonThreshold, geçiş genişliği _VillageToonSoftness), gölgede albedo × _VillageToonShadowColor ve doygunluğu
+//   artırılmış (_VillageToonShadowSaturation: gölge kirli griye değil canlı, tonu kaymış renge döner), parlama keskin
+//   kenarlı leke (_VillageToonSpecSize, _VillageToonSpecStrength; sadece smoothness'ı _VillageToonSpecMinSmoothness'tan
+//   büyük materyallerde: çim, toprak, odun mat kalır), ortam ışığı (SH) payı _VillageToonAmbient. Gerçek zamanlı gölgeler de aynı eşikle sertleşir. SSAO toon'da kullanılmaz (yumuşak leke yapar).
 // Ayarların hepsi global (materyal başına değil): ToonStyle bileşeni yazar.
 #ifndef VILLAGE_TOON_INCLUDED
 #define VILLAGE_TOON_INCLUDED
@@ -13,6 +14,8 @@ float _VillageToon;
 float _VillageToonThreshold;
 float _VillageToonSoftness;
 half4 _VillageToonShadowColor;
+float _VillageToonShadowSaturation;
+float _VillageToonSpecMinSmoothness;
 float _VillageToonSpecSize;
 float _VillageToonSpecStrength;
 float _VillageToonAmbient;
@@ -35,7 +38,16 @@ half3 ToonSpecular(Light light, InputData inputData, SurfaceData surfaceData, ha
 {
     half3 halfDir = SafeNormalize(light.direction + inputData.viewDirectionWS);
     half highlight = ToonStep(dot(inputData.normalWS, halfDir), 1.0 - _VillageToonSpecSize);
-    return light.color * (highlight * lit * _VillageToonSpecStrength * surfaceData.smoothness);
+    half glossy = smoothstep(_VillageToonSpecMinSmoothness, _VillageToonSpecMinSmoothness + 0.1, surfaceData.smoothness);
+    return light.color * (highlight * lit * glossy * _VillageToonSpecStrength);
+}
+
+// Gölgedeki renk: gölge rengiyle çarpılır, sonra doygunluğu artırılır (gri değerden uzaklaştırılır)
+half3 ToonShadowAlbedo(half3 albedo)
+{
+    half3 dark = albedo * _VillageToonShadowColor.rgb;
+    half luma = dot(dark, half3(0.299, 0.587, 0.114));
+    return max(0.0, lerp(luma.xxx, dark, 1.0 + _VillageToonShadowSaturation));
 }
 
 half4 ToonFragment(InputData inputData, SurfaceData surfaceData)
@@ -57,7 +69,7 @@ half4 ToonFragment(InputData inputData, SurfaceData surfaceData)
     {
         half lit = ToonLit(mainLight, inputData);
         half3 light = mainLight.color * mainLight.distanceAttenuation;
-        color += albedo * light * lerp(_VillageToonShadowColor.rgb, 1.0, lit);
+        color += light * lerp(ToonShadowAlbedo(albedo), albedo, lit);
         color += ToonSpecular(mainLight, inputData, surfaceData, lit) * mainLight.distanceAttenuation;
     }
 
