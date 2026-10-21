@@ -10,7 +10,7 @@ using UnityEngine;
 // Üstteki parça istasyonun çocuğu olur, collider'ları kapanır; yerine üstte 1×1×1 "Top" collider'ı (WorkstationTop)
 // açılır: aletler ve parçalar oraya hedeflenir, sağ tıkla tutulunca parça istasyondan alınır.
 // Tarifler Inspector'da: girdi SO → çıktı SO × adet. Çıktısı boş tarif: parça konur ama bölünmez. Üstteki parça kaydedilmez.
-// Görünüm: Model atanırsa o (pivot ayak izinin ilk hücresinin ortasında, prefab'ın pivotu gibi), yoksa alt sınıfın
+// Görünüm: Model atanırsa o (modelin pivotu ayak izinin ortasına konur: 2×2'de dört hücrenin ortası), yoksa alt sınıfın
 // kodla kurduğu geçici görünüm (prototip). Kökte collider yoksa görünümü saran kutu eklenir (tutulabilsin).
 public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTarget, IHoldTarget
 {
@@ -29,7 +29,8 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
     [SerializeField] private List<Recipe> recipes = new List<Recipe>();
 
     [Header("Görünüm")]
-    [Tooltip("İstasyonun modeli (prefab ya da FBX; pivot ayak izinin ilk hücresinin ortasında). Boşsa geçici görünüm çizilir.")]
+    [Tooltip("İstasyonun modeli (prefab ya da FBX). Pivotu ayak izinin ortasına (yatayda) konur: modelin pivotu modelin " +
+             "ortasında, yüksekliği hücrenin ortasında (taban pivotun 0.5 altında) olmalı. Boşsa geçici görünüm çizilir.")]
     [SerializeField] private GameObject model;
     [Tooltip("Geçici görünümün rengi (model yokken)")]
     [SerializeField] protected Color placeholderColor = new Color(0.55f, 0.38f, 0.24f);
@@ -93,7 +94,11 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
     private void BuildVisual()
     {
         GameObject built;
-        if (model != null) built = Instantiate(model, transform, false);
+        if (model != null)
+        {
+            built = Instantiate(model, transform, false);
+            built.transform.localPosition += LocalCenter;
+        }
         else
         {
             built = new GameObject("Placeholder");

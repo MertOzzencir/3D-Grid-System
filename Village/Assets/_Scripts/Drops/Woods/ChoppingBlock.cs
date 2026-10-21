@@ -3,7 +3,7 @@ using UnityEngine;
 // Kesme kütüğü (Workstation): üstüne konan parça (1BR odun, yarım odun) baltayla bölünür. Balta sağ tıkla alınıp
 // kütüğe getirilir, parçanın üstünde (axeOffset, axeRotation; kameraya göre) durur, sol tıkla vurulur (ağaç kesmedeki
 // gibi); hitsToSplit vuruşta parça bölünür, çıktılar kütüğün soluna ve sağına zıplar.
-// Geçici görünüm (model yokken): silindir kütük, hücrenin alt yarısı, üstü topHeight'ta.
+// 2×2. Geçici görünüm (model yokken): ayak izinin ortasında silindir kütük, hücrenin alt yarısı, üstü topHeight'ta.
 public class ChoppingBlock : Workstation
 {
     [Header("Kesme")]
@@ -23,7 +23,7 @@ public class ChoppingBlock : Workstation
     protected override void BuildPlaceholder(Transform parent)
     {
         float height = Mathf.Max(0.1f, topHeight + 0.5f); // hücrenin tabanından üst yüzeye
-        Primitive(PrimitiveType.Cylinder, parent, Vector3.up * (-0.5f + height * 0.5f), new Vector3(0.8f, height * 0.5f, 0.8f), placeholderColor);
+        Primitive(PrimitiveType.Cylinder, parent, LocalCenter + Vector3.up * (-0.5f + height * 0.5f), new Vector3(1.6f, height * 0.5f, 1.6f), placeholderColor);
     }
 
     protected override void OnHeld() => hits = 0;
