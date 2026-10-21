@@ -158,6 +158,20 @@ public static class WoodLayout
         return segs;
     }
 
+    // Yan odunun parçaları (içten dışa): kayıtlı ve toplamı uzunluğa eşitse o, yoksa doğal modellerden
+    public static int[] PieceSegments(IWoodStack stack, WoodSide side, int layer)
+    {
+        int length = stack.PieceAt(side, layer);
+        int[] stored = stack.SideSegments(side, layer);
+        if (stored != null)
+        {
+            int sum = 0;
+            foreach (int segment in stored) sum += segment;
+            if (sum == length) return stored;
+        }
+        return DefaultSegments(length);
+    }
+
     // Tepeye odun eklenince katman numaraları kayar (yan odunlar aynı yükseklikte kalır), parçaları da onlarla
     public static int[][][] SideSegmentsAfterTopMerge(IWoodStack stack, int addedLength)
     {

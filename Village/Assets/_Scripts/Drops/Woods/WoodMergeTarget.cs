@@ -4,7 +4,7 @@ using UnityEngine;
 // Wood ve MergedWood'un ortak hedef davranışı (IToolTarget'ı bununla uygularlar):
 // taşınan tek parça odun için geçerli bağlantı noktalarını hesaplar, mouse'a en yakınını seçtirir,
 // tıklanınca WoodMerger'a iletir. Sahibi hem GridPlaceable hem IWoodStack olmalı.
-public class WoodMergeTarget
+public class WoodMergeTarget : IWoodSlotView
 {
     private readonly GridPlaceable owner;
     private readonly IWoodStack stack;
@@ -68,7 +68,7 @@ public class WoodMergeTarget
         accept = false;
         if (!(interacted is Wood carried) || ReferenceEquals(carried, owner)) return default;
 
-        WoodSide facing = GetFacingSide();
+        WoodSide facing = FacingSide(owner);
         snapPoints.Clear();
         candidateCells.Clear();
         candidateDirections.Clear();
@@ -276,7 +276,7 @@ public class WoodMergeTarget
 
     // Kameraya en çok bakan yan "ön" sayılır.
     // Odunun kendi rotasyonu da hesaba katılır (yanlar odunla birlikte döner).
-    private WoodSide GetFacingSide()
+    public static WoodSide FacingSide(GridPlaceable owner)
     {
         Vector3 toCamera = Vector3.ProjectOnPlane(-Camera.main.transform.forward, Vector3.up);
         WoodSide facing = WoodSide.Forward;

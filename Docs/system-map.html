@@ -216,8 +216,8 @@ const NODES = [
     next: "Adalar arası geçiş ve ilk ikinci ada." },
   { id: "material", name: "Malzeme", status: "wip", hub: true, x: 1080, y: 415, tag: "ana halka",
     what: "Odun var. İleride taş (ağırlık taşır, suya dayanır) ve demir (hareket eden yapılar). Her malzemenin işlevsel anlamı olacak; kaynaklar sınırlı.",
-    how: ["Odun: dik durur, yan ve tepeden birleşir, blueprint'leri doldurur"],
-    files: ["Drops/Woods/"],
+    how: ["Odun: dik durur, yan ve tepeden birleşir, blueprint'leri doldurur", "Baltayla ek yerlerinden sökülür (WASD ile seçilir, tek vuruş); ayrılan parça yakındaki boş yere zıplar"],
+    files: ["Drops/Woods/", "Drops/Woods/WoodDetachTarget.cs"],
     next: "Taş ve demirin işlevleri." },
 
   // --- Kaynak ve envanter ---

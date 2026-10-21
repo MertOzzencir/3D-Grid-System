@@ -4,6 +4,7 @@ using UnityEngine;
 
 // Yanlarında odun olan dik odun: ana (base) odun + dört yanın katmanlarındaki yatık parçalar.
 // Boş katmanlarına tek parça odun eklenebilir (hedef); kendisi başka bir oduna eklenemez ama taşınıp döndürülebilir.
+// Balta getirilince ek yerlerinden sökülür (WoodDetachTarget).
 public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlueprintPiece, IWoodStack, ISaveState
 {
     // Unity iç içe dizi (int[][]) kaydedemediği için her yan bu sınıfla tutulur
@@ -34,6 +35,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
 
     private GridDragMotor drag;
     private WoodMergeTarget mergeTarget;
+    private WoodDetachTarget detachTarget;
     private GridFootprint[] footprints; // rotasyon başına bir kez hesaplanır
     private string signature;           // şekil değişmedikçe aynı
     private int signatureSteps;
@@ -129,6 +131,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     {
         drag = new GridDragMotor(this, followSpeed);
         mergeTarget = new WoodMergeTarget(this);
+        detachTarget = new WoodDetachTarget(this);
     }
 
     // sides: WoodLayout.EmptySides biçiminde, [yan][katman - 1] = uzunluk (0 = boş)
@@ -344,10 +347,16 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         Build(loaded.baseLength, loadedSides, WoodMerger.Instance.Catalog, loaded.segments, loadedSegments);
     }
 
-    // --- IToolTarget: boş bir katmana tek parça odun getirildiğinde ---
-    public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept) => mergeTarget.GetToolTargetPosition(interacted, out accept);
-    public Quaternion GetToolTargetRotation() => mergeTarget.GetToolTargetRotation();
-    public void OnToolTargetExit() => mergeTarget.OnToolTargetExit();
-    public bool OnToolUsed(IInteractable tool) => mergeTarget.OnToolUsed(tool);
-    public bool IsStillTargeted(IInteractable interacted, Ray mouseRay) => mergeTarget.IsStillTargeted(interacted, mouseRay);
+    // --- IToolTarget: boş bir katmana tek parça odun getirildiğinde (birleştirme) ya da balta getirildiğinde (sökme) ---
+    public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept)
+        => interacted is Axe ? detachTarget.GetToolTargetPosition(interacted, out accept) : mergeTarget.GetToolTargetPosition(interacted, out accept);
+    public Quaternion GetToolTargetRotation() => detachTarget.HasSelection ? detachTarget.GetToolTargetRotation() : mergeTarget.GetToolTargetRotation();
+    public void OnToolTargetExit()
+    {
+        mergeTarget.OnToolTargetExit();
+        detachTarget.OnToolTargetExit();
+    }
+    public bool OnToolUsed(IInteractable tool) => tool is Axe ? detachTarget.OnToolUsed(tool) : mergeTarget.OnToolUsed(tool);
+    public bool IsStillTargeted(IInteractable interacted, Ray mouseRay)
+        => interacted is Axe ? detachTarget.IsStillTargeted(interacted, mouseRay) : mergeTarget.IsStillTargeted(interacted, mouseRay);
 }

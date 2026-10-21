@@ -16,6 +16,8 @@ using UnityEngine;
 // çerçeve (dört kenar; yan parçada dikey kenarlar dahil), çerçevenin köşelerinden parçanın uzandığı yönde ucuna kadar
 // çizgiler (ucunda tamamen şeffaf, `fadePower`); dışarı bakan uç ve parçanın içindeki hücre sınırları çizilmez. Mouse'un
 // seçtiği yer `selectedAlpha`, diğerleri `optionAlpha`. Dikey çizgiler kameraya dönük şerit, yataylar yatay şerit.
+// Sökme: elde balta bir MergedWood'a yapışınca (WoodDetachTarget.Active) aynı şekilde ek yerleri gösterilir: çerçeve ek
+// yerinde, çizgiler ayrılacak kısım boyunca.
 // Ayarları WoodMerger'da ("Held Grid"), WoodMerger.Update her kare Tick'i çağırır.
 [Serializable]
 public class HeldGridIndicator
@@ -59,18 +61,19 @@ public class HeldGridIndicator
     {
         InteractableController controller = InteractableController.Instance;
         GridPlaceable held = enabled && controller != null ? controller.Held as GridPlaceable : null;
-        if (!(held is Wood) && !(held is MergedWood)) held = null;
+        // Birleştirme (elde odun) ya da sökme (elde balta): sadece bağlantı / ek yerleri
+        IWoodSlotView slots = held is Wood ? WoodMergeTarget.Active : held is Axe ? WoodDetachTarget.Active : (IWoodSlotView)null;
+        if (slots != null && (!slots.IsAlive || slots.CandidateCells.Count == 0)) slots = null;
+        if (!(held is Wood) && !(held is MergedWood) && slots == null) held = null;
 
         if (held != null && EnsureRoot())
         {
-            WoodMergeTarget merge = held is Wood ? WoodMergeTarget.Active : null;
-            if (merge != null && merge.IsAlive && merge.CandidateCells.Count > 0)
+            if (slots != null)
             {
-                // Birleştirme: sadece bağlantı yerlerinin hücreleri
-                int key = merge.CandidatesKey;
+                int key = slots.CandidatesKey;
                 if (shownMergeKey != key)
                 {
-                    RebuildMerge(merge);
+                    RebuildMerge(slots);
                     shownMergeKey = key;
                     shownFor = null;
                 }
@@ -149,7 +152,7 @@ public class HeldGridIndicator
                     int distance = int.MaxValue;
                     foreach (Vector3Int f in footprint)
                         distance = Mathf.Min(distance, Mathf.Max(Mathf.Abs(x - f.x), Mathf.Max(Mathf.Abs(y - f.y), Mathf.Abs(z - f.z))));
-                    if (distance > range || !CanHoldAt(held, cell)) continue;
+                    if (distance > range || !CanHoldAt(held, cell, requireSupport)) continue;
                     cells[cell] = 1f - distance / (float)(range + 1);
                 }
 
@@ -185,8 +188,9 @@ public class HeldGridIndicator
         SetMesh(vertices, colors, triangles);
     }
 
-    // Odun bu hücreye (origin olarak) konabilir mi: bütün şekli sığar, base'e girmez, (requireSupport) altı dolu
-    private bool CanHoldAt(GridPlaceable held, Vector3Int cell)
+    // Odun bu hücreye (origin olarak) konabilir mi: bütün şekli sığar, base'e girmez, (requireSupport) altı dolu.
+    // Sökülen parçanın yerini ararken WoodMerger de kullanır.
+    public static bool CanHoldAt(GridPlaceable held, Vector3Int cell, bool requireSupport)
     {
         GridManager grid = GridManager.Instance;
         if (grid == null || !grid.CanPlaceablePlaceOn(held, cell)) return false;
@@ -208,7 +212,7 @@ public class HeldGridIndicator
     }
 
     // Birleştirme: her bağlantı yerinin hücrelerinin bütün yatay kenarları (ortak olan bir kez, en belirgin saydamlıkla)
-    private void RebuildMerge(WoodMergeTarget merge)
+    private void RebuildMerge(IWoodSlotView merge)
     {
         var vertices = new List<Vector3>();
         var colors = new List<Color>();
