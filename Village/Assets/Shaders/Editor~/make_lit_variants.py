@@ -1,5 +1,7 @@
-# URP Lit.shader'dan deformasyonlu / efektli kopyalar üretir (Village/Tree Chop Lit, Village/Wood Wobble Lit).
+# URP Lit.shader'dan deformasyonlu / efektli kopyalar üretir (Village/Tree Chop Lit, Village/Wood Wobble Lit) ve düz
+# kopyasını (Village/Lit: efekt yok, URP Lit kullanan materyaller bunu kullanır).
 # Lit'ten farklar: shader adı + pass'lerde vertex (ve istenirse fragment), URP'nin kendi fonksiyonundan önce sarmalanır.
+# Hepsinde ForwardLit fragment'ı Toon.hlsl'deki ToonLitPassFragment'a gider: toon kapalıyken (ToonStyle) birebir Lit.
 # URP güncellenince tekrar çalıştır:  python "Assets/Shaders/Editor~/make_lit_variants.py"
 # ("Editor~" klasörü ~ ile bittiği için Unity onu import etmez.)
 import glob, os, sys
@@ -9,8 +11,11 @@ SHADERS = os.path.dirname(HERE)
 PROJECT = os.path.dirname(os.path.dirname(SHADERS))
 
 VARIANTS = [
+    dict(name="Village/Lit", output="VillageLit.shader",
+         description="efekt yok (URP Lit kullanan materyaller bunu kullanır; toon denemesi için)",
+         vertex=None, fragment=None),
     # name: shader adı, output: çıktı dosyası, description: başlık açıklaması
-    # vertex: (include, fonksiyon) → pozisyon (ve normal) deforme edilir
+    # vertex: (include, fonksiyon) ya da None → pozisyon (ve normal) deforme edilir
     # fragment: (include, fonksiyon) ya da None → fonksiyon(input.positionCS) fragment'ın başında çağrılır (örn. clip)
     dict(name="Village/Tree Chop Lit", output="TreeChopLit.shader",
          description="balta vuruşunda gövde göçüğü (ChopDent.hlsl) + rüzgârda salınım (Wind.hlsl), ikisi TreeVertex.hlsl'de",
@@ -116,12 +121,14 @@ def include_line(pass_include):
 
 
 def make_variant(urp, lit, v):
-    vertex_include, vertex_apply = v["vertex"]
-    header = (
-        f"// URP Lit kopyası + {v['description']}.\n"
-        "// Lit'ten tek fark: ForwardLit, ShadowCaster, GBuffer, DepthOnly, DepthNormals pass'lerinde\n"
-        f"// vertex, URP'nin kendi vertex fonksiyonuna gitmeden önce {vertex_apply} ile deforme edilir.\n"
-    )
+    header = f"// URP Lit kopyası + {v['description']}.\n"
+    if v["vertex"]:
+        header += (
+            "// ForwardLit, ShadowCaster, GBuffer, DepthOnly, DepthNormals pass'lerinde\n"
+            f"// vertex, URP'nin kendi vertex fonksiyonuna gitmeden önce {v['vertex'][1]} ile deforme edilir.\n"
+        )
+    header += ("// ForwardLit fragment'ı Toon.hlsl'deki ToonLitPassFragment: toon kapalıyken (ToonStyle) birebir Lit, "
+               "açıkken sert geçişli ışık.\n")
     if v["fragment"]:
         header += (f"// ForwardLit, GBuffer, DepthOnly, DepthNormals fragment'ı önce {v['fragment'][1]} çağırır "
                    "(ShadowCaster hariç).\n")
@@ -131,7 +138,8 @@ def make_variant(urp, lit, v):
     # Her pass include'unun hemen arkasına eklenecek kod
     additions = {}
 
-    for original, pass_include, position, normal in VERTEX_PASSES:
+    for original, pass_include, position, normal in (VERTEX_PASSES if v["vertex"] else []):
+        vertex_include, vertex_apply = v["vertex"]
         wrapper = "Village" + original
         pragma = f"#pragma vertex {original}"
         if t.count(pragma) != 1 or t.count(include_line(pass_include)) != 1:
@@ -147,9 +155,10 @@ def make_variant(urp, lit, v):
             f"                return {original}(input);\n"
             f"            }}")
 
-    if v["fragment"]:
-        fragment_include, fragment_apply = v["fragment"]
-        for original, pass_include, signature, template in FRAGMENT_PASSES:
+    # ForwardLit her zaman sarmalanır (toon), diğer pass'ler sadece fragment efekti varsa
+    for original, pass_include, signature, template in FRAGMENT_PASSES:
+        forward = original == "LitPassFragment"
+        if v["fragment"] or forward:
             wrapper = "Village" + original
             pragma = f"#pragma fragment {original}"
             if t.count(pragma) != 1:
@@ -158,9 +167,17 @@ def make_variant(urp, lit, v):
                 sys.exit(f"{pass_include} içinde {original} imzası değişmiş, FRAGMENT_PASSES'ı güncelle")
 
             t = t.replace(pragma, f"#pragma fragment {wrapper}")
-            additions.setdefault(pass_include, []).append(
-                f"#include \"{fragment_include}\"\n"
-                "            " + template.format(name=wrapper, call=f"{fragment_apply}(input.positionCS);"))
+            includes = ""
+            if v["fragment"]:
+                fragment_include, fragment_apply = v["fragment"]
+                includes += f"#include \"{fragment_include}\"\n            "
+                body = template.format(name=wrapper, call=f"{fragment_apply}(input.positionCS);")
+            else:
+                body = template.format(name=wrapper, call="@@").replace("                @@\n", "")
+            if forward:
+                includes += "#include \"Toon.hlsl\"\n            "
+                body = body.replace("                LitPassFragment(input", "                ToonLitPassFragment(input")
+            additions.setdefault(pass_include, []).append(includes + body)
 
     for pass_include, blocks in additions.items():
         line = include_line(pass_include)

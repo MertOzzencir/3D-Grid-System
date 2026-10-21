@@ -1,6 +1,7 @@
 // URP Lit kopyası + birleşmede jöle gibi sallanma (Wobble.hlsl) + noktalı saydamlık (Fade.hlsl).
-// Lit'ten tek fark: ForwardLit, ShadowCaster, GBuffer, DepthOnly, DepthNormals pass'lerinde
+// ForwardLit, ShadowCaster, GBuffer, DepthOnly, DepthNormals pass'lerinde
 // vertex, URP'nin kendi vertex fonksiyonuna gitmeden önce ApplyWobble ile deforme edilir.
+// ForwardLit fragment'ı Toon.hlsl'deki ToonLitPassFragment: toon kapalıyken (ToonStyle) birebir Lit, açıkken sert geçişli ışık.
 // ForwardLit, GBuffer, DepthOnly, DepthNormals fragment'ı önce ApplyFade çağırır (ShadowCaster hariç).
 // Elle düzenlenmez: Editor~/make_lit_variants.py ile üretilir, URP güncellenince yeniden üret.
 Shader "Village/Wood Wobble Lit"
@@ -188,6 +189,7 @@ Shader "Village/Wood Wobble Lit"
                 return LitPassVertex(input);
             }
             #include "Fade.hlsl"
+            #include "Toon.hlsl"
             void VillageLitPassFragment(
                 Varyings input
                 , out half4 outColor : SV_Target0
@@ -197,7 +199,7 @@ Shader "Village/Wood Wobble Lit"
             )
             {
                 ApplyFade(input.positionCS);
-                LitPassFragment(input, outColor
+                ToonLitPassFragment(input, outColor
             #ifdef _WRITE_RENDERING_LAYERS
                     , outRenderingLayers
             #endif

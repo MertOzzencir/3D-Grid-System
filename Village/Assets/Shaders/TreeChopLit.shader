@@ -1,6 +1,7 @@
 // URP Lit kopyası + balta vuruşunda gövde göçüğü (ChopDent.hlsl) + rüzgârda salınım (Wind.hlsl), ikisi TreeVertex.hlsl'de.
-// Lit'ten tek fark: ForwardLit, ShadowCaster, GBuffer, DepthOnly, DepthNormals pass'lerinde
+// ForwardLit, ShadowCaster, GBuffer, DepthOnly, DepthNormals pass'lerinde
 // vertex, URP'nin kendi vertex fonksiyonuna gitmeden önce ApplyTreeVertex ile deforme edilir.
+// ForwardLit fragment'ı Toon.hlsl'deki ToonLitPassFragment: toon kapalıyken (ToonStyle) birebir Lit, açıkken sert geçişli ışık.
 // Elle düzenlenmez: Editor~/make_lit_variants.py ile üretilir, URP güncellenince yeniden üret.
 Shader "Village/Tree Chop Lit"
 {
@@ -118,7 +119,7 @@ Shader "Village/Tree Chop Lit"
             // -------------------------------------
             // Shader Stages
             #pragma vertex VillageLitPassVertex
-            #pragma fragment LitPassFragment
+            #pragma fragment VillageLitPassFragment
 
             // -------------------------------------
             // Material Keywords
@@ -185,6 +186,21 @@ Shader "Village/Tree Chop Lit"
             {
                 ApplyTreeVertex(input.positionOS.xyz, input.normalOS);
                 return LitPassVertex(input);
+            }
+            #include "Toon.hlsl"
+            void VillageLitPassFragment(
+                Varyings input
+                , out half4 outColor : SV_Target0
+            #ifdef _WRITE_RENDERING_LAYERS
+                , out uint outRenderingLayers : SV_Target1
+            #endif
+            )
+            {
+                ToonLitPassFragment(input, outColor
+            #ifdef _WRITE_RENDERING_LAYERS
+                    , outRenderingLayers
+            #endif
+                );
             }
             ENDHLSL
         }
