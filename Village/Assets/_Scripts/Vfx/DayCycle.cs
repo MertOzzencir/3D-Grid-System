@@ -3,8 +3,6 @@ using UnityEngine;
 // Gün saati: cycleMinutes'ta bir tam gün (sabah → öğle → altın saat → gece → sabah). Güneşin (gece: ayın) açısı, rengi,
 // şiddeti; ortam ışığı (Gradient); sis ve kamera arka planı; kenar ışığı; uçuşanlar (gece ateş böcekleri) ve suyun gece
 // kararması buna bağlı. Öğle değerleri "Render Stili: Diorama" menüsünün değerleriyle aynı.
-// Sabah (Morning, 0..1): ortama sıcak renkli pus çöker (sis yaklaşır, rengi hazeColor'a kayar); ışık huzmeleri (GodRays)
-// da aynı değerle gelir. Sisi sadece DayCycle yazar.
 // Saat kayda girer (SaveManager → SaveFile.dayTime). Sahnede bir tane.
 // time: 0 gün doğumu, 0.25 öğle, 0.5 altın saat, ~0.6 gece başlar, ~0.95 şafak.
 public class DayCycle : MonoBehaviour
@@ -43,18 +41,6 @@ public class DayCycle : MonoBehaviour
     [Tooltip("Suyun gece rengi çarpanı (StylizedWater, global)")]
     [SerializeField] private Color waterNightTint = new Color(0.28f, 0.36f, 0.55f);
 
-    [Header("Sabah pusu")]
-    [Tooltip("Sabahın gücü (0 yok, 1 tam): pus ve ışık huzmeleri (GodRays) buna bağlı. Varsayılan: şafakta (~0.93) gelir, " +
-             "gün doğumunda (0) tam, kuşlukta (~0.15) gider.")]
-    [SerializeField] private AnimationCurve morning = Curve((0f, 1f), (0.08f, 0.7f), (0.15f, 0f), (0.93f, 0f), (1f, 1f));
-    [Tooltip("Pusun rengi (tam sabahta ufuk rengi hazeTint kadar buna kayar)")]
-    [SerializeField] private Color hazeColor = new Color(1f, 0.86f, 0.7f);
-    [SerializeField, Range(0f, 1f)] private float hazeTint = 0.6f;
-    [Tooltip("Tam sabahta sisin başladığı ve tamamen kapattığı uzaklık (birim). Normalde sahnenin sis ayarları (Lighting → " +
-             "Fog); bunlar küçüldükçe pus yoğunlaşır.")]
-    [SerializeField] private float hazeFogStart = 0f;
-    [SerializeField] private float hazeFogEnd = 90f;
-
     private static readonly int NightDarkenId = Shader.PropertyToID("_NightDarken");
     private static readonly int NightTintId = Shader.PropertyToID("_NightTint");
 
@@ -62,7 +48,6 @@ public class DayCycle : MonoBehaviour
     private Light rimLight;
     private float rimBaseIntensity;
     private AmbientParticles particles;
-    private float baseFogStart, baseFogEnd;
 
     public float Time01
     {
@@ -75,14 +60,11 @@ public class DayCycle : MonoBehaviour
     }
 
     public float Night => night.Evaluate(time);
-    public float Morning => Mathf.Clamp01(morning.Evaluate(time));
 
     private void Awake()
     {
         Instance = this;
         if (sun == null) sun = RenderSettings.sun;
-        baseFogStart = RenderSettings.fogStartDistance;
-        baseFogEnd = RenderSettings.fogEndDistance;
         rim = FindFirstObjectByType<RimLight>();
         if (rim != null)
         {
@@ -121,12 +103,8 @@ public class DayCycle : MonoBehaviour
         RenderSettings.ambientEquatorColor = ambientEquator.Evaluate(time);
         RenderSettings.ambientGroundColor = ambientGround.Evaluate(time);
 
-        // Sabah pusu: sis yaklaşır, rengi sıcak pusa kayar
-        float haze = Morning;
-        Color sky = Color.Lerp(horizon.Evaluate(time), hazeColor, haze * hazeTint);
+        Color sky = horizon.Evaluate(time);
         RenderSettings.fogColor = sky;
-        RenderSettings.fogStartDistance = Mathf.Lerp(baseFogStart, hazeFogStart, haze);
-        RenderSettings.fogEndDistance = Mathf.Lerp(baseFogEnd, hazeFogEnd, haze);
         if (Camera.main != null) Camera.main.backgroundColor = sky;
 
         if (rimLight != null)
