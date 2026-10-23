@@ -40,8 +40,8 @@ public class ToonStyle : MonoBehaviour
     [Tooltip("Gerçek zamanlı gölgelerin (objelerin birbirine düşürdüğü) kenar yumuşaklığı. Çok küçükse uzaktaki gölgeler " +
              "pürüzlü / lekeli olur.")]
     [SerializeField, Range(0f, 0.5f)] private float shadowSoftness = 0.15f;
-    [Tooltip("Normal map'in (dokudaki oyuklar) ışığa etkisi. 1 = tam (uzakta lekeli bantlar yapabilir), 0 = sadece modelin şekli.")]
-    [SerializeField, Range(0f, 1f)] private float normalDetail = 0.3f;
+    [Tooltip("Normal map'in (dokudaki oyuklar) ışığa etkisi. 1 = tam, 0 = sadece modelin şekli (yüzey detayı kaybolur).")]
+    [SerializeField, Range(0f, 1f)] private float normalDetail = 1f;
     [Tooltip("Ara ton: ışığa yan bakan aydınlık yerler bu kadar parlak (1 = ara ton yok, iki ton)")]
     [SerializeField, Range(0.5f, 1f)] private float midBrightness = 0.85f;
     [Tooltip("Ara tonun bittiği yer: eşikten bu kadar sonra tam aydınlık")]
