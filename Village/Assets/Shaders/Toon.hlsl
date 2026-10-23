@@ -6,6 +6,11 @@
 //   artırılmış (_VillageToonShadowSaturation: gölge kirli griye değil canlı, tonu kaymış renge döner), parlama keskin
 //   kenarlı leke (_VillageToonSpecSize, _VillageToonSpecStrength; sadece smoothness'ı _VillageToonSpecMinSmoothness'tan
 //   büyük materyallerde: çim, toprak, odun mat kalır), ortam ışığı (SH) payı _VillageToonAmbient. Gerçek zamanlı gölgeler de aynı eşikle sertleşir. SSAO toon'da kullanılmaz (yumuşak leke yapar).
+// Uzakta temiz kalsın diye: aydınlık-gölge eşiği ekran türeviyle yumuşar (fwidth: uzakta piksel başına değişim büyük,
+// eşik pürüzlü bantlara dönmesin), ışığın yönü için yüzeyin kendi normali normal map'le sadece _VillageToonNormalDetail
+// kadar karışır (uzakta küçülen normal map yüzeyi bulandırıp koyu lekeler yapıyordu), gerçek zamanlı gölgenin kenarı
+// _VillageToonShadowSoftness kadar yumuşak (uzaktaki düşük çözünürlüklü gölge pürüzlü çıkmasın). Üç ton: ışığa tam
+// bakan yer tam aydınlık, eşiği az geçen yer _VillageToonMidBrightness kadar (ara ton, _VillageToonMidOffset ötede biter).
 // Ayarların hepsi global (materyal başına değil): ToonStyle bileşeni yazar.
 #ifndef VILLAGE_TOON_INCLUDED
 #define VILLAGE_TOON_INCLUDED
@@ -19,6 +24,10 @@ float _VillageToonSpecMinSmoothness;
 float _VillageToonSpecSize;
 float _VillageToonSpecStrength;
 float _VillageToonAmbient;
+float _VillageToonShadowSoftness;
+float _VillageToonNormalDetail;
+float _VillageToonMidOffset;
+float _VillageToonMidBrightness;
 
 half ToonStep(half value, half threshold)
 {
@@ -26,12 +35,25 @@ half ToonStep(half value, half threshold)
     return smoothstep(threshold - soft, threshold + soft, value);
 }
 
-// Bir ışığın aydınlık payı (0 gölge, 1 aydınlık): yüzeyin ışığa bakması ve gerçek zamanlı gölge, ikisi de sert
-half ToonLit(Light light, InputData inputData)
+// Ekran türeviyle yumuşayan eşik: değer piksel başına hızlı değişiyorsa (uzakta) geçiş en az o kadar geniş
+half ToonStepAA(half value, half threshold)
 {
-    half facing = ToonStep(dot(inputData.normalWS, light.direction), _VillageToonThreshold);
-    half shadow = ToonStep(light.shadowAttenuation, 0.5);
-    return facing * shadow;
+    half soft = max(_VillageToonSoftness, fwidth(value));
+    return smoothstep(threshold - soft, threshold + soft, value);
+}
+
+// Bir ışığın aydınlık payı (0 gölge, 1 aydınlık): yüzeyin ışığa bakması (sert) ve gerçek zamanlı gölge (biraz yumuşak).
+// tone: üç tonlu hali (aydınlık ama ışığa yan bakan yer ara tonda)
+half ToonLit(Light light, half3 lightNormal, out half tone)
+{
+    half ndl = dot(lightNormal, light.direction);
+    half facing = ToonStepAA(ndl, _VillageToonThreshold);
+    half shadowSoft = max(_VillageToonShadowSoftness, 0.001);
+    half shadow = smoothstep(0.5 - shadowSoft, 0.5 + shadowSoft, light.shadowAttenuation);
+    half lit = facing * shadow;
+    half full = ToonStepAA(ndl, _VillageToonThreshold + _VillageToonMidOffset);
+    tone = lit * lerp(_VillageToonMidBrightness, 1.0, full);
+    return lit;
 }
 
 half3 ToonSpecular(Light light, InputData inputData, SurfaceData surfaceData, half lit)
@@ -50,7 +72,8 @@ half3 ToonShadowAlbedo(half3 albedo)
     return max(0.0, lerp(luma.xxx, dark, 1.0 + _VillageToonShadowSaturation));
 }
 
-half4 ToonFragment(InputData inputData, SurfaceData surfaceData)
+// lightNormal: ışığın yönü için kullanılan normal (yüzeyin kendi normali + biraz normal map)
+half4 ToonFragment(InputData inputData, SurfaceData surfaceData, half3 lightNormal)
 {
     half4 shadowMask = CalculateShadowMask(inputData);
     AmbientOcclusionFactor noOcclusion;
@@ -67,9 +90,10 @@ half4 ToonFragment(InputData inputData, SurfaceData surfaceData)
     if (IsMatchingLightLayer(mainLight.layerMask, meshRenderingLayers))
 #endif
     {
-        half lit = ToonLit(mainLight, inputData);
+        half tone;
+        half lit = ToonLit(mainLight, lightNormal, tone);
         half3 light = mainLight.color * mainLight.distanceAttenuation;
-        color += light * lerp(ToonShadowAlbedo(albedo), albedo, lit);
+        color += light * lerp(ToonShadowAlbedo(albedo), albedo, tone);
         color += ToonSpecular(mainLight, inputData, surfaceData, lit) * mainLight.distanceAttenuation;
     }
 
@@ -86,8 +110,9 @@ half4 ToonFragment(InputData inputData, SurfaceData surfaceData)
         if (IsMatchingLightLayer(light.layerMask, meshRenderingLayers))
 #endif
         {
-            half lit = ToonLit(light, inputData);
-            color += albedo * light.color * light.distanceAttenuation * lit;
+            half tone;
+            half lit = ToonLit(light, lightNormal, tone);
+            color += albedo * light.color * light.distanceAttenuation * tone;
             color += ToonSpecular(light, inputData, surfaceData, lit) * light.distanceAttenuation;
         }
     }
@@ -99,8 +124,9 @@ half4 ToonFragment(InputData inputData, SurfaceData surfaceData)
         if (IsMatchingLightLayer(light.layerMask, meshRenderingLayers))
 #endif
         {
-            half lit = ToonLit(light, inputData);
-            color += albedo * light.color * light.distanceAttenuation * lit;
+            half tone;
+            half lit = ToonLit(light, lightNormal, tone);
+            color += albedo * light.color * light.distanceAttenuation * tone;
             color += ToonSpecular(light, inputData, surfaceData, lit) * light.distanceAttenuation;
         }
     LIGHT_LOOP_END
@@ -149,7 +175,9 @@ void ToonLitPassFragment(
 
     InitializeBakedGIData(input, inputData);
 
-    half4 color = ToonFragment(inputData, surfaceData);
+    half3 geometryNormal = NormalizeNormalPerPixel(input.normalWS);
+    half3 lightNormal = normalize(lerp(geometryNormal, inputData.normalWS, _VillageToonNormalDetail));
+    half4 color = ToonFragment(inputData, surfaceData, lightNormal);
     color.rgb = MixFog(color.rgb, inputData.fogCoord);
     color.a = OutputAlpha(color.a, IsSurfaceTypeTransparent(_Surface));
 

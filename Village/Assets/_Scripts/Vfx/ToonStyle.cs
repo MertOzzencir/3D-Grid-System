@@ -17,6 +17,10 @@ public class ToonStyle : MonoBehaviour
     private static readonly int SpecSizeId = Shader.PropertyToID("_VillageToonSpecSize");
     private static readonly int SpecStrengthId = Shader.PropertyToID("_VillageToonSpecStrength");
     private static readonly int AmbientId = Shader.PropertyToID("_VillageToonAmbient");
+    private static readonly int ShadowSoftnessId = Shader.PropertyToID("_VillageToonShadowSoftness");
+    private static readonly int NormalDetailId = Shader.PropertyToID("_VillageToonNormalDetail");
+    private static readonly int MidOffsetId = Shader.PropertyToID("_VillageToonMidOffset");
+    private static readonly int MidBrightnessId = Shader.PropertyToID("_VillageToonMidBrightness");
     private static readonly int OutlineWidthId = Shader.PropertyToID("_VillageOutlineWidth");
     private static readonly int OutlineDepthId = Shader.PropertyToID("_VillageOutlineDepth");
     private static readonly int OutlineNormalId = Shader.PropertyToID("_VillageOutlineNormal");
@@ -33,6 +37,15 @@ public class ToonStyle : MonoBehaviour
     [SerializeField, Range(0f, 1.5f)] private float shadowSaturation = 0.5f;
     [Tooltip("Ortam ışığının (gökyüzü) payı: gölgeli tarafların ne kadar aydınlanacağı")]
     [SerializeField, Range(0f, 1.5f)] private float ambient = 0.35f;
+    [Tooltip("Gerçek zamanlı gölgelerin (objelerin birbirine düşürdüğü) kenar yumuşaklığı. Çok küçükse uzaktaki gölgeler " +
+             "pürüzlü / lekeli olur.")]
+    [SerializeField, Range(0f, 0.5f)] private float shadowSoftness = 0.15f;
+    [Tooltip("Normal map'in (dokudaki oyuklar) ışığa etkisi. 1 = tam (uzakta lekeli bantlar yapabilir), 0 = sadece modelin şekli.")]
+    [SerializeField, Range(0f, 1f)] private float normalDetail = 0.3f;
+    [Tooltip("Ara ton: ışığa yan bakan aydınlık yerler bu kadar parlak (1 = ara ton yok, iki ton)")]
+    [SerializeField, Range(0.5f, 1f)] private float midBrightness = 0.85f;
+    [Tooltip("Ara tonun bittiği yer: eşikten bu kadar sonra tam aydınlık")]
+    [SerializeField, Range(0.05f, 1f)] private float midOffset = 0.4f;
 
     [Header("Parlama")]
     [Tooltip("Parlama lekesinin büyüklüğü (0 = yok)")]
@@ -71,6 +84,10 @@ public class ToonStyle : MonoBehaviour
         Shader.SetGlobalFloat(SpecMinSmoothnessId, specularMinSmoothness);
         Shader.SetGlobalFloat(OutlineFadeDistanceId, outlineFadeDistance);
         Shader.SetGlobalFloat(AmbientId, ambient);
+        Shader.SetGlobalFloat(ShadowSoftnessId, shadowSoftness);
+        Shader.SetGlobalFloat(NormalDetailId, normalDetail);
+        Shader.SetGlobalFloat(MidOffsetId, midOffset);
+        Shader.SetGlobalFloat(MidBrightnessId, midBrightness);
         Shader.SetGlobalFloat(SpecSizeId, specularSize);
         Shader.SetGlobalFloat(SpecStrengthId, specularStrength);
         Shader.SetGlobalColor(OutlineColorId, outlineColor);
