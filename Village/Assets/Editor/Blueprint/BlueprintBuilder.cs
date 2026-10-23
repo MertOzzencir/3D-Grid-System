@@ -4,9 +4,16 @@ using UnityEngine;
 
 // Play mode'da grid'e yerleştirilmiş parçalardan blueprint prefab'ı ve onun placeable SO'sunu üretir.
 // Parçalar dünya (0,0,0) noktasına göre kaydedilir; blueprint'in pivot'u orasıdır.
+// Oyun sırasında koddan üretilen mesh / materyaller (örn. odunların bağlantı ipi, istasyonların geçici görünüşü) proje
+// dosyası değil: prefab onlara referansı kaydedemez. Kopyalanırken SO'nun (Data) içine alt dosya olarak kaydedilir
+// (Persist); aynı adla yeniden kaydedince eskileri silinir.
 public static class BlueprintBuilder
 {
     private const float CellColliderSize = 0.95f;
+
+    // Koddan üretilmiş nesnelerin bu kayıttaki kopyaları (aynı ip mesh'i birden çok kez kaydedilmesin)
+    private static readonly Dictionary<Object, Object> persisted = new Dictionary<Object, Object>();
+    private static string persistPath;
 
     public static bool Build(string blueprintName, string folder, out string message)
     {
@@ -17,6 +24,16 @@ public static class BlueprintBuilder
             var allCells = new List<Vector3Int>();
             int slotCount = 0;
             int skipped = 0;
+
+            EnsureFolder(folder);
+            string prefabPath = $"{folder}/{blueprintName}.prefab";
+            string dataPath = $"{folder}/{blueprintName} Data.asset";
+            // Prefab SO'yu, SO da prefab'ı gösteriyor: önce SO, sonra prefab, en son SO'ya prefab bağlanır.
+            // SO önce oluşur ki koddan üretilmiş görünüşler onun içine kaydedilebilsin.
+            GridPlaceableSO data = LoadOrCreateAsset<GridPlaceableSO>(dataPath);
+            RemoveSubAssets(dataPath);
+            persisted.Clear();
+            persistPath = dataPath;
 
             foreach (GridPlaceable placeable in GridManager.Instance.GetAllPlaceables())
             {
@@ -37,12 +54,6 @@ public static class BlueprintBuilder
 
             blueprint.EditorSetCells(allCells);
 
-            EnsureFolder(folder);
-            string prefabPath = $"{folder}/{blueprintName}.prefab";
-            string dataPath = $"{folder}/{blueprintName} Data.asset";
-
-            // Prefab SO'yu, SO da prefab'ı gösteriyor: önce SO, sonra prefab, en son SO'ya prefab bağlanır
-            GridPlaceableSO data = LoadOrCreateAsset<GridPlaceableSO>(dataPath);
             data.Name = blueprintName;
             SetEntityData(blueprint, data);
 
@@ -57,6 +68,8 @@ public static class BlueprintBuilder
         finally
         {
             Object.Destroy(root);
+            persisted.Clear();
+            persistPath = null;
         }
     }
 
@@ -92,8 +105,10 @@ public static class BlueprintBuilder
     {
         if (source.TryGetComponent(out MeshFilter filter) && source.TryGetComponent(out MeshRenderer renderer))
         {
-            target.gameObject.AddComponent<MeshFilter>().sharedMesh = filter.sharedMesh;
-            target.gameObject.AddComponent<MeshRenderer>().sharedMaterials = renderer.sharedMaterials;
+            target.gameObject.AddComponent<MeshFilter>().sharedMesh = Persist(filter.sharedMesh);
+            Material[] materials = renderer.sharedMaterials;
+            for (int i = 0; i < materials.Length; i++) materials[i] = Persist(materials[i]);
+            target.gameObject.AddComponent<MeshRenderer>().sharedMaterials = materials;
         }
 
         foreach (Transform child in source)
@@ -107,6 +122,25 @@ public static class BlueprintBuilder
             copy.localScale = child.localScale;
             CopyRenderers(child, copy);
         }
+    }
+
+    // Proje dosyası olmayan (koddan üretilmiş) mesh / materyal: kopyası SO'nun içine alt dosya olarak kaydedilir
+    private static T Persist<T>(T source) where T : Object
+    {
+        if (source == null || AssetDatabase.Contains(source) || persistPath == null) return source;
+        if (persisted.TryGetValue(source, out Object done)) return (T)done;
+        T copy = Object.Instantiate(source);
+        copy.name = source.name;
+        AssetDatabase.AddObjectToAsset(copy, persistPath);
+        persisted[source] = copy;
+        return copy;
+    }
+
+    // Önceki kayıttan kalan alt dosyalar (aynı adla yeniden kaydedince birikmesin)
+    private static void RemoveSubAssets(string path)
+    {
+        foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(path))
+            if (asset != null && AssetDatabase.IsSubAsset(asset)) Object.DestroyImmediate(asset, true);
     }
 
     // GridEntity.data private olduğu için SerializedObject üzerinden atanıyor

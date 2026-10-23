@@ -56,6 +56,7 @@ Sistem haritası (interaktif): `Docs/system-map.html` (yayında: https://claude.
 
 ## Blueprint (boyama kitabı)
 - Blueprint sahnesinde (`Scenes/Blueprint.unity`) Play mode'da parçalar yerleştirilir, **Tools → Blueprint Creator** ile prefab + `GridPlaceableSO` üretilir (`Assets/Blueprints`).
+- Slot görünüşleri parçaların renderer'larının kopyası (`BlueprintBuilder.CopyRenderers`). Koddan üretilen mesh / materyaller (odunların bağlantı ipi, istasyonların geçici görünüşü) proje dosyası değil: `Persist` onların kopyasını blueprint'in Data SO'sunun içine alt dosya olarak kaydeder (yoksa prefab'da ip kaybolurdu; kullanıcı: blueprint'lerde de ip olsun). Aynı adla yeniden kaydedince eski alt dosyalar silinir (`RemoveSubAssets`).
 - Pivot dünya (0,0,0); builder slot'ları 1 birim aşağı kaydırıyor (kullanıcının ayarı).
 - Uyum `IBlueprintPiece.BlueprintSignature` ile (örn. `Wood:2`, `MergedWood:2|0,1|0,0|0,0|0,0`). Yeni parça türü (taş, çit) sadece bu interface'i uygular; sistem odun üzerine kurulmamalı.
 - Doldurma: `BlueprintSlot` bir `IToolTarget`. Uyan parça (imza eşit) slot'a yapışır ve kendisi doğru yöne döner: hedef rotasyon = blueprint rotasyonu + slot'un `canonicalRotation`'ı + parçanın `BlueprintRotationSteps`'i. Tıklanınca parça yok olur, slot dolar (geri alınamaz). Sıra kuralı yok.
