@@ -34,12 +34,23 @@ public class PlacementController : MonoBehaviour
         if (toolController == null) toolController = GetComponent<ToolController>();
 
         InputManager.OnSpace += OpenBuildMode;
+        foreach (GridPlacementControllerBase menu in placementBases)
+            menu.SelectionChanged += HighlightSlot;
         SetBuildMode(isOpen); // sahnedeki başlangıç durumları ne olursa olsun hepsi uyumlu başlasın
     }
 
     void OnDestroy()
     {
         InputManager.OnSpace -= OpenBuildMode;
+        foreach (GridPlacementControllerBase menu in placementBases)
+            if (menu != null) menu.SelectionChanged -= HighlightSlot;
+    }
+
+    // Seçili objenin kutusu yanar (sayı tuşuyla seçilir; -1: seçim yok)
+    private void HighlightSlot(int slot)
+    {
+        for (int i = 0; i < placementSlots.Length; i++)
+            placementSlots[i].color = i == slot ? selectedColor : Color.white;
     }
 
     // Build mode açık mı (eldiven gizlenir, mouse imleci görünür: GloveCursor)
@@ -58,8 +69,9 @@ public class PlacementController : MonoBehaviour
 
         int pageCount = Mathf.Max(1, Mathf.CeilToInt(currentMenu.MenusSO.Entities.Count / (float)PageSize));
         if (pageCount <= 1) return;
-        // Aşağı scroll sonraki sayfa; sondan başa döner
+        // Aşağı scroll sonraki sayfa; sondan başa döner. Seçim önceki sayfanındı: bırakılır
         page = (page + (scroll < 0f ? 1 : -1) + pageCount) % pageCount;
+        currentMenu.ClearSelection();
         SetMenuElements(currentIndex);
     }
 
