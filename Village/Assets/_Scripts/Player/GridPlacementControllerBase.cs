@@ -21,6 +21,8 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
     }
 
     protected abstract TEntity GetPrefab(int index);
+    // Sayı tuşu (1..) → menüdeki sıra: o anki sayfanın başından (PlacementController sayfa değiştirince PageOffset'i yazar)
+    private int EntryIndex(int number) => PageOffset + number - 1;
     // Menüdeki SO (yaratılan kopyaya verisi atanır)
     protected abstract GridEntitySOBase GetEntityData(int index);
 
@@ -38,7 +40,7 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
     {
         if (isPressed)
         {
-            TEntity prefab = GetPrefab(obj - 1);
+            TEntity prefab = GetPrefab(EntryIndex(obj));
             if (prefab == null) return;
             if (!TryGetTargetPosition(out Vector3 startPos)) return;
 
@@ -80,11 +82,11 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
 
     private void SpawnLine(int obj, Vector3 start, Vector3 end)
     {
-        TEntity prefab = GetPrefab(obj - 1);
+        TEntity prefab = GetPrefab(EntryIndex(obj));
         if (prefab == null) return;
 
         // Şekil SO'dan gelir (prefab'ı paylaşan SO'lar olabilir): kontrol ve aralık yaratılan kopyayla
-        TEntity instance = CreateInstance(obj - 1);
+        TEntity instance = CreateInstance(EntryIndex(obj));
         float step = Mathf.Max(1, instance.GetFootprint().Size.x); // her entity arası boşluk, footprint genişliğine göre
 
         Vector3 delta = end - start;
@@ -103,7 +105,7 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
         {
             Vector3 pos = start + direction * (step * i);
 
-            if (instance == null) instance = CreateInstance(obj - 1);
+            if (instance == null) instance = CreateInstance(EntryIndex(obj));
             if (!CanPlace(instance, pos)) continue;
             if (PlaceEntity(instance, pos)) instance = null;
         }
@@ -158,4 +160,6 @@ public abstract class GridPlacementControllerBase : MonoBehaviour
 {
     public abstract string MenuName { get; set; }
     public GridMenuBaseSO MenusSO;
+    // Gösterilen sayfanın ilk elemanının menüdeki sırası (sayı tuşları buradan sayar)
+    public int PageOffset { get; set; }
 }

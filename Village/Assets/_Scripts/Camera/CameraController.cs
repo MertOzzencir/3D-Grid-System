@@ -226,7 +226,8 @@ public class CameraController : MonoBehaviour
     {
         if (isRotating) return;
 
-        float scroll = InputManager.ScrollDelta();
+        // Build mode'da menü seçiliyken scroll menünün sayfasını değiştirir (PlacementController)
+        float scroll = PlacementController.ScrollChangesPage ? 0f : InputManager.ScrollDelta();
         if (Mathf.Abs(scroll) > 0.001f)
             zoomVelocity = scroll * zoomSpeed;
 

@@ -17,6 +17,7 @@ public class PlacementController : MonoBehaviour
 
     private GridPlacementControllerBase currentMenu;
     private int currentIndex = -1;
+    private int page; // menüler kutu sayısı (9) kadarlık sayfalara bölünür, build mode'da mouse scroll ile değişir
     private bool isOpen = true;
     private Image openBuildModeImage => openBuildMode.GetComponent<Image>();
 
@@ -44,6 +45,24 @@ public class PlacementController : MonoBehaviour
     // Build mode açık mı (eldiven gizlenir, mouse imleci görünür: GloveCursor)
     public static bool IsBuildMode { get; private set; }
 
+    // Build mode'da bir menü seçili: mouse scroll sayfa değiştirir, kamera zoom yapmaz (CameraController)
+    public static bool ScrollChangesPage { get; private set; }
+
+    private int PageSize => Mathf.Min(placementSlots.Length, placementNames.Length);
+
+    private void Update()
+    {
+        if (currentMenu == null || PageSize == 0) return;
+        float scroll = InputManager.ScrollDelta();
+        if (Mathf.Abs(scroll) < 0.001f) return;
+
+        int pageCount = Mathf.Max(1, Mathf.CeilToInt(currentMenu.MenusSO.Entities.Count / (float)PageSize));
+        if (pageCount <= 1) return;
+        // Aşağı scroll sonraki sayfa; sondan başa döner
+        page = (page + (scroll < 0f ? 1 : -1) + pageCount) % pageCount;
+        SetMenuElements(currentIndex);
+    }
+
     // Space ve build mode butonu bunu çağırır
     public void OpenBuildMode() => SetBuildMode(!isOpen);
 
@@ -67,7 +86,9 @@ public class PlacementController : MonoBehaviour
     {
         SetDeActiveMenus();
         placementBases[index].enabled = true;
+        page = 0;
         SetMenuElements(index);
+        ScrollChangesPage = true;
 
         currentIndex = index;
         UpdateButtonHighlight();
@@ -76,6 +97,8 @@ public class PlacementController : MonoBehaviour
     public void SetDeActiveMenus()
     {
         foreach (var a in placementBases) a.enabled = false;
+        currentMenu = null;
+        ScrollChangesPage = false;
         ResetSpritesAndNames();
         ResetButtonHighlight();
     }
@@ -102,13 +125,14 @@ public class PlacementController : MonoBehaviour
     {
         ResetSpritesAndNames();
         currentMenu = placementBases[index];
-        int timer = 0;
-        foreach (var a in currentMenu.MenusSO.Entities)
+        // Sadece bu sayfanın elemanları; sayı tuşları da bu sayfadan sayar
+        int start = page * PageSize;
+        currentMenu.PageOffset = start;
+        var entities = currentMenu.MenusSO.Entities;
+        for (int slot = 0; slot < PageSize && start + slot < entities.Count; slot++)
         {
-            placementSlots[timer].sprite = a.Icon;
-            placementNames[timer].text = a.Name;
-            timer++;
-            if (timer >= placementSlots.Length || timer >= placementNames.Length) break;
+            placementSlots[slot].sprite = entities[start + slot].Icon;
+            placementNames[slot].text = entities[start + slot].Name;
         }
     }
 
