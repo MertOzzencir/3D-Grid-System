@@ -46,6 +46,9 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     public List<WoodRope.Face> RopeFaces => ropeFaces;
 
     public int BaseLength => baseLength;
+    // Yanları boş: iple bağlı dik 1×1'lerden yığın. Eski 2BR / 3BR odun gibi davranır: taşınıp başka bir oduna tek parça
+    // olarak eklenebilir (WoodMergeTarget.TryGetPiece)
+    public bool IsStack => WoodLayout.IsEmpty(ToArrays());
     public int[] BaseSegments => segments != null && segments.Length > 0 ? (int[])segments.Clone() : WoodLayout.DefaultSegments(baseLength);
 
     public Renderer[] PieceRenderers(WoodSide side) => sideRenderers[(int)side].ToArray();

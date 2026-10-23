@@ -62,7 +62,8 @@ public class WoodMerger : MonoBehaviour
     }
 
     // target hem GridPlaceable hem IWoodStack olmalı (Wood ya da MergedWood)
-    public void Merge(GridPlaceable target, Wood carried, WoodSlot slot)
+    // carried: tek 1×1 (Wood) ya da yanları boş dik yığın (MergedWood.IsStack), carriedLength boyu
+    public void Merge(GridPlaceable target, GridPlaceable carried, int carriedLength, WoodSlot slot)
     {
         var stack = (IWoodStack)target;
 
@@ -76,10 +77,10 @@ public class WoodMerger : MonoBehaviour
 
         if (slot.IsTop)
         {
-            baseLength += carried.Length;
-            sides = WoodLayout.SidesAfterTopMerge(stack, carried.Length);
-            sideSegments = WoodLayout.SideSegmentsAfterTopMerge(stack, carried.Length);
-            segments = WoodLayout.SegmentsAfterTopMerge(segments, carried.Length);
+            baseLength += carriedLength;
+            sides = WoodLayout.SidesAfterTopMerge(stack, carriedLength);
+            sideSegments = WoodLayout.SideSegmentsAfterTopMerge(stack, carriedLength);
+            segments = WoodLayout.SegmentsAfterTopMerge(segments, carriedLength);
         }
         else if (slot.IsEnd)
         {
@@ -88,21 +89,21 @@ public class WoodMerger : MonoBehaviour
             sideSegments = WoodLayout.CopySideSegments(stack);
             int length = sides[(int)slot.Side][slot.Layer - 1];
             int[] old = sideSegments[(int)slot.Side][slot.Layer - 1] ?? new[] { length };
-            sideSegments[(int)slot.Side][slot.Layer - 1] = WoodLayout.SegmentsAfterTopMerge(old, carried.Length);
-            sides[(int)slot.Side][slot.Layer - 1] = length + carried.Length;
+            sideSegments[(int)slot.Side][slot.Layer - 1] = WoodLayout.SegmentsAfterTopMerge(old, carriedLength);
+            sides[(int)slot.Side][slot.Layer - 1] = length + carriedLength;
         }
         else
         {
             sides = WoodLayout.CopySides(stack);
             sideSegments = WoodLayout.CopySideSegments(stack);
-            sides[(int)slot.Side][slot.Layer - 1] = carried.Length;
+            sides[(int)slot.Side][slot.Layer - 1] = carriedLength;
         }
 
         // Hedefin ipi (sonuç aynı yerde, aynı dönüşte kurulur): sadece yeni eklenen ip kenarları sarılarak gelsin
         System.Collections.Generic.List<WoodRope.Face> previousRope = target is MergedWood oldMerged ? oldMerged.RopeFaces : null;
 
         // Taşınan odun yok olacak: geri yerleştirilmeye çalışılmasın diye iptal değil, sadece bırakıyoruz
-        InteractableController.Instance.Release(carried);
+        InteractableController.Instance.Release((IInteractable)carried);
         Destroy(carried.gameObject);
         GridManager.Instance.PlaceableRemoveOn(target, true);
 

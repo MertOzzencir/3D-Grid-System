@@ -79,7 +79,7 @@ public class HeldGridIndicator
         InteractableController controller = InteractableController.Instance;
         GridPlaceable held = enabled && controller != null ? controller.Held as GridPlaceable : null;
         // Birleştirme (elde odun) ya da sökme (elde balta): sadece bağlantı / ek yerleri
-        IWoodSlotView slots = held is Wood ? WoodMergeTarget.Active : held is Axe ? WoodDetachTarget.Active : (IWoodSlotView)null;
+        IWoodSlotView slots = held is Wood || held is MergedWood ? WoodMergeTarget.Active : held is Axe ? WoodDetachTarget.Active : (IWoodSlotView)null;
         if (slots != null && (!slots.IsAlive || slots.CandidateCells.Count == 0)) slots = null;
         if (!(held is Wood) && !(held is MergedWood) && slots == null) held = null;
 

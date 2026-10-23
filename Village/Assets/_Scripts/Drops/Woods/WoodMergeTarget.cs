@@ -62,17 +62,38 @@ public class WoodMergeTarget : IWoodSlotView
             Debug.LogError($"{owner.name} WoodMergeTarget kullanıyor ama IWoodStack değil", owner);
     }
 
-    // Sadece tek parça Wood kabul edilir; MergedWood başka bir oduna eklenemez
+    // Başka bir oduna eklenebilen parça ve boyu: tek 1×1 (Wood) ya da yanları boş dik yığın (MergedWood.IsStack: iple bağlı
+    // 1×1'ler, eski 2BR / 3BR odun gibi). Yanında odun olan MergedWood eklenemez.
+    public static bool TryGetPiece(IInteractable interacted, out GridPlaceable piece, out int length)
+    {
+        switch (interacted)
+        {
+            case Wood wood:
+                piece = wood;
+                length = wood.Length;
+                return true;
+            case MergedWood stack when stack.IsStack:
+                piece = stack;
+                length = stack.BaseLength;
+                return true;
+            default:
+                piece = null;
+                length = 0;
+                return false;
+        }
+    }
+
+    // Taşınan parça: tek 1×1 ya da yanları boş dik yığın (TryGetPiece)
     public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept)
     {
         accept = false;
-        if (!(interacted is Wood carried) || ReferenceEquals(carried, owner)) return default;
+        if (!TryGetPiece(interacted, out GridPlaceable carried, out int carriedLength) || ReferenceEquals(carried, owner)) return default;
 
         WoodSide facing = FacingSide(owner);
         snapPoints.Clear();
         candidateCells.Clear();
         candidateDirections.Clear();
-        CollectSnapPoints(carried, facing, snapPoints);
+        CollectSnapPoints(carriedLength, facing, snapPoints);
 
         int index = lockedId >= 0 ? snapPoints.FindIndex(p => p.Layer == lockedId) : -1;
         if (index >= 0)
@@ -114,7 +135,7 @@ public class WoodMergeTarget : IWoodSlotView
     // andaki yerinden ekranda TargetReleasePixels'ten fazla uzaklaşınca bırakılır (birleştirmekten vazgeçildi)
     public bool IsStillTargeted(IInteractable interacted, Ray mouseRay)
     {
-        if (!(interacted is Wood carried) || ReferenceEquals(carried, owner) || lockedId < 0) return false;
+        if (!TryGetPiece(interacted, out GridPlaceable carried, out _) || ReferenceEquals(carried, owner) || lockedId < 0) return false;
         Vector2 moved = Input.mousePosition - attachMouse;
         return moved.magnitude <= WoodMerger.Instance.TargetReleasePixels;
     }
@@ -237,24 +258,24 @@ public class WoodMergeTarget : IWoodSlotView
 
     public bool OnToolUsed(IInteractable tool)
     {
-        if (!(tool is Wood carried) || snapSelector == null || !snapSelector.HasSelection) return false;
+        if (!TryGetPiece(tool, out GridPlaceable carried, out int carriedLength) || snapSelector == null || !snapSelector.HasSelection) return false;
         if (Active == this) Active = null;
 
         WoodSlot slot = WoodSlot.FromId(snapSelector.Selected.Layer);
         snapSelector.Hide();
-        WoodMerger.Instance.Merge(owner, carried, slot);
+        WoodMerger.Instance.Merge(owner, carried, carriedLength, slot);
         return true;
     }
 
     // Taşınan odunun konabileceği yerler: tepe + kameraya bakan yüzün sağındaki ve solundaki yanlar.
     // Geçersizler (prefab yok / katman dolu / hücre dolu) hiç eklenmez.
-    private void CollectSnapPoints(Wood carried, WoodSide facing, List<SnapPoint> result)
+    private void CollectSnapPoints(int carriedLength, WoodSide facing, List<SnapPoint> result)
     {
         int baseLength = stack.BaseLength;
 
         // Tepe: toplam boy WoodLayout.MaxBaseLength'i geçmesin (eklenen 1×1'ler iple bağlanır)
-        if (baseLength + carried.Length <= WoodLayout.MaxBaseLength)
-            TryAddSnapPoint(WoodSlot.Top, baseLength, carried.Length, result);
+        if (baseLength + carriedLength <= WoodLayout.MaxBaseLength)
+            TryAddSnapPoint(WoodSlot.Top, baseLength, carriedLength, result);
 
         // Ön yanın sağındaki ve solundaki yanlar; ön ve arka gösterilmez
         WoodSide first = (WoodSide)(((int)facing + 1) % WoodLayout.SideCount);
@@ -262,15 +283,15 @@ public class WoodMergeTarget : IWoodSlotView
         foreach (WoodSide side in new[] { first, second })
             for (int layer = 1; layer <= baseLength; layer++)
                 if (stack.PieceAt(side, layer) == 0)
-                    TryAddSnapPoint(WoodSlot.At(side, layer), baseLength, carried.Length, result);
+                    TryAddSnapPoint(WoodSlot.At(side, layer), baseLength, carriedLength, result);
 
         // Yan odunların dış uçları (dört yan): toplam boy WoodLayout.MaxBaseLength'i geçmesin
         for (int s = 0; s < WoodLayout.SideCount; s++)
             for (int layer = 1; layer <= baseLength; layer++)
             {
                 int length = stack.PieceAt((WoodSide)s, layer);
-                if (length > 0 && length + carried.Length <= WoodLayout.MaxBaseLength)
-                    TryAddEndSnapPoint((WoodSide)s, layer, baseLength, length, carried.Length, result);
+                if (length > 0 && length + carriedLength <= WoodLayout.MaxBaseLength)
+                    TryAddEndSnapPoint((WoodSide)s, layer, baseLength, length, carriedLength, result);
             }
     }
 
