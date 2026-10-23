@@ -11,6 +11,9 @@ using UnityEngine;
 // parça yok), hiçbir hücresi base'in içinde değil ve (requireSupport) en alt hücrelerinden birinin altında base ya da
 // obje var (sürükleyerek havaya konamaz). Komşu hücrelerin ortak kenarı bir kez
 // (en belirgin saydamlıkla), yoksa üst üste binip koyulaşırdı. Tek mesh, "Village/Grid Fade" (UV.y 0: yukarı doğru sönme yok). Odun hücre değiştirince mesh yeniden kurulur.
+// Hız (büyük MergedWood'da ms patlıyordu): Rebuild başında bölgedeki her hücre grid'de bir kez okunur (Region), konabilirlik
+// ve uzaklık sadece bu dizilerden hesaplanır; eskiden her aday hücre için odunun bütün hücreleri grid'de tek tek aranıyordu
+// (aday × odun hücresi × birkaç sözlük araması). Listeler / sözlükler yeniden kullanılır (GC yok).
 // Birleştirme: taşınan odun başka bir oduna yapışınca (WoodMergeTarget.Active) çevre yerine sadece bağlantı yerlerinin
 // hücreleri gösterilir (eski ok göstergelerinin yerine), dışarı doğru açık: parçanın ana oduna değdiği yüzde kapalı bir
 // çerçeve (dört kenar; yan parçada dikey kenarlar dahil), çerçevenin köşelerinden parçanın uzandığı yönde ucuna kadar
@@ -55,6 +58,20 @@ public class HeldGridIndicator
     private Vector3Int shownOrigin;
     private GridMaskRotator.Rotation shownRotation;
     private int? shownMergeKey; // birleştirme gösteriliyorsa hücrelerin / seçimin anahtarı
+
+    // Rebuild'in tekrar kullanılan tamponları
+    private readonly Dictionary<Vector3Int, float> cellBuffer = new Dictionary<Vector3Int, float>();
+    private readonly Dictionary<(Vector3Int, Vector3Int), float> edgeBuffer = new Dictionary<(Vector3Int, Vector3Int), float>();
+    private readonly List<Vector3> vertices = new List<Vector3>();
+    private readonly List<Color> colors = new List<Color>();
+    private readonly List<int> triangles = new List<int>();
+    private readonly List<Vector2> uvs = new List<Vector2>();
+    private readonly List<int> bottomOffsets = new List<int>(); // odunun en alt katındaki hücrelerinin indisleri
+    // Bölge: aday hücreler + odunun şekli + bir alt kat (destek). free: odunun bir hücresi oraya girebilir (grid içinde,
+    // placeable yok, ince parça yok, base yok, CanOccupy); support: üstündeki hücreyi taşır (base, ince parça ya da başka obje)
+    private bool[] regionFree = new bool[0];
+    private bool[] regionSupport = new bool[0];
+    private int[] candidateDistance = new int[0];
 
     // Her kare: elde odun varsa onun çevresi gösterilir, yoksa söner
     public void Tick(float deltaTime)
@@ -132,32 +149,84 @@ public class HeldGridIndicator
     // Odun origin'deyken kapladığı hücrelerin çevresi (Chebyshev uzaklığı range'e kadar)
     private void Rebuild(GridPlaceable held, Vector3Int origin)
     {
-        var footprint = new List<Vector3Int>();
-        foreach (Vector3Int offset in held.GetFootprint().FilledCells())
-            footprint.Add(origin + offset);
-        Vector3Int min = footprint[0], max = footprint[0];
-        foreach (Vector3Int cell in footprint)
+        GridManager grid = GridManager.Instance;
+        IReadOnlyList<Vector3Int> offsets = held.GetFootprint().FilledCells();
+        if (grid == null || offsets.Count == 0) return;
+        Vector3Int offsetMin = offsets[0], offsetMax = offsets[0];
+        foreach (Vector3Int offset in offsets)
         {
-            min = Vector3Int.Min(min, cell);
-            max = Vector3Int.Max(max, cell);
+            offsetMin = Vector3Int.Min(offsetMin, offset);
+            offsetMax = Vector3Int.Max(offsetMax, offset);
+        }
+        bottomOffsets.Clear();
+        for (int i = 0; i < offsets.Count; i++)
+            if (offsets[i].y == offsetMin.y) bottomOffsets.Add(i);
+        Vector3Int min = origin + offsetMin, max = origin + offsetMax; // odunun şu anki hücrelerinin kutusu
+
+        // Aday hücreler (odunun konacağı origin): kutudan her yöne range
+        Vector3Int candMin = min - Vector3Int.one * range;
+        Vector3Int candSize = max + Vector3Int.one * range - candMin + Vector3Int.one;
+        // Bölge: adaylara odunun şekli eklenince kaplanan her hücre + destek için bir alt kat
+        Vector3Int regionMin = candMin + offsetMin + Vector3Int.down;
+        Vector3Int regionSize = candMin + candSize - Vector3Int.one + offsetMax - regionMin + Vector3Int.one;
+        int regionCount = regionSize.x * regionSize.y * regionSize.z;
+        if (regionFree.Length < regionCount)
+        {
+            regionFree = new bool[regionCount];
+            regionSupport = new bool[regionCount];
+        }
+        for (int x = 0; x < regionSize.x; x++)
+            for (int y = 0; y < regionSize.y; y++)
+                for (int z = 0; z < regionSize.z; z++)
+                {
+                    var cell = new Vector3Int(regionMin.x + x, regionMin.y + y, regionMin.z + z);
+                    int i = (x * regionSize.y + y) * regionSize.z + z;
+                    if (!grid.TryGetCell(cell, out GridData data))
+                    {
+                        regionFree[i] = false;
+                        regionSupport[i] = false;
+                        continue;
+                    }
+                    regionFree[i] = data.Placeable == null && !data.HasFine && data.Base == null && held.CanOccupy(cell);
+                    regionSupport[i] = data.Base != null || data.HasFine || (data.Placeable != null && data.Placeable != held);
+                }
+
+        // Adayların odunun hücrelerine uzaklığı: odunun her hücresinden dışarı bir kez yayılır
+        int candCount = candSize.x * candSize.y * candSize.z;
+        if (candidateDistance.Length < candCount) candidateDistance = new int[candCount];
+        for (int i = 0; i < candCount; i++) candidateDistance[i] = int.MaxValue;
+        foreach (Vector3Int offset in offsets)
+        {
+            Vector3Int c = origin + offset - candMin;
+            for (int dx = -range; dx <= range; dx++)
+                for (int dy = -range; dy <= range; dy++)
+                    for (int dz = -range; dz <= range; dz++)
+                    {
+                        int x = c.x + dx, y = c.y + dy, z = c.z + dz;
+                        if (x < 0 || y < 0 || z < 0 || x >= candSize.x || y >= candSize.y || z >= candSize.z) continue;
+                        int i = (x * candSize.y + y) * candSize.z + z;
+                        int distance = Mathf.Max(Mathf.Abs(dx), Mathf.Max(Mathf.Abs(dy), Mathf.Abs(dz)));
+                        if (distance < candidateDistance[i]) candidateDistance[i] = distance;
+                    }
         }
 
-        // Hücre → saydamlık (yakın = 1)
-        var cells = new Dictionary<Vector3Int, float>();
-        for (int x = min.x - range; x <= max.x + range; x++)
-            for (int y = min.y - range; y <= max.y + range; y++)
-                for (int z = min.z - range; z <= max.z + range; z++)
+        // Hücre → saydamlık (yakın = 1); sadece odunun konabileceği adaylar
+        Dictionary<Vector3Int, float> cells = cellBuffer;
+        cells.Clear();
+        for (int x = 0; x < candSize.x; x++)
+            for (int y = 0; y < candSize.y; y++)
+                for (int z = 0; z < candSize.z; z++)
                 {
-                    var cell = new Vector3Int(x, y, z);
-                    int distance = int.MaxValue;
-                    foreach (Vector3Int f in footprint)
-                        distance = Mathf.Min(distance, Mathf.Max(Mathf.Abs(x - f.x), Mathf.Max(Mathf.Abs(y - f.y), Mathf.Abs(z - f.z))));
-                    if (distance > range || !CanHoldAt(held, cell, requireSupport)) continue;
+                    int distance = candidateDistance[(x * candSize.y + y) * candSize.z + z];
+                    if (distance > range) continue;
+                    var cell = new Vector3Int(candMin.x + x, candMin.y + y, candMin.z + z);
+                    if (!CanHoldInRegion(cell, offsets, regionMin, regionSize)) continue;
                     cells[cell] = 1f - distance / (float)(range + 1);
                 }
 
         // Yüzler ve kenarlar (köşe koordinatları × 2); ortak olanlar bir kez, en belirgin saydamlıkla
-        var edges = new Dictionary<(Vector3Int, Vector3Int), float>();
+        Dictionary<(Vector3Int, Vector3Int), float> edges = edgeBuffer;
+        edges.Clear();
         foreach (var pair in cells)
         {
             Vector3Int c2 = pair.Key * 2;
@@ -167,8 +236,8 @@ public class HeldGridIndicator
             Vector3Int c = pair.Key;
             int outX = c.x < min.x ? -1 : c.x > max.x ? 1 : 0; // merkezden hangi yana dışarıda
             int outZ = c.z < min.z ? -1 : c.z > max.z ? 1 : 0;
-            foreach (int y in new[] { -1, 1 })
-                foreach (int s in new[] { -1, 1 })
+            for (int y = -1; y <= 1; y += 2)
+                for (int s = -1; s <= 1; s += 2)
                 {
                     // X boyunca uzanan kenar (z = c.z + s / 2) ve Z boyunca uzanan kenar (x = c.x + s / 2)
                     if (outZ == 0 || s != outZ)
@@ -180,13 +249,27 @@ public class HeldGridIndicator
 
         // Çizgiler yatay şerit; saydamlık çizgi boyunca sürekli: odunun hücrelerinin kutusunda tam, kutudan range uzakta 0
         Vector3 boxMin = (Vector3)min - Vector3.one * 0.5f, boxMax = (Vector3)max + Vector3.one * 0.5f;
-        var vertices = new List<Vector3>();
-        var colors = new List<Color>();
-        var triangles = new List<int>();
+        vertices.Clear();
+        colors.Clear();
+        triangles.Clear();
+        Func<Vector3, float> fade = p => Fade(p, boxMin, boxMax);
         foreach (var pair in edges)
-            AddRibbon((Vector3)pair.Key.Item1 * 0.5f, (Vector3)pair.Key.Item2 * 0.5f, p => Fade(p, boxMin, boxMax), vertices, colors, triangles);
+            AddRibbon((Vector3)pair.Key.Item1 * 0.5f, (Vector3)pair.Key.Item2 * 0.5f, fade, vertices, colors, triangles);
         SetMesh(vertices, colors, triangles);
     }
+
+    // Odun bu hücreye (origin olarak) konabilir mi (CanHoldAt'in aynısı, bölge dizilerinden)
+    private bool CanHoldInRegion(Vector3Int cell, IReadOnlyList<Vector3Int> offsets, Vector3Int regionMin, Vector3Int regionSize)
+    {
+        foreach (Vector3Int offset in offsets)
+            if (!regionFree[RegionIndex(cell + offset - regionMin, regionSize)]) return false;
+        if (!requireSupport) return true;
+        foreach (int i in bottomOffsets)
+            if (regionSupport[RegionIndex(cell + offsets[i] + Vector3Int.down - regionMin, regionSize)]) return true;
+        return false;
+    }
+
+    private static int RegionIndex(Vector3Int local, Vector3Int size) => (local.x * size.y + local.y) * size.z + local.z;
 
     // Odun bu hücreye (origin olarak) konabilir mi: bütün şekli sığar, base'e girmez, (requireSupport) altı dolu.
     // Sökülen parçanın yerini ararken WoodMerger de kullanır.
@@ -214,9 +297,9 @@ public class HeldGridIndicator
     // Birleştirme: her bağlantı yerinin hücrelerinin bütün yatay kenarları (ortak olan bir kez, en belirgin saydamlıkla)
     private void RebuildMerge(IWoodSlotView merge)
     {
-        var vertices = new List<Vector3>();
-        var colors = new List<Color>();
-        var triangles = new List<int>();
+        vertices.Clear();
+        colors.Clear();
+        triangles.Clear();
         int selected = merge.SelectedIndex;
         for (int i = 0; i < merge.CandidateCells.Count; i++)
         {
@@ -253,7 +336,9 @@ public class HeldGridIndicator
         mesh.Clear();
         if (vertices.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         mesh.SetVertices(vertices);
-        mesh.SetUVs(0, new List<Vector2>(new Vector2[vertices.Count])); // UV.y 0: yukarı doğru sönme yok
+        uvs.Clear();
+        for (int i = 0; i < vertices.Count; i++) uvs.Add(Vector2.zero); // UV.y 0: yukarı doğru sönme yok
+        mesh.SetUVs(0, uvs);
         mesh.SetColors(colors);
         mesh.SetTriangles(triangles, 0);
         mesh.RecalculateBounds();
@@ -282,7 +367,12 @@ public class HeldGridIndicator
         for (int i = 0; i < parts; i++)
         {
             int k = start + i * 2;
-            triangles.AddRange(new[] { k, k + 1, k + 3, k, k + 3, k + 2 });
+            triangles.Add(k);
+            triangles.Add(k + 1);
+            triangles.Add(k + 3);
+            triangles.Add(k);
+            triangles.Add(k + 3);
+            triangles.Add(k + 2);
         }
     }
 
