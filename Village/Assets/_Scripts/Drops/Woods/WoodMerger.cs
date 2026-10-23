@@ -99,19 +99,9 @@ public class WoodMerger : MonoBehaviour
             sides[(int)slot.Side][slot.Layer - 1] = carriedLength;
         }
 
-        // Önceden bağlı olan ip (sonuç aynı yerde, aynı dönüşte kurulur): hedefin ipi + taşınan yığının kendi ek yerleri (yan
-        // kola yatınca sonuçta yatay ek yeri olurlar ama zaten bağlıydılar). Sadece parçanın hedefe bağlandığı ip sarılarak
-        // gelir. Tepeye eklenen yığının ek yerleri dikey: ip yok.
-        var previousRope = new System.Collections.Generic.List<WoodRope.Face>();
-        if (target is MergedWood oldMerged) previousRope.AddRange(oldMerged.RopeFaces);
-        if (!slot.IsTop && carriedLength > 1)
-        {
-            Vector3 outward = WoodLayout.SideDirection(slot.Side);
-            Vector3 start = WoodLayout.PieceStart(stack.BaseLength, WoodSlot.At(slot.Side, slot.Layer));
-            int first = slot.IsEnd ? stack.PieceAt(slot.Side, slot.Layer) : 0; // taşınan parçanın kol üstündeki ilk yeri
-            for (int k = 1; k < carriedLength; k++)
-                previousRope.Add(new WoodRope.Face { center = start + outward * (first + k - 0.5f), normal = outward, up = Vector3.up });
-        }
+        // Hedefin ipi (sonuç aynı yerde, aynı dönüşte kurulur): sadece yeni eklenen ip sarılarak gelir. İp sadece yan kolun
+        // ana oduna bağlandığı yerde olduğu için yeni ip = yana yeni kol eklendiyse onun bağlantısı.
+        System.Collections.Generic.List<WoodRope.Face> previousRope = target is MergedWood oldMerged ? oldMerged.RopeFaces : null;
 
         // Taşınan odun yok olacak: geri yerleştirilmeye çalışılmasın diye iptal değil, sadece bırakıyoruz
         InteractableController.Instance.Release((IInteractable)carried);

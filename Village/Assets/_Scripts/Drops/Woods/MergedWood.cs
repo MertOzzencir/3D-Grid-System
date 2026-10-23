@@ -156,7 +156,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         foreach (List<Renderer> list in sideRenderers)
             list.Clear();
 
-        // Ana odun: 1×1'ler üst üste. Dikey ek yerlerine ip yok (kullanıcı: sadece yatay bağlantılar iple)
+        // Ana odun: 1×1'ler üst üste. 1×1'lerin arasına ip yok (kullanıcı: ip sadece yan kolun ana oduna bağlandığı yerde)
         ropeFaces = new List<WoodRope.Face>();
         Material woodMaterial = null;
         int height = 0;
@@ -172,7 +172,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         }
         foreach ((WoodSlot slot, int length) in FilledSlots())
         {
-            // Yan odun parçalardan (içten dışa); parçaların ek yerleri de ipe bağlanır
+            // Yan odun 1×1'lerden (içten dışa); aralarına ip yok, ip sadece ana oduna bağlandığı yerde
             Vector3Int start = WoodLayout.PieceStart(baseLength, slot);
             Vector3Int outward = WoodLayout.SideDirection(slot.Side);
             GameObject visual = null;
@@ -185,8 +185,6 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
                     visual ??= segmentVisual;
                     sideRenderers[(int)slot.Side].AddRange(segmentVisual.GetComponentsInChildren<Renderer>());
                 }
-                if (offset > 0)
-                    ropeFaces.Add(new WoodRope.Face { center = start + (Vector3)outward * (offset - 0.5f), normal = outward, up = Vector3.up });
                 offset += segment;
             }
             if (visual == null) continue;
