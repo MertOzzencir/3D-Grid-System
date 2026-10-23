@@ -30,6 +30,9 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
     private Material validMaterial, invalidMaterial;
     private bool isDragging;
     private Vector3 dragStartPos;
+    // Mouse UI'nin üstünde mi: Update'te okunur. Input olaylarının içinden EventSystem'e sorulamaz (Unity uyarır, bir
+    // önceki karenin cevabını verir); tıklama gelince bu saklanan değer kullanılır.
+    private bool pointerOverUi;
     private readonly List<Vector3> linePositions = new List<Vector3>();
 
     public override string MenuName
@@ -121,7 +124,7 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
         if (isPressed)
         {
             // Menü butonlarına tıklamak bir şey koymasın
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
+            if (pointerOverUi) return;
             if (!TryGetTargetPosition(out dragStartPos)) return;
             isDragging = true;
             return;
@@ -189,8 +192,7 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
     private void UpdatePreview()
     {
         if (ghost == null) return;
-        bool overUi = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
-        if (overUi && !isDragging || !TryGetTargetPosition(out Vector3 target))
+        if (pointerOverUi && !isDragging || !TryGetTargetPosition(out Vector3 target))
         {
             ghost.HideFrom(0);
             return;
@@ -225,6 +227,7 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
 
     private void Update()
     {
+        pointerOverUi = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
         if (deleting) DeletePlaced();
         UpdatePreview();
     }
