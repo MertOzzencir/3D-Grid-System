@@ -79,16 +79,16 @@ public class WoodMerger : MonoBehaviour
             baseLength += carried.Length;
             sides = WoodLayout.SidesAfterTopMerge(stack, carried.Length);
             sideSegments = WoodLayout.SideSegmentsAfterTopMerge(stack, carried.Length);
-            segments = WoodLayout.SegmentsAfterTopMerge(segments, carried.Length, catalog);
+            segments = WoodLayout.SegmentsAfterTopMerge(segments, carried.Length);
         }
         else if (slot.IsEnd)
         {
-            // Yan odunun ucuna: o yan odun uzar (tepedeki gibi: 3'ü geçmiyorsa doğal model, geçiyorsa iple bağlı parça)
+            // Yan odunun ucuna: o yan odun uzar (tepedeki gibi: eklenen 1×1 ucuna iple bağlanır)
             sides = WoodLayout.CopySides(stack);
             sideSegments = WoodLayout.CopySideSegments(stack);
             int length = sides[(int)slot.Side][slot.Layer - 1];
             int[] old = sideSegments[(int)slot.Side][slot.Layer - 1] ?? new[] { length };
-            sideSegments[(int)slot.Side][slot.Layer - 1] = WoodLayout.SegmentsAfterTopMerge(old, carried.Length, catalog);
+            sideSegments[(int)slot.Side][slot.Layer - 1] = WoodLayout.SegmentsAfterTopMerge(old, carried.Length);
             sides[(int)slot.Side][slot.Layer - 1] = length + carried.Length;
         }
         else
@@ -270,6 +270,10 @@ public class WoodMerger : MonoBehaviour
     }
 
     // Ayrılan kısım eski yerinden (yatıksa yatık) yeni yerine kavis çizerek zıplar, yolda dikleşir (ağaçtan düşen odun gibi)
+    // Grid'e yerleşmiş bir parçayı fromPosition / fromRotation'dan şu anki yerine zıplatır (örn. ağaçtan düşen odun yığını)
+    public void PlayHop(Transform piece, Vector3 fromPosition, Quaternion fromRotation)
+        => StartCoroutine(Hop(piece, fromPosition, fromRotation));
+
     private System.Collections.IEnumerator Hop(Transform piece, Vector3 fromPosition, Quaternion fromRotation)
     {
         Vector3 toPosition = piece.position;
@@ -292,6 +296,11 @@ public class WoodMerger : MonoBehaviour
         Vector3 basePoint = result.transform.position + Vector3.up * (footprint.Min.y - 0.5f);
         StartCoroutine(mergeWobble.Play(result.GetComponentsInChildren<Renderer>(), basePoint, footprint.Size.y, push));
     }
+
+    // length kadar dik odun: 1 ise tek 1×1 Wood, daha uzunsa iple bağlı 1×1'lerden yığın (yanları boş MergedWood).
+    // Grid'e konmamış döner.
+    public GridPlaceable SpawnWoodStack(int length)
+        => length <= 1 ? SpawnLongWood(1) : SpawnMergedWood(length, WoodLayout.EmptySides(length), null, null);
 
     private GridPlaceable SpawnLongWood(int length)
     {

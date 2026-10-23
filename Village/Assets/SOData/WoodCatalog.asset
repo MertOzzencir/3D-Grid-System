@@ -14,5 +14,3 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WoodCatalogSO
   woods:
   - {fileID: 2878994140946404698, guid: 690e2674d6d11984a9b88f0cd6ff7075, type: 3}
-  - {fileID: 473603992209207643, guid: f167de33ebc3e8f458583dc38a89ddb0, type: 3}
-  - {fileID: 5845504799137714120, guid: 01f5a4a2e74cd64499d6afa13c017982, type: 3}

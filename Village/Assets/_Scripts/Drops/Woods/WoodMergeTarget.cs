@@ -252,7 +252,7 @@ public class WoodMergeTarget : IWoodSlotView
     {
         int baseLength = stack.BaseLength;
 
-        // Tepe: toplam boy WoodLayout.MaxBaseLength'i geçmesin (3BR'i geçen kısım iple bağlanmış parça olur)
+        // Tepe: toplam boy WoodLayout.MaxBaseLength'i geçmesin (eklenen 1×1'ler iple bağlanır)
         if (baseLength + carried.Length <= WoodLayout.MaxBaseLength)
             TryAddSnapPoint(WoodSlot.Top, baseLength, carried.Length, result);
 

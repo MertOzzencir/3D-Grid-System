@@ -86,17 +86,8 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         return result;
     }
 
-    // Yan odunun parçaları: kayıtlı ve toplamı uzunluğa eşitse o, yoksa doğal modellerden
-    private static int[] SegmentsFor(int[] stored, int length)
-    {
-        if (stored != null)
-        {
-            int sum = 0;
-            foreach (int segment in stored) sum += segment;
-            if (sum == length) return stored;
-        }
-        return WoodLayout.DefaultSegments(length);
-    }
+    // Yan odunun parçaları: hep 1×1'ler (eski kayıttaki 2BR / 3BR parçalar da 1'lere bölünür)
+    private static int[] SegmentsFor(int[] stored, int length) => WoodLayout.DefaultSegments(length);
 
     public int PieceAt(WoodSide side, int layer)
     {
@@ -111,8 +102,11 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     {
         get
         {
+            // Yanları boş yığın (iple bağlı dik 1×1'ler) blueprint'te aynı boydaki dik odunun yerine geçer ("Wood:2" slot'u)
             if (signature == null)
-                signature = "MergedWood:" + WoodLayout.CanonicalSignature(baseLength, ToArrays(), out signatureSteps);
+                signature = WoodLayout.IsEmpty(ToArrays())
+                    ? $"Wood:{baseLength}"
+                    : "MergedWood:" + WoodLayout.CanonicalSignature(baseLength, ToArrays(), out signatureSteps);
             return signature;
         }
     }
@@ -135,12 +129,12 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     }
 
     // sides: WoodLayout.EmptySides biçiminde, [yan][katman - 1] = uzunluk (0 = boş)
-    // segments: ana odunun parçaları, aşağıdan yukarı (toplamı baseLength); null ise doğal modellerden
-    // sideSegments: [yan][katman - 1] = yan odunun parçaları (içten dışa) ya da null (doğal modellerden)
+    // segments: ana odunun parçaları; artık hep 1×1'ler (eski kayıt uyumu için parametre duruyor, kullanılmaz)
+    // sideSegments: eski kayıt uyumu için duruyor; yan odunlar da hep 1×1'lerden kurulur
     public void Build(int baseLength, int[][] sides, WoodCatalogSO catalog, int[] segments = null, int[][][] sideSegments = null)
     {
         this.baseLength = baseLength;
-        this.segments = segments != null && segments.Length > 0 ? (int[])segments.Clone() : WoodLayout.DefaultSegments(baseLength);
+        this.segments = WoodLayout.DefaultSegments(baseLength);
         this.sides = new Side[WoodLayout.SideCount];
         for (int s = 0; s < WoodLayout.SideCount; s++)
         {

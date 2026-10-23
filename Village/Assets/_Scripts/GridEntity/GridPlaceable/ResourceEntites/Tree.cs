@@ -136,7 +136,7 @@ public class Tree : ResourceEntity, IStickyToolTarget
     }
 
     // Dal oku kendi uzunluğunu verir. Gövde oku, önceden kesilmiş dalların uzunluğu düşülmüş gövdeyi verir:
-    // örn. 2BR gövde + 1BR dal → dal duruyorsa 2BR, dal kesildiyse 1BR odun çıkar.
+    // örn. 2 boy gövde + 1 boy dal → dal duruyorsa iple bağlı iki 1×1, dal kesildiyse tek 1×1 çıkar.
     private int WoodLengthFor(ArrowBase arrow)
     {
         if (!(arrow is ArrowRoot)) return arrow.WoodLength;
@@ -154,23 +154,34 @@ public class Tree : ResourceEntity, IStickyToolTarget
         if (arrow != null) arrow.gameObject.SetActive(false);
     }
 
-    // Odun, origin'den (kesilen parçanın yeri) ağacın yanındaki ilk boş hücreye zıplar
+    // Odun origin'den (kesilen parçanın yeri) ağacın yanındaki, sığdığı ilk boş yere zıplar. Bütün odunlar 1×1: uzunluk
+    // 1'den büyükse (örn. gövde dipten kesilince 2) iple bağlı 1×1'lerden dik yığın çıkar (WoodMerger.SpawnWoodStack).
     private void SpawnWood(int length, Vector3 origin)
     {
-        Wood prefab = WoodMerger.Instance.Catalog.GetWood(length);
-        if (prefab == null)
+        GridPlaceable wood = WoodMerger.Instance.SpawnWoodStack(length);
+        if (!TryFindSpawnCell(wood, out Vector3Int target))
         {
-            Debug.LogWarning($"WoodCatalog'da {length} uzunluğunda odun yok", this);
+            Destroy(wood.gameObject);
             return;
         }
 
-        Vector3 target = GridManager.Instance.GetEmptyGridFromEntityPosition(this, out bool found);
-        if (!found) return;
-
-        Wood wood = Instantiate(prefab, origin, Quaternion.identity);
-        wood.OnSpawned();
         GridManager.Instance.PlaceablePlaceOn(wood, target);
-        wood.SpawnAnimation(target, origin);
+        if (wood is Wood single) single.SpawnAnimation(target, origin);
+        else WoodMerger.Instance.PlayHop(wood.transform, origin, wood.transform.rotation);
+    }
+
+    // Ağacın ayak izinin çevresindeki (bir hücre dışı) zemin katında, odunun bütün boyunun sığdığı ilk yer
+    private bool TryFindSpawnCell(GridPlaceable wood, out Vector3Int cell)
+    {
+        GridFootprint footprint = PlacedFootprint ?? GetFootprint();
+        for (int z = footprint.Min.z - 1; z <= footprint.Max.z + 1; z++)
+            for (int x = footprint.Min.x - 1; x <= footprint.Max.x + 1; x++)
+            {
+                cell = OriginWorldPosition + new Vector3Int(x, 0, z);
+                if (GridManager.Instance.CanPlaceablePlaceOn(wood, cell)) return true;
+            }
+        cell = default;
+        return false;
     }
 
     // --- Oklar ---
