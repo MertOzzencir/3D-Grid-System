@@ -65,7 +65,9 @@ Shader "Village/Toon Outline"
                 float facing = abs(dot(normal, forward));
                 float depthThreshold = _VillageOutlineDepth * (1.0 + 4.0 * (1.0 - facing));
 
-                float edge = max(step(depthThreshold, depthDifference), step(_VillageOutlineNormal, normalDifference));
+                // Eşikte birden değil, kısa bir aralıkta açılır (uzakta tırtıklı / titreşen çizgi olmasın)
+                float edge = max(smoothstep(depthThreshold, depthThreshold * 1.5, depthDifference),
+                                 smoothstep(_VillageOutlineNormal, _VillageOutlineNormal * 1.5, normalDifference));
                 color.rgb = lerp(color.rgb, color.rgb * _VillageOutlineColor.rgb, edge * _VillageOutlineColor.a);
                 return color;
             }
