@@ -283,6 +283,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridBasePlacementController
   MenusSO: {fileID: 11400000, guid: 535bbaa9c803de942ba9e096a0f9f6c3, type: 2}
   menuName: Base
+  ghostShader: {fileID: 0}
+  validColor: {r: 0.45, g: 1, b: 0.55, a: 0.45}
+  invalidColor: {r: 1, g: 0.35, b: 0.3, a: 0.45}
 --- !u!114 &82442284
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -297,6 +300,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridPlaceablePlacementController
   MenusSO: {fileID: 11400000, guid: e5732123c8cf7a047a823bd180b08932, type: 2}
   menuName: Placeable
+  ghostShader: {fileID: 0}
+  validColor: {r: 0.45, g: 1, b: 0.55, a: 0.45}
+  invalidColor: {r: 1, g: 0.35, b: 0.3, a: 0.45}
 --- !u!114 &82442285
 MonoBehaviour:
   m_ObjectHideFlags: 0
