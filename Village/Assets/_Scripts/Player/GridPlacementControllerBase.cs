@@ -169,7 +169,8 @@ public abstract class GridPlacementControllerBase<TEntity> : GridPlacementContro
         float step = Mathf.Max(1, alongX ? size.x : size.z);
         float distance = delta.magnitude;
         Vector3 direction = distance > 0.001f ? delta.normalized : Vector3.zero;
-        int count = distance > 0.001f ? Mathf.Max(1, Mathf.RoundToInt(distance / step)) : 0;
+        // Yarım adımdan az kayma tek obje (eskiden en az 2 sayıyordu: tıklarken fare biraz kayınca iki obje konuyordu)
+        int count = Mathf.RoundToInt(distance / step);
         for (int i = 0; i <= count; i++)
             result.Add(start + direction * (step * i));
     }
