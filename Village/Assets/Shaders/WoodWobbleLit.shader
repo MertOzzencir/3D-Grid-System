@@ -3,6 +3,7 @@
 // vertex, URP'nin kendi vertex fonksiyonuna gitmeden önce ApplyWobble ile deforme edilir.
 // ForwardLit fragment'ı Toon.hlsl'deki ToonLitPassFragment: toon kapalıyken (ToonStyle) birebir Lit, açıkken sert geçişli ışık.
 // ForwardLit, GBuffer, DepthOnly, DepthNormals fragment'ı önce ApplyFade çağırır (ShadowCaster hariç).
+// DepthNormals pass'i normal map'siz (toon konturu modelin şeklinden çizilsin).
 // Elle düzenlenmez: Editor~/make_lit_variants.py ile üretilir, URP güncellenince yeniden üret.
 Shader "Village/Wood Wobble Lit"
 {
@@ -443,7 +444,7 @@ Shader "Village/Wood Wobble Lit"
 
             // -------------------------------------
             // Material Keywords
-            #pragma shader_feature_local _NORMALMAP
+            // _NORMALMAP yok: ekran normalleri modelin şeklinden (toon konturu)
             #pragma shader_feature_local _PARALLAXMAP
             #pragma shader_feature_local _ _DETAIL_MULX2 _DETAIL_SCALED
             #pragma shader_feature_local _ALPHATEST_ON

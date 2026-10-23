@@ -182,6 +182,16 @@ def make_variant(urp, lit, v):
     for pass_include, blocks in additions.items():
         line = include_line(pass_include)
         t = t.replace(line, line + "".join("\n            " + block for block in blocks))
+    # DepthNormals pass'i normal map'siz: ekran normalleri (toon konturu, SSAO) modelin gerçek şeklinden gelir. Normal map'in
+    # oyukları uzakta birkaç piksele sıkışıp kontura keskin köşe gibi görünüyor, tırtıklı koyu çizgiler çıkıyordu.
+    start = t.index('Name "DepthNormals"')
+    end = t.index("ENDHLSL", start)
+    pragma = "            #pragma shader_feature_local _NORMALMAP\n"
+    if t.count(pragma, start, end) != 1:
+        sys.exit("Lit.shader beklenen yapıda değil: DepthNormals _NORMALMAP")
+    t = t[:start] + t[start:end].replace(pragma, "            // _NORMALMAP yok: ekran normalleri modelin şeklinden (toon konturu)\n") + t[end:]
+    header_note = "// DepthNormals pass'i normal map'siz (toon konturu modelin şeklinden çizilsin).\n"
+    t = t.replace("// Elle düzenlenmez:", header_note + "// Elle düzenlenmez:", 1)
     return t
 
 
