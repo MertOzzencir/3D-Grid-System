@@ -43,6 +43,15 @@ public abstract class Creature : GridPlaceable
     public virtual bool OnZoneHoldTick(CreatureZoneType zone) => false;  // basılı: devam ediyorsa true
     public virtual void OnZoneHoldEnd(CreatureZoneType zone) { }
     public virtual void OnZoneHover(CreatureZoneType zone, bool entered) { }
+
+    // Elde tutulan bir eşya bölgeye getirilince (CreatureZone IToolTarget olarak iletir; örn. kediye balık yemi).
+    // Tür kabul ederse true ve eşyanın duracağı yer; sol tıkta OnZoneToolUsed (kullanıldıysa true).
+    public virtual bool AcceptsZoneTool(IInteractable tool, CreatureZoneType zone, out Vector3 position)
+    {
+        position = default;
+        return false;
+    }
+    public virtual bool OnZoneToolUsed(IInteractable tool, CreatureZoneType zone) => false;
 }
 
 // Bir durum: girer, her kare çalışır, çıkar. Tür kendi durumlarını bundan türetir.

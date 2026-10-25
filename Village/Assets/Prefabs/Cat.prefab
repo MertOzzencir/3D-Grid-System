@@ -74,6 +74,10 @@ MonoBehaviour:
   overpetPerRub: 1
   overpetDecay: 0.4
   affectionPerRub: 0.02
+  feeding:
+    slices: 4
+    digestSeconds: 8
+    poopData: {fileID: 11400000, guid: 513ed088322546fc9c4959c3d35f64c5, type: 2}
   lookFieldOfView: 120
   headPatSeconds: 1.2
   buttSlapSeconds: 2.2

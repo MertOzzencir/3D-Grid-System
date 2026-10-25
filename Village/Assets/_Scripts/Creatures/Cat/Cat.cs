@@ -5,6 +5,8 @@ using UnityEngine;
 //   sol tık kafa → pat-pat (HeadPat)      sol tık kıç → şaplak, kıçını kaldırıp yeri tırmalar (ButtSlap)
 //   sağ tık basılı → göbek modu: sırtüstü döner, eldivenle göbeği okşanır (BellyRub); fazla okşanırsa
 //   arka ayaklarıyla tekmeler (BunnyKick) ve kaçar.
+//   elde balık yemi (FishBait) kedinin üstünde sol tık → yer: besleme barı (CatFeeding) bir dilim dolar; sindirince
+//   dolu dilim kadar kaka (ağaç tohumu, CatPoop) bırakır.
 // Animasyonlar CreatureAnimator ile isimden oynatılır; model gelmeden yer tutucu (iki kutu) kendini kurar ve
 // tepkileri basit kutu hareketleriyle gösterir.
 // Grid'de "yürüyen placeable": build menüsünden konur, kayıtla gelir (ISaveState: kafanın yönü + sevgi), durduğu iki
@@ -30,6 +32,9 @@ public class Cat : Creature, ISaveState
     [SerializeField] private float overpetDecay = 0.4f;
     [Tooltip("Okşama başına sevgi artışı")]
     [SerializeField] private float affectionPerRub = 0.02f;
+
+    [Tooltip("Besleme: balık yemi → dilimli bar → sindirince kaka (ağaç tohumu)")]
+    [SerializeField] private CatFeeding feeding = new CatFeeding();
 
     [Header("Görüş")]
     [Tooltip("Kedinin önünde eldiveni gördüğü toplam açı (derece). Bunun dışında (arkada, yanda) kalan eldivene bakmaz.")]
@@ -136,6 +141,7 @@ public class Cat : Creature, ISaveState
     private Vector3 touchPoint, touchNormal = Vector3.up, touchDragOffset, lastGlovePoint;
     private Vector3Int? restoredHeadOffset; // kayıttan: gövde hücresinden kafa hücresine
     private float lastPounceTime = float.MinValue;
+    private int hoveredZones; // mouse kedinin bölgelerinden birinin üstündeyse > 0 (besleme barı görünür)
 
     public GridWalker Walker => walker;
     public float Affection => affection;
@@ -166,6 +172,8 @@ public class Cat : Creature, ISaveState
         if (CurrentState == null) ChooseNext();
 
         overpet = Mathf.Max(0f, overpet - overpetDecay * Time.deltaTime);
+        bool holdingFish = InteractableController.Instance != null && InteractableController.Instance.Held is FishBait;
+        feeding.Tick(this, holdingFish || hoveredZones > 0);
         base.Update();
 
         // Kafa ve gözler eldivene bakar: yakındaysa (CatRig / CatEyes kendi mesafesine bakar) ve görüş alanındaysa
@@ -342,12 +350,16 @@ public class Cat : Creature, ISaveState
     {
         public Vector3Int head; // gövde hücresinden kafa hücresine
         public float affection;
+        public int fed;         // besleme barının dolu dilimleri
+        public float digest;    // sindirmeye kalan süre
     }
 
     public string CaptureState() => JsonUtility.ToJson(new SaveState
     {
         head = walker.IsPlaced ? walker.HeadCell - walker.BodyCell : Vector3Int.forward,
         affection = affection,
+        fed = feeding.Fed,
+        digest = feeding.DigestTimer,
     });
 
     public void RestoreState(string state)
@@ -356,6 +368,7 @@ public class Cat : Creature, ISaveState
         if (saved == null) return;
         if (saved.head != Vector3Int.zero) restoredHeadOffset = saved.head;
         affection = Mathf.Clamp01(saved.affection);
+        feeding.Restore(saved.fed, saved.digest);
     }
 
     // --- Davranış seçimi ---
@@ -372,6 +385,25 @@ public class Cat : Creature, ISaveState
     private GloveCursor Glove => glove != null ? glove : glove = FindFirstObjectByType<GloveCursor>();
 
     // --- Etkileşim (CreatureZone'dan) ---
+
+    // Elde balık yemi: kedi yiyebiliyorsa (bar dolu değil) yem kafasının üstünde durur, sol tıkla yer
+    public override bool AcceptsZoneTool(IInteractable tool, CreatureZoneType zone, out Vector3 position)
+    {
+        position = default;
+        if (!(tool is FishBait) || feeding.IsFull || !walker.IsPlaced) return false;
+        position = (Vector3)walker.HeadCell + Vector3.up * 0.6f;
+        return true;
+    }
+
+    public override bool OnZoneToolUsed(IInteractable tool, CreatureZoneType zone)
+    {
+        if (!(tool is FishBait fish) || !feeding.TryFeed()) return false;
+        fish.Eat();
+        return true;
+    }
+
+    public override void OnZoneHover(CreatureZoneType zone, bool entered)
+        => hoveredZones = Mathf.Max(0, hoveredZones + (entered ? 1 : -1));
 
     public override void OnZoneClicked(CreatureZoneType zone, RaycastHit hit)
     {

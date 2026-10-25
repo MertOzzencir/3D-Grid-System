@@ -268,10 +268,11 @@ const NODES = [
     what: "20 dakikada bir gün: güneş, ay, renkler, sis, ateş böcekleri. Kaydedilir.",
     how: ["Fikir: gece bitkileri, sera yapısı"], files: ["Vfx/DayCycle.cs"],
     next: "Büyüme süresine bağlanabilir." },
-  { id: "cat", name: "Kedi", status: "parked", x: 1090, y: 735, tag: "Cat",
-    what: "Sevilen, şaplak yiyen, ele zıplayan kedi. Ana halka oturunca yeri belli olacak.",
-    how: ["Fikir: sevgisi yüksekse hediye bırakır", "Fikir: tarla ziyaretçisi (karede uyur)"],
-    files: ["Creatures/Cat/Cat.cs"], next: "Park edildi." },
+  { id: "cat", name: "Kedi", status: "wip", x: 1090, y: 735, tag: "Cat",
+    what: "Sevilen, şaplak yiyen, ele zıplayan kedi. Balıkla beslenince kaka bırakır: kaka ağaç tohumu (odunun kaynağı).",
+    how: ["Balık yemi kedinin üstüne getirilip sol tıkla yedirilir", "Dilimli besleme barı: sindirince dolu dilim kadar kaka", "Kaka istenen yere ekilir, fidan büyüyüp ağaç olur"],
+    files: ["Creatures/Cat/Cat.cs", "Creatures/Cat/CatFeeding.cs", "Creatures/Cat/FishBait.cs", "Creatures/Cat/CatPoop.cs"],
+    next: "Balık tutma gelince yem oradan; modeller (balık, kaka)." },
 
   // --- Park edilenler / sonraki ---
   { id: "upgrade", name: "Gemi upgrade'leri", status: "planned", x: 390, y: 95, tag: "fikir",
@@ -305,6 +306,7 @@ const EDGES = [
   ["island", "npc", "yeni NPC", "planned"],
   ["material", "build", "yapı malzemesi", "live"],
   ["chop", "material", "odun", "live"],
+  ["cat", "chop", "kaka → ağaç", "live"],
   ["chop", "chopblock", "1BR odun", "live"],
   ["chopblock", "fine", "yarım / çeyrek odun", "live"],
   ["chopblock", "sawbench", "yarım odun", "live"],

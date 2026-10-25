@@ -6,7 +6,10 @@ using UnityEngine;
 // Dal oku (ArrowChild) sadece üst kısmı keser; gövde oku (ArrowRoot) ağacı tamamen kaldırır.
 // Yapışkan hedef: balta bir kez yapışınca mouse gövdeden çıksa da kopmaz; ani mouse hareketiyle (GridDragMotor)
 // ya da mouse gövdenin ekseninden releaseDistance'tan fazla uzaklaşınca bırakılır.
-public class Tree : ResourceEntity, IStickyToolTarget
+// Fidan: kedi kakası ekilince (CatPoop) ağaç fidan olarak konur (StartAsSapling): bütün ayak izini hemen kaplar (oraya
+// başka bir şey konamaz), görünüşü saplingScale'den growSeconds'ta tam boya büyür; büyürken baltayla kesilemez.
+// Büyüme kayda girer (ISaveState).
+public class Tree : ResourceEntity, IStickyToolTarget, ISaveState
 {
     [SerializeField] private ArrowBase[] Arrows;
     [SerializeField] private GameObject mainVisual;
@@ -29,8 +32,25 @@ public class Tree : ResourceEntity, IStickyToolTarget
     [Tooltip("Vurulan tarafın içeri göçmesi. Ağacın materyali 'Village/Tree Chop Lit' shader'ını kullanmalı.")]
     [SerializeField] private ChopDent chopDent = new ChopDent();
 
+    [Header("Fidan (kakadan ekilince)")]
+    [Tooltip("Fidandan tam ağaca büyüme süresi (saniye)")]
+    [SerializeField] private float growSeconds = 60f;
+    [Tooltip("Fidanın boyu (tam ağaca oranla)")]
+    [SerializeField, Range(0.05f, 1f)] private float saplingScale = 0.15f;
+
     private ArrowBase selectedArrow;
     private TreeHitFeedback hitFeedback;
+    private float growth = 1f; // 0 fidan, 1 tam ağaç
+    private Vector3 mainVisualScale = Vector3.one;
+    private bool scaleRead;
+
+    public bool IsGrowing => growth < 1f;
+
+    [System.Serializable]
+    private class SaveState
+    {
+        public float growth = 1f;
+    }
 
     private TreeHitFeedback HitFeedback => hitFeedback ??= new TreeHitFeedback(this, hitShake, chopDent);
 
@@ -59,7 +79,7 @@ public class Tree : ResourceEntity, IStickyToolTarget
     public Vector3 GetToolTargetPosition(IInteractable interactable, out bool accept)
     {
         accept = false;
-        if (!(interactable is Axe)) return default;
+        if (!(interactable is Axe) || IsGrowing) return default; // fidan kesilmez
         accept = true;
 
         SetArrowsVisible(true);
@@ -285,6 +305,45 @@ public class Tree : ResourceEntity, IStickyToolTarget
     }
 
     // --- Yaşam döngüsü ---
+
+    // --- Fidan ---
+
+    // Ekilince: fidan boyunda başlar, Update'te büyür
+    public void StartAsSapling()
+    {
+        growth = 0f;
+        ApplyGrowth();
+    }
+
+    private void Update()
+    {
+        if (!IsGrowing) return;
+        growth = Mathf.Min(1f, growth + Time.deltaTime / Mathf.Max(growSeconds, 0.01f));
+        ApplyGrowth();
+    }
+
+    // Ana görünüş fidan boyundan tam boya (yumuşak hızlanıp yavaşlayarak)
+    private void ApplyGrowth()
+    {
+        if (mainVisual == null) return;
+        if (!scaleRead)
+        {
+            mainVisualScale = mainVisual.transform.localScale;
+            scaleRead = true;
+        }
+        float t = Mathf.SmoothStep(0f, 1f, growth);
+        mainVisual.transform.localScale = mainVisualScale * Mathf.Lerp(saplingScale, 1f, t);
+    }
+
+    public string CaptureState() => JsonUtility.ToJson(new SaveState { growth = growth });
+
+    public void RestoreState(string state)
+    {
+        SaveState saved = JsonUtility.FromJson<SaveState>(state);
+        if (saved == null) return;
+        growth = Mathf.Clamp01(saved.growth);
+        if (IsGrowing) ApplyGrowth();
+    }
 
     public override void OnPlaced(Vector3Int origin)
     {

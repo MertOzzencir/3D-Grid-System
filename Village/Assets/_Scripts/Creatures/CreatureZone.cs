@@ -6,8 +6,9 @@ public enum CreatureZoneType { Head, Rear, Body }
 //   sol tık (elde bir şey yokken) → IClickable → Creature.OnZoneClicked
 //   sağ tık basılı                → IInteractable sözleşmesi → OnZoneHoldBegin / Tick / End (örn. göbek okşama)
 //   mouse üstünde                 → IHoverable → OnZoneHover
+//   elde eşyayla üstüne gelinince → IToolTarget → AcceptsZoneTool / OnZoneToolUsed (örn. kediye balık yemi)
 // IGloveFreeHold: sağ tıkla "tutulduğunda" eldiven bölgeye çakılmaz, mouse'u takip edip yüzeyde gezer (okşama).
-public class CreatureZone : MonoBehaviour, IClickable, IInteractable, IHoverable, IGloveFreeHold
+public class CreatureZone : MonoBehaviour, IClickable, IInteractable, IHoverable, IGloveFreeHold, IToolTarget
 {
     [SerializeField] private CreatureZoneType zone;
     [SerializeField] private Creature owner;
@@ -53,4 +54,15 @@ public class CreatureZone : MonoBehaviour, IClickable, IInteractable, IHoverable
 
     // Sağ tık basılıyken sol tık: şimdilik bir şey yapmaz, tutma devam eder
     public void Interact(out bool finished) => finished = false;
+
+    // --- IToolTarget (elde eşya) ---
+    public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept)
+    {
+        accept = owner.AcceptsZoneTool(interacted, zone, out Vector3 position);
+        return position;
+    }
+
+    public Quaternion GetToolTargetRotation() => owner.transform.rotation;
+    public bool OnToolUsed(IInteractable tool) => owner.OnZoneToolUsed(tool, zone);
+    public void OnToolTargetExit() { }
 }
