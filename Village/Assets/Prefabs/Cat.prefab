@@ -76,8 +76,13 @@ MonoBehaviour:
   affectionPerRub: 0.02
   feeding:
     slices: 4
-    digestSeconds: 8
+    digestSeconds: 2
     poopData: {fileID: 11400000, guid: 513ed088322546fc9c4959c3d35f64c5, type: 2}
+    barOffset: {x: 0, y: 1.2, z: 0}
+    barSize: {x: 0.9, y: 0.14}
+    fillColor: {r: 1, g: 0.72, b: 0.3, a: 1}
+    emptyColor: {r: 0.15, g: 0.12, b: 0.1, a: 0.55}
+    fadeSpeed: 6
   lookFieldOfView: 120
   headPatSeconds: 1.2
   buttSlapSeconds: 2.2

@@ -283,6 +283,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridBasePlacementController
   MenusSO: {fileID: 11400000, guid: 535bbaa9c803de942ba9e096a0f9f6c3, type: 2}
   menuName: Base
+  ghostShader: {fileID: 0}
+  validColor: {r: 0.45, g: 1, b: 0.55, a: 0.45}
+  invalidColor: {r: 1, g: 0.35, b: 0.3, a: 0.45}
 --- !u!114 &82442284
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -297,6 +300,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridPlaceablePlacementController
   MenusSO: {fileID: 11400000, guid: e5732123c8cf7a047a823bd180b08932, type: 2}
   menuName: Placeable
+  ghostShader: {fileID: 0}
+  validColor: {r: 0.45, g: 1, b: 0.55, a: 0.45}
+  invalidColor: {r: 1, g: 0.35, b: 0.3, a: 0.45}
 --- !u!114 &82442285
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -354,6 +360,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6283cbcd68dd7c543a683d8076512fcc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  flickReleaseSpeed: 3
 --- !u!114 &82442287
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -922,9 +929,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: '::'
   speed: 25
   acceleration: 120
+  followSharpness: 6
+  focusSharpness: 3
   rotationAngle: 90
   rotationSpeed: 400
   fallbackOrbitDistance: 10
+  pivotMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  pivotFallbackHeight: 0
+  maxPivotDistance: 200
   zoomSpeed: 1750
   zoomDamping: 18
   minHeight: 5
@@ -1832,6 +1846,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridManager
   HeightDebugDistance: 0
   showBaseGizmos: 1
+  showFineGizmos: 1
   GridSize: {x: 30, y: 15, z: 30}
 --- !u!114 &1032872126
 MonoBehaviour:
@@ -2110,12 +2125,48 @@ MonoBehaviour:
   mergedWoodPrefab: {fileID: 7454160838818081061, guid: bad3add8b331686469c363ef7240b915, type: 3}
   mergeWobble:
     bendAmount: 0.15
-    squashAmount: 0.25
+    squashAmount: 0.12
     duration: 0.6
     oscillations: 2.5
   frontFade:
     visibleAmount: 0.3
     duration: 0.15
+  targetReleasePixels: 150
+  rope:
+    enabled: 1
+    material: {fileID: 0}
+    color: {r: 0.86, g: 0.74, b: 0.52, a: 1}
+    thickness: 0.05625
+    surface: 0.01
+    cornerRadius: 0.6
+    cornerPull: 0.1
+    edgeBow: 0.04
+    strands: 6
+    strandDepth: 0.22
+    strandPitch: 0.25
+    knotSize: 1.5
+    growSpeed: 6
+    growDelay: 0.1
+    growStagger: 0.08
+    looseness: 0.45
+    knotPopDuration: 0.25
+    knotFibers: 10
+  heldGrid:
+    enabled: 1
+    range: 1
+    requireSupport: 1
+    color: {r: 1, g: 1, b: 1, a: 0.55}
+    edgeAlpha: 0.8
+    lineWidth: 0.05
+    fadePower: 1.5
+    selectedAlpha: 1
+    optionAlpha: 0.4
+    fadeSpeed: 6
+  detachAxeOffset: {x: 0, y: 0.5, z: -1}
+  detachAxeRotation: {x: 45, y: 0, z: 0}
+  detachSearchRange: 3
+  detachHopDuration: 0.5
+  detachHopHeight: 1
 --- !u!4 &1126745012
 Transform:
   m_ObjectHideFlags: 0

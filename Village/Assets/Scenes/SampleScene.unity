@@ -1562,6 +1562,10 @@ MonoBehaviour:
   shadowColor: {r: 0.5, g: 0.52, b: 0.75, a: 1}
   shadowSaturation: 0.5
   ambient: 0.35
+  shadowSoftness: 0.15
+  normalDetail: 1
+  midBrightness: 0.85
+  midOffset: 0.4
   specularSize: 0.05
   specularStrength: 0.4
   specularMinSmoothness: 0.6

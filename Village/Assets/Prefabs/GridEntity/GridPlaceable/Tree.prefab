@@ -792,6 +792,8 @@ MonoBehaviour:
     pushInDuration: 0.1
     returnDuration: 0.08
     springCount: 1
+  growSeconds: 5
+  saplingScale: 0.15
 --- !u!1 &7857285809937519307
 GameObject:
   m_ObjectHideFlags: 0
