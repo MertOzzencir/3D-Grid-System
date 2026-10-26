@@ -15,6 +15,8 @@ public class GooglyEyes
     [SerializeField] private Vector3 eyePosition = new Vector3(0.11f, -0.32f, 0.12f);
     [Tooltip("Gözlerin yanlardan öne dönüklüğü (derece; 0 = tam yana bakar)")]
     [SerializeField] private float eyeAngle = 25f;
+    [Tooltip("Sağ gözün ek dönüşü (derece, anchor'ın eksenlerinde). Sol göz aynası (Y ve Z ters).")]
+    [SerializeField] private Vector3 eyeRotation;
     [Tooltip("Gözün çapı ve göz bebeğinin çapı (birim)")]
     [SerializeField] private float eyeSize = 0.1f;
     [SerializeField] private float pupilSize = 0.05f;
@@ -83,7 +85,9 @@ public class GooglyEyes
     {
         eye.root.localPosition = new Vector3(eyePosition.x * eye.side, eyePosition.y, eyePosition.z);
         // Dışarı (+Z) yana bakar, eyeAngle kadar öne döner
-        eye.root.localRotation = Quaternion.LookRotation(Quaternion.Euler(0f, -eyeAngle * eye.side, 0f) * new Vector3(eye.side, 0f, 0f), Vector3.up);
+        Quaternion look = Quaternion.LookRotation(Quaternion.Euler(0f, -eyeAngle * eye.side, 0f) * new Vector3(eye.side, 0f, 0f), Vector3.up);
+        Quaternion extra = Quaternion.Euler(eyeRotation.x, eyeRotation.y * eye.side, eyeRotation.z * eye.side); // sol göz aynası
+        eye.root.localRotation = extra * look;
         eye.ball.localScale = new Vector3(eyeSize, eyeSize, eyeSize * bulge);
         eye.pupil.localScale = new Vector3(pupilSize, pupilSize, pupilSize * 0.35f);
     }
