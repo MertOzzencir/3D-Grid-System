@@ -11,6 +11,9 @@ using UnityEngine;
 // aletler ve parçalar oraya hedeflenir, sağ tıkla tutulunca parça istasyondan alınır.
 // Yığın: aynı türden parçalar StackLimit kadar üst üste konabilir (kesme kütüğünde 1×1 odun 3'e kadar). Alet hep en
 // üsttekini (held, en son konan) işler; aletin yeri de onun üstü (HoldPoint). Elle (sağ tık) da en üstteki alınır.
+// Kameraya göre duruş: ince parça (yarım / çeyrek odun) konunca kesik yüzü (FinePlaceable.InnerFace) kameraya bakacak
+// şekilde döner; böylece bölüneceği eksen kameranın sağ-solu olur, kesik hep yatay görünür. Kamera dönünce
+// (CameraController.OnCameraRotation) üstteki parçalar da yumuşakça yeni duruşa döner.
 // Tarifler Inspector'da: girdi SO → çıktı SO × adet. Çıktısı boş tarif: parça konur ama bölünmez. Üstteki parça kaydedilmez.
 // Görünüm: Model atanırsa o (modelin pivotu ayak izinin ortasına konur: 2×2'de dört hücrenin ortası), yoksa alt sınıfın
 // kodla kurduğu geçici görünüm (prototip). Kökte collider yoksa görünümü saran kutu eklenir (tutulabilsin).
@@ -200,7 +203,7 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
     {
         if (!CanHold(item)) return false;
         item.transform.SetParent(transform, true);
-        item.transform.SetPositionAndRotation(PiecePoint(item), transform.rotation);
+        item.transform.SetPositionAndRotation(PiecePoint(item), HeldRotation(item, CameraController.CurrentFacing));
         var colliders = new List<Collider>();
         foreach (Collider c in item.GetComponentsInChildren<Collider>())
             if (c.enabled)
@@ -237,6 +240,45 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
                 if (c != null) c.enabled = true;
         disabledColliders.Remove(item);
         return item;
+    }
+
+    // İstasyondaki parçanın duruşu: ince parçanın kesik yüzü kameraya (kameranın baktığı 90° yönün tersine), diğerleri
+    // istasyonun dönüşünde
+    private Quaternion HeldRotation(GridPlaceable item, CameraFacing facing)
+    {
+        if (!(item is FinePlaceable fine)) return transform.rotation;
+        Vector3 toCamera = Quaternion.Euler(0f, (float)facing, 0f) * Vector3.back;
+        return GridMaskRotator.ToQuaternion(FacingRotation(fine.InnerFace, toCamera));
+    }
+
+    private Coroutine turnRoutine;
+
+    private void OnEnable() => CameraController.OnCameraRotation += OnCameraRotated;
+    private void OnDisable() => CameraController.OnCameraRotation -= OnCameraRotated;
+
+    // Kamera döndü: üstteki parçalar yeni duruşa kamerayla birlikte döner
+    private void OnCameraRotated(CameraFacing facing)
+    {
+        if (pieces.Count == 0 || !isActiveAndEnabled) return;
+        if (turnRoutine != null) StopCoroutine(turnRoutine);
+        turnRoutine = StartCoroutine(TurnPieces(facing));
+    }
+
+    private IEnumerator TurnPieces(CameraFacing facing)
+    {
+        const float duration = 0.3f;
+        var from = new Quaternion[pieces.Count];
+        for (int i = 0; i < pieces.Count; i++) from[i] = pieces[i].transform.rotation;
+        for (float elapsed = 0f; elapsed < duration; elapsed += Time.deltaTime)
+        {
+            float t = Mathf.SmoothStep(0f, 1f, elapsed / duration);
+            for (int i = 0; i < pieces.Count && i < from.Length; i++)
+                if (pieces[i] != null) pieces[i].transform.rotation = Quaternion.Slerp(from[i], HeldRotation(pieces[i], facing), t);
+            yield return null;
+        }
+        foreach (GridPlaceable piece in pieces)
+            if (piece != null) piece.transform.rotation = HeldRotation(piece, facing);
+        turnRoutine = null;
     }
 
     // held / tarif ve Top collider'ı yığına göre; parçalar yerlerine
