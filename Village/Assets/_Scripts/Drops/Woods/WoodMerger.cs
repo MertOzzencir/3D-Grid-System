@@ -30,6 +30,10 @@ public class WoodMerger : MonoBehaviour
     [Tooltip("Baltanın ek yerindeki dönüşü (derece, kameraya göre: kamera döndükçe balta da döner). Play'deyken değiştirince " +
              "anında görünür; istenen duruş bulununca prefab'a yazılır.")]
     [SerializeField] private Vector3 detachAxeRotation = new Vector3(45f, 0f, 0f);
+    [Tooltip("Ana odunun ek yerlerinde (üst üste 1×1'lerin arası, yatay çizgi) baltanın yeri ve dönüşü: balta yatay durur. " +
+             "Üstteki iki ayar yan kolların ek yerleri (dikey çizgi) için. Play'deyken değiştirince anında görünür.")]
+    [SerializeField] private Vector3 detachAxeBaseOffset = new Vector3(0f, 0f, -1f);
+    [SerializeField] private Vector3 detachAxeBaseRotation = new Vector3(0f, 0f, 90f);
     [Tooltip("Sökülen parça, kalan odunun hücrelerinden bu kadar hücre öteye kadar konabileceği boş yer arar")]
     [SerializeField, Range(1, 5)] private int detachSearchRange = 3;
     [Tooltip("Sökülen parçanın yeni yerine zıplama süresi (saniye)")]
@@ -44,6 +48,8 @@ public class WoodMerger : MonoBehaviour
     public GameObject SnapIndicatorPrefab => snapIndicatorPrefab;
     public Vector3 DetachAxeOffset => detachAxeOffset;
     public Vector3 DetachAxeRotation => detachAxeRotation;
+    public Vector3 DetachAxeBaseOffset => detachAxeBaseOffset;
+    public Vector3 DetachAxeBaseRotation => detachAxeBaseRotation;
 
     private void Awake()
     {

@@ -102,10 +102,18 @@ public class WoodDetachTarget : IWoodSlotView
         lockedId = entries[index].Joint.Id;
         Active = this;
         accept = true;
-        return entries[index].Position + AxeFrame() * WoodMerger.Instance.DetachAxeOffset;
+        return entries[index].Position + AxeFrame() * AxeOffset(entries[index].Joint);
     }
 
-    public Quaternion GetToolTargetRotation() => AxeFrame() * Quaternion.Euler(WoodMerger.Instance.DetachAxeRotation);
+    public Quaternion GetToolTargetRotation()
+        => AxeFrame() * Quaternion.Euler(HasSelection ? AxeRotation(entries[selected].Joint) : WoodMerger.Instance.DetachAxeRotation);
+
+    // Ana odunun ek yeri yatay çizgi: balta yatay (ayrı ayar); yan kolların ek yerleri dikey: dik duruş
+    private static Vector3 AxeOffset(WoodJoint joint)
+        => joint.IsBase ? WoodMerger.Instance.DetachAxeBaseOffset : WoodMerger.Instance.DetachAxeOffset;
+
+    private static Vector3 AxeRotation(WoodJoint joint)
+        => joint.IsBase ? WoodMerger.Instance.DetachAxeBaseRotation : WoodMerger.Instance.DetachAxeRotation;
 
     // Ağaçtaki oklar gibi kamerayla 90° adımlarla döner (balta kameraya göre aynı duruşta kalır)
     private static Quaternion AxeFrame() => Quaternion.Euler(0f, (float)CameraController.CurrentFacing, 0f);
