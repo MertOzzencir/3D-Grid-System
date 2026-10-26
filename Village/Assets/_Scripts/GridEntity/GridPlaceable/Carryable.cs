@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
-// Sağ tıkla alınıp grid'de taşınan basit eşya (balık yemi, kedi kakası...): GridDragMotor ile taşınır, sağ tık bırakınca
+// Sağ tıkla alınıp grid'de taşınan basit eşya (balık, kedi kakası...): GridDragMotor ile taşınır, sağ tık bırakınca
 // grid'e konur. Sol tık (elde tutarken) önce altındaki hedefe uygulanır (IToolTarget, örn. kedi balığı yer); hedef yoksa
 // alt sınıfın UseWithoutTarget'ı (örn. kakayı ekmek). Görünüş: Model atanırsa o (pivot hücrenin ortasında), yoksa alt
 // sınıfın kodla kurduğu geçici görünüm. Kökte collider yoksa görünüşü saran kutu eklenir (tutulabilsin).
@@ -43,7 +43,7 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
     private readonly List<GameObject> flying = new List<GameObject>();
 
     public int Count => count;
-    // Aynı türden olanlar tutarken toplanıp yığın olur mu (alt sınıf: balık yemi evet)
+    // Aynı türden olanlar tutarken toplanıp yığın olur mu (alt sınıf: balık evet)
     protected virtual bool Stackable => false;
 
     protected GridDragMotor Drag { get; private set; }

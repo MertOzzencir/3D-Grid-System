@@ -44,7 +44,7 @@ public abstract class Creature : GridPlaceable
     public virtual void OnZoneHoldEnd(CreatureZoneType zone) { }
     public virtual void OnZoneHover(CreatureZoneType zone, bool entered) { }
 
-    // Elde tutulan bir eşya bölgeye getirilince (CreatureZone IToolTarget olarak iletir; örn. kediye balık yemi).
+    // Elde tutulan bir eşya bölgeye getirilince (CreatureZone IToolTarget olarak iletir; örn. kediye balık).
     // Tür kabul ederse true ve eşyanın duracağı yer; sol tıkta OnZoneToolUsed (kullanıldıysa true).
     public virtual bool AcceptsZoneTool(IInteractable tool, CreatureZoneType zone, out Vector3 position)
     {

@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 6858773253790983737}
   - component: {fileID: 1901678103772131005}
   m_Layer: 0
-  m_Name: FishBait
+  m_Name: Fish
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -43,6 +43,6 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d2a68ba0e7741ceb093906b0cf0d770, type: 3}
   m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::FishBait
+  m_EditorClassIdentifier: Assembly-CSharp::Fish
   data: {fileID: 11400000, guid: de94be7d129949f3aeb560b50f7b11b9, type: 2}
   rotation: 0

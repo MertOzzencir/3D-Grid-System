@@ -5,7 +5,7 @@ using UnityEngine;
 //   sol tık kafa → pat-pat (HeadPat)      sol tık kıç → şaplak, kıçını kaldırıp yeri tırmalar (ButtSlap)
 //   sağ tık basılı → göbek modu: sırtüstü döner, eldivenle göbeği okşanır (BellyRub); fazla okşanırsa
 //   arka ayaklarıyla tekmeler (BunnyKick) ve kaçar.
-//   elde balık yemi (FishBait) kedinin üstünde sol tık → yer: besleme barı (CatFeeding) bir dilim dolar; sindirince
+//   elde balık (Fish) kedinin üstünde sol tık → yer: besleme barı (CatFeeding) bir dilim dolar; sindirince
 //   dolu dilim kadar kaka (ağaç tohumu, CatPoop) bırakır.
 // Animasyonlar CreatureAnimator ile isimden oynatılır; model gelmeden yer tutucu (iki kutu) kendini kurar ve
 // tepkileri basit kutu hareketleriyle gösterir.
@@ -33,7 +33,7 @@ public class Cat : Creature, ISaveState
     [Tooltip("Okşama başına sevgi artışı")]
     [SerializeField] private float affectionPerRub = 0.02f;
 
-    [Tooltip("Besleme: balık yemi → dilimli bar → sindirince kaka (ağaç tohumu)")]
+    [Tooltip("Besleme: balık → dilimli bar → sindirince kaka (ağaç tohumu)")]
     [SerializeField] private CatFeeding feeding = new CatFeeding();
 
     [Header("Görüş")]
@@ -172,7 +172,7 @@ public class Cat : Creature, ISaveState
         if (CurrentState == null) ChooseNext();
 
         overpet = Mathf.Max(0f, overpet - overpetDecay * Time.deltaTime);
-        bool holdingFish = InteractableController.Instance != null && InteractableController.Instance.Held is FishBait;
+        bool holdingFish = InteractableController.Instance != null && InteractableController.Instance.Held is Fish;
         feeding.Tick(this, holdingFish || hoveredZones > 0);
         base.Update();
 
@@ -386,18 +386,18 @@ public class Cat : Creature, ISaveState
 
     // --- Etkileşim (CreatureZone'dan) ---
 
-    // Elde balık yemi: kedi yiyebiliyorsa (bar dolu değil) yem kafasının üstünde durur, sol tıkla yer
+    // Elde balık: kedi yiyebiliyorsa (bar dolu değil) balık kafasının üstünde durur, sol tıkla yer
     public override bool AcceptsZoneTool(IInteractable tool, CreatureZoneType zone, out Vector3 position)
     {
         position = default;
-        if (!(tool is FishBait) || feeding.IsFull || !walker.IsPlaced) return false;
+        if (!(tool is Fish) || feeding.IsFull || !walker.IsPlaced) return false;
         position = (Vector3)walker.HeadCell + Vector3.up * 0.6f;
         return true;
     }
 
     public override bool OnZoneToolUsed(IInteractable tool, CreatureZoneType zone)
     {
-        if (!(tool is FishBait fish) || !feeding.TryFeed()) return false;
+        if (!(tool is Fish fish) || !feeding.TryFeed()) return false;
         fish.Eat();
         return true;
     }

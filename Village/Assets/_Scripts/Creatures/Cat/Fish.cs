@@ -1,9 +1,9 @@
 using UnityEngine;
 
-// Geçici balık yemi (balık tutma gelene kadar build menüsünden konur): sağ tıkla alınır, kedinin üstüne getirilip sol
+// Balık: kedinin yemeği (balık tutma gelene kadar geçici olarak build menüsünden konur): sağ tıkla alınır, kedinin üstüne getirilip sol
 // tıklanınca kedi yer (Cat besleme barı bir dilim dolar; bkz. Cat.TryFeed). Geçici görünüm: mavi gövde + kuyruk.
-// Tohum gibi yığınlanır: tutarken aynı türden yemler toplanır, kedi her tıklamada yığından bir tane yer.
-public class FishBait : Carryable
+// Tohum gibi yığınlanır: tutarken aynı türden balıklar toplanır, kedi her tıklamada yığından bir tane yer.
+public class Fish : Carryable
 {
     [Tooltip("Geçici görünümün rengi (model yokken)")]
     [SerializeField] private Color placeholderColor = new Color(0.45f, 0.7f, 0.85f);
@@ -19,6 +19,6 @@ public class FishBait : Carryable
                   Quaternion.Euler(0f, 0f, 45f));
     }
 
-    // Kedi yığından bir tane yedi (son taneyse yem yok olur)
+    // Kedi yığından bir tane yedi (son taneyse balık yok olur)
     public void Eat() => UseOne();
 }

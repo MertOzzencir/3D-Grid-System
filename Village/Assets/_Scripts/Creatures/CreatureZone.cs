@@ -6,7 +6,7 @@ public enum CreatureZoneType { Head, Rear, Body }
 //   sol tık (elde bir şey yokken) → IClickable → Creature.OnZoneClicked
 //   sağ tık basılı                → IInteractable sözleşmesi → OnZoneHoldBegin / Tick / End (örn. göbek okşama)
 //   mouse üstünde                 → IHoverable → OnZoneHover
-//   elde eşyayla üstüne gelinince → IToolTarget → AcceptsZoneTool / OnZoneToolUsed (örn. kediye balık yemi)
+//   elde eşyayla üstüne gelinince → IToolTarget → AcceptsZoneTool / OnZoneToolUsed (örn. kediye balık)
 // IGloveFreeHold: sağ tıkla "tutulduğunda" eldiven bölgeye çakılmaz, mouse'u takip edip yüzeyde gezer (okşama).
 public class CreatureZone : MonoBehaviour, IClickable, IInteractable, IHoverable, IGloveFreeHold, IToolTarget
 {

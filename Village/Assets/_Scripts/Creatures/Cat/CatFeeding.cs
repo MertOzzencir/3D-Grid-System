@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// Kedinin beslenmesi (Cat'te bir alan, ayarları Cat'in Inspector'ında "Feeding"): dilimli besleme barı. Her balık yemi
-// (FishBait) bir dilim doldurur; son beslemeden digestSeconds sonra kedi sindirir: dolu dilim kadar kaka (CatPoop, ağaç
+// Kedinin beslenmesi (Cat'te bir alan, ayarları Cat'in Inspector'ında "Feeding"): dilimli besleme barı. Her balık
+// (Fish) bir dilim doldurur; son beslemeden digestSeconds sonra kedi sindirir: dolu dilim kadar kaka (CatPoop, ağaç
 // tohumu) yanındaki boş hücrelere zıplar, bar boşalır. Daha çok beslenen kedi tek seferde daha çok kaka yapar.
 // Bar kedinin üstünde, kameraya dönük; elde balık varken ya da mouse kedinin üstündeyken görünür ("Village/Grid Fade").
 // Dolu dilim sayısı ve sindirme süresi kayda girer (Cat.SaveState).
