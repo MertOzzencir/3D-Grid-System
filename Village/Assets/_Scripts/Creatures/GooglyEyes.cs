@@ -6,6 +6,7 @@ using UnityEngine;
 // çarpınca seker. Her gözün ayrı bir "dinlenme" kayması var (derpRest): ikisi farklı yerlere bakar, şapşik durur.
 // Sağ göz eyePosition'da, sol göz X'te aynası; gözler yanlara (yerel ±X), eyeAngle kadar öne dönük (burun +Z).
 // Bağlandığı obje (anchor: kafa kemiği ya da modelin kökü) ile hareket eder; Tick her kare (LateUpdate) çağrılır.
+// Yer, açı ve boylar her karede ayarlardan uygulanır: Play'deyken Inspector'dan değiştirince anında görünür.
 [Serializable]
 public class GooglyEyes
 {
@@ -37,7 +38,9 @@ public class GooglyEyes
     private class Eye
     {
         public Transform root;   // gözün merkezi, +Z dışarı bakar
+        public Transform ball;
         public Transform pupil;
+        public float side;       // sağ +1, sol -1
         public Vector2 offset;   // göz bebeğinin gözün düzlemindeki yeri
         public Vector2 velocity;
         public Vector2 derpRest; // bu gözün tembel bakış yeri
@@ -60,32 +63,36 @@ public class GooglyEyes
     {
         var root = new GameObject(side > 0f ? "Eye R" : "Eye L").transform;
         root.SetParent(anchor, false);
-        root.localPosition = new Vector3(eyePosition.x * side, eyePosition.y, eyePosition.z);
-        // Dışarı (+Z) yana bakar, eyeAngle kadar öne döner
-        root.localRotation = Quaternion.LookRotation(Quaternion.Euler(0f, -eyeAngle * side, 0f) * new Vector3(side, 0f, 0f), Vector3.up);
-
-        GameObject ball = Part(root, white, Vector3.zero, new Vector3(eyeSize, eyeSize, eyeSize * bulge));
-        GameObject pupil = Part(root, black, Vector3.zero, new Vector3(pupilSize, pupilSize, pupilSize * 0.35f));
-        float range = PupilRange;
         var eye = new Eye
         {
             root = root,
-            pupil = pupil.transform,
-            derpRest = UnityEngine.Random.insideUnitCircle * range * 0.8f,
-            lastPosition = root.position,
+            ball = Part(root, white).transform,
+            pupil = Part(root, black).transform,
+            side = side,
+            derpRest = UnityEngine.Random.insideUnitCircle * 0.8f, // göz bebeğinin gidebileceği alana oranla
         };
-        eye.offset = eye.derpRest;
+        Layout(eye);
+        eye.lastPosition = root.position;
+        eye.offset = eye.derpRest * PupilRange;
         Place(eye);
         return eye;
     }
 
-    private static GameObject Part(Transform parent, Material material, Vector3 position, Vector3 scale)
+    // Gözün yeri, açısı ve boyları ayarlardan
+    private void Layout(Eye eye)
+    {
+        eye.root.localPosition = new Vector3(eyePosition.x * eye.side, eyePosition.y, eyePosition.z);
+        // Dışarı (+Z) yana bakar, eyeAngle kadar öne döner
+        eye.root.localRotation = Quaternion.LookRotation(Quaternion.Euler(0f, -eyeAngle * eye.side, 0f) * new Vector3(eye.side, 0f, 0f), Vector3.up);
+        eye.ball.localScale = new Vector3(eyeSize, eyeSize, eyeSize * bulge);
+        eye.pupil.localScale = new Vector3(pupilSize, pupilSize, pupilSize * 0.35f);
+    }
+
+    private static GameObject Part(Transform parent, Material material)
     {
         GameObject part = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         UnityEngine.Object.Destroy(part.GetComponent<Collider>());
         part.transform.SetParent(parent, false);
-        part.transform.localPosition = position;
-        part.transform.localScale = scale;
         var renderer = part.GetComponent<Renderer>();
         renderer.sharedMaterial = material;
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -105,6 +112,7 @@ public class GooglyEyes
     private void Simulate(Eye eye, float dt)
     {
         if (eye.root == null) return;
+        Layout(eye);
         dt = Mathf.Min(dt, 0.05f);
         Vector3 position = eye.root.position;
         Vector3 velocity = (position - eye.lastPosition) / dt;
@@ -115,7 +123,7 @@ public class GooglyEyes
         // Göz bebeğine etkiyen kuvvet (dünya): yer çekimi + gözün ivmesinin tersi (atalet); gözün düzlemine izdüşümü
         Vector3 force = Vector3.down * gravity - Vector3.ClampMagnitude(acceleration, 60f) * (0.02f * shake);
         Vector2 local = new Vector2(Vector3.Dot(force, eye.root.right), Vector3.Dot(force, eye.root.up));
-        local += (eye.derpRest - eye.offset) * derpPull;
+        local += (eye.derpRest * PupilRange - eye.offset) * derpPull;
 
         eye.velocity += local * dt;
         eye.velocity *= Mathf.Exp(-damping * dt);
