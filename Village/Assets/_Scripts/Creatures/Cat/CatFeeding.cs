@@ -3,17 +3,23 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Kedinin beslenmesi (Cat'te bir alan, ayarları Cat'in Inspector'ında "Feeding"): dilimli besleme barı. Her balık
-// (Fish) bir dilim doldurur; son beslemeden digestSeconds sonra kedi sindirir: dolu dilim kadar kaka (CatPoop, ağaç
-// tohumu) yanındaki boş hücrelere zıplar, bar boşalır. Daha çok beslenen kedi tek seferde daha çok kaka yapar.
-// Bar kedinin üstünde, kameraya dönük; elde balık varken ya da mouse kedinin üstündeyken görünür ("Village/Grid Fade").
-// Dolu dilim sayısı ve sindirme süresi kayda girer (Cat.SaveState).
+// (Fish) bir dilim doldurur. Sıçması şaplakla: midesi doluyken kıçına vurdukça (Cat ButtSlap → OnSlap) şaplak barı dolar,
+// slapsToPoop şaplakta dolunca midedeki dolu dilim kadar kaka (CatPoop, ağaç tohumu) yanındaki boş hücrelere zıplar, iki
+// bar da boşalır. Midesi boşsa vurmak barı doldurmaz. Bir süre vurulmazsa (slapDecayDelay) şaplak barı yavaşça geri
+// iner (slapDecay). Barlar kedinin üstünde üst üste, kameraya dönük: üstte besleme (dilimli), altında şaplak (düz
+// dolan); elde balık varken ya da mouse kedinin üstündeyken görünür ("Village/Grid Fade"). Dolu dilim ve şaplak barı
+// kayda girer (Cat.SaveState).
 [Serializable]
 public class CatFeeding
 {
-    [Tooltip("Barın dilim sayısı: kedi en fazla bu kadar balık yer, sindirince bu kadar kaka yapar")]
+    [Tooltip("Besleme barının dilim sayısı: kedi en fazla bu kadar balık yer, sıçınca bu kadar kaka yapar")]
     [SerializeField, Min(1)] private int slices = 4;
-    [Tooltip("Son beslemeden sonra sindirme süresi (saniye)")]
-    [SerializeField] private float digestSeconds = 8f;
+    [Tooltip("Kaç şaplakta sıçar (midesi doluyken)")]
+    [SerializeField, Min(1)] private int slapsToPoop = 5;
+    [Tooltip("Son şaplaktan bu kadar saniye sonra şaplak barı inmeye başlar")]
+    [SerializeField] private float slapDecayDelay = 1.5f;
+    [Tooltip("Şaplak barının inme hızı (saniyede şaplak)")]
+    [SerializeField] private float slapDecay = 0.6f;
     [Tooltip("Kakanın verisi (CatPoop)")]
     [SerializeField] private GridPlaceableSO poopData;
 
@@ -23,22 +29,27 @@ public class CatFeeding
     [SerializeField] private Vector2 barSize = new Vector2(0.9f, 0.14f);
     [SerializeField] private Color fillColor = new Color(1f, 0.72f, 0.3f, 1f);
     [SerializeField] private Color emptyColor = new Color(0.15f, 0.12f, 0.1f, 0.55f);
+    [Tooltip("Şaplak barının rengi ve yüksekliği (besleme barının altında)")]
+    [SerializeField] private Color slapColor = new Color(0.95f, 0.45f, 0.55f, 1f);
+    [SerializeField] private float slapBarHeight = 0.07f;
     [Tooltip("Belirme / sönme hızı (saniyede)")]
     [SerializeField] private float fadeSpeed = 6f;
 
     private static readonly int ColorId = Shader.PropertyToID("_Color");
 
     private int fed;
-    private float digestTimer;
+    private float slaps;          // şaplak barı (0..slapsToPoop)
+    private float lastSlapTime = float.MinValue;
     private Transform bar;
     private Mesh barMesh;
     private Material barMaterial;
     private MeshRenderer barRenderer;
     private int shownFed = -1;
+    private float shownSlaps = -1f;
     private float visibility;
 
     public int Fed => fed;
-    public float DigestTimer => digestTimer;
+    public float Slaps => slaps;
     public bool IsFull => fed >= slices;
 
     // Bir dilim doldurur (balık yendi). Doluysa yemez.
@@ -46,24 +57,29 @@ public class CatFeeding
     {
         if (IsFull) return false;
         fed++;
-        digestTimer = digestSeconds;
         return true;
     }
 
-    public void Restore(int savedFed, float savedTimer)
+    // Kıçına şaplak: midesi doluysa şaplak barı bir dolar; dolunca sıçar
+    public void OnSlap(Cat cat)
     {
-        fed = Mathf.Clamp(savedFed, 0, slices);
-        digestTimer = savedTimer > 0f ? savedTimer : digestSeconds;
+        if (fed == 0) return;
+        slaps += 1f;
+        lastSlapTime = Time.time;
+        if (slaps >= slapsToPoop) Poop(cat);
     }
 
-    // Her kare (kedi grid'deyken): sindirme ve bar
+    public void Restore(int savedFed, float savedSlaps)
+    {
+        fed = Mathf.Clamp(savedFed, 0, slices);
+        slaps = fed > 0 ? Mathf.Clamp(savedSlaps, 0f, slapsToPoop - 1) : 0f;
+    }
+
+    // Her kare (kedi grid'deyken): şaplak barının inmesi ve barlar
     public void Tick(Cat cat, bool showBar)
     {
-        if (fed > 0)
-        {
-            digestTimer -= Time.deltaTime;
-            if (digestTimer <= 0f) Poop(cat);
-        }
+        if (slaps > 0f && Time.time - lastSlapTime > slapDecayDelay)
+            slaps = Mathf.Max(0f, slaps - slapDecay * Time.deltaTime);
         UpdateBar(cat, showBar);
     }
 
@@ -72,6 +88,7 @@ public class CatFeeding
     {
         int count = fed;
         fed = 0;
+        slaps = 0f;
         if (poopData == null)
         {
             Debug.LogWarning("CatFeeding: Poop Data atanmamış, kaka çıkmadı.", cat);
@@ -104,7 +121,7 @@ public class CatFeeding
             return;
         }
         if (!EnsureBar(cat)) return;
-        if (shownFed != fed) RebuildBar();
+        if (shownFed != fed || Mathf.Abs(shownSlaps - slaps) > 0.001f) RebuildBar();
         barRenderer.enabled = true;
         barMaterial.SetColor(ColorId, new Color(1f, 1f, 1f, visibility));
         bar.position = cat.transform.position + barOffset;
@@ -129,16 +146,24 @@ public class CatFeeding
         return true;
     }
 
-    // Arka plan şeridi + dilimler (dolu dilimler fillColor, boşlar emptyColor; aralarında küçük boşluk)
+    // Arka plan şeridi + besleme dilimleri (dolu dilimler fillColor, boşlar emptyColor; aralarında küçük boşluk) + altında
+    // şaplak barı (boş şerit üstünde slapColor, şaplak oranında dolu)
     private void RebuildBar()
     {
         shownFed = fed;
+        shownSlaps = slaps;
         var vertices = new List<Vector3>();
         var colors = new List<Color>();
         var triangles = new List<int>();
         float pad = barSize.y * 0.18f;
-        AddQuad(-barSize.x * 0.5f - pad, -barSize.y * 0.5f - pad, barSize.x + pad * 2f, barSize.y + pad * 2f, 0.01f,
+        float slapTop = -barSize.y * 0.5f - pad; // şaplak barının üstü (besleme barının altında)
+        float slapBottom = slapTop - slapBarHeight;
+        AddQuad(-barSize.x * 0.5f - pad, slapBottom - pad, barSize.x + pad * 2f, barSize.y * 0.5f - slapBottom + pad * 2f, 0.01f,
                 new Color(0f, 0f, 0f, 0.35f), vertices, colors, triangles);
+        AddQuad(-barSize.x * 0.5f, slapBottom, barSize.x, slapBarHeight, 0.005f, emptyColor, vertices, colors, triangles);
+        float slapFill = Mathf.Clamp01(slaps / slapsToPoop);
+        if (slapFill > 0f)
+            AddQuad(-barSize.x * 0.5f, slapBottom, barSize.x * slapFill, slapBarHeight, 0f, slapColor, vertices, colors, triangles);
         float gap = barSize.x * 0.03f;
         float width = (barSize.x - gap * (slices - 1)) / slices;
         for (int i = 0; i < slices; i++)

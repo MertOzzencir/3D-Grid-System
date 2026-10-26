@@ -76,7 +76,6 @@ MonoBehaviour:
   affectionPerRub: 0.02
   feeding:
     slices: 4
-    digestSeconds: 2
     poopData: {fileID: 11400000, guid: 513ed088322546fc9c4959c3d35f64c5, type: 2}
     barOffset: {x: 0, y: 1.2, z: 0}
     barSize: {x: 0.9, y: 0.14}

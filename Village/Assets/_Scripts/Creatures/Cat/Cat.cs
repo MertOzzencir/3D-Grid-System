@@ -5,8 +5,8 @@ using UnityEngine;
 //   sol tık kafa → pat-pat (HeadPat)      sol tık kıç → şaplak, kıçını kaldırıp yeri tırmalar (ButtSlap)
 //   sağ tık basılı → göbek modu: sırtüstü döner, eldivenle göbeği okşanır (BellyRub); fazla okşanırsa
 //   arka ayaklarıyla tekmeler (BunnyKick) ve kaçar.
-//   elde balık (Fish) kedinin üstünde sol tık → yer: besleme barı (CatFeeding) bir dilim dolar; sindirince
-//   dolu dilim kadar kaka (ağaç tohumu, CatPoop) bırakır.
+//   elde balık (Fish) kedinin üstünde sol tık → yer: besleme barı (CatFeeding) bir dilim dolar. Midesi doluyken
+//   kıçına vurdukça şaplak barı dolar; dolunca midedeki dilim kadar kaka (ağaç tohumu, CatPoop) bırakır.
 // Animasyonlar CreatureAnimator ile isimden oynatılır; model gelmeden yer tutucu (iki kutu) kendini kurar ve
 // tepkileri basit kutu hareketleriyle gösterir.
 // Grid'de "yürüyen placeable": build menüsünden konur, kayıtla gelir (ISaveState: kafanın yönü + sevgi), durduğu iki
@@ -351,7 +351,7 @@ public class Cat : Creature, ISaveState
         public Vector3Int head; // gövde hücresinden kafa hücresine
         public float affection;
         public int fed;         // besleme barının dolu dilimleri
-        public float digest;    // sindirmeye kalan süre
+        public float slaps;     // şaplak barı
     }
 
     public string CaptureState() => JsonUtility.ToJson(new SaveState
@@ -359,7 +359,7 @@ public class Cat : Creature, ISaveState
         head = walker.IsPlaced ? walker.HeadCell - walker.BodyCell : Vector3Int.forward,
         affection = affection,
         fed = feeding.Fed,
-        digest = feeding.DigestTimer,
+        slaps = feeding.Slaps,
     });
 
     public void RestoreState(string state)
@@ -368,7 +368,7 @@ public class Cat : Creature, ISaveState
         if (saved == null) return;
         if (saved.head != Vector3Int.zero) restoredHeadOffset = saved.head;
         affection = Mathf.Clamp01(saved.affection);
-        feeding.Restore(saved.fed, saved.digest);
+        feeding.Restore(saved.fed, saved.slaps);
     }
 
     // --- Davranış seçimi ---
@@ -422,6 +422,7 @@ public class Cat : Creature, ISaveState
         {
             Glove?.PlayPress(slapLift, slapDuration);
             ChangeState(new ReactionState(this, "ButtSlap", buttSlapSeconds, CatMood.Alert, PlaceholderButtSlap()));
+            feeding.OnSlap(this); // midesi doluysa şaplak barı dolar, dolunca sıçar
             // Gözler pat-pat'teki gibi mutlu kısılır (kuyruk ve nefes Alert'te kalır)
             if (eyes != null) eyes.Mood = CatMood.Happy;
             // Vurulan nokta jöle gibi titrer (içeri göçüp sekerek söner); kıç kalkmaz, patiler oynamaz

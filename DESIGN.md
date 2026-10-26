@@ -79,7 +79,7 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 - Odun var; ilerleyen adalarla taş, demir, ...
 - Her malzemenin **işlevsel anlamı** var, sadece görünüşü değişen blok değil. Fikir: odun = hafif, karada; taş = ağırlık taşır, suya dayanır (iskele temeli, kuyu, köprü ayağı); demir = hareket eden şeyler (değirmen, mekanizma).
 - Kaynaklar sınırlı (spawn sınırı) → keşif.
-- **Odun kaynağı: kedi** (2026-10-25): kediyi balıkla beslersin, kedi sindirip kaka bırakır, kaka ağaç tohumu: oyuncu istediği yere eker, fidan büyüyüp ağaç olur. Ağaç sayısı balık sayısına bağlı (kaynak kendiliğinden sınırlı). Kedide dilimli besleme barı: ne kadar beslersen sindirince o kadar kaka. Şimdilik geçici balık yemi (build menüsü); balık tutma gelince oradan, yemek pişirme gelince yemekle beslemek daha anlamlı olabilir.
+- **Odun kaynağı: kedi** (2026-10-25): kediyi balıkla beslersin, kıçına şaplak attıkça şaplak barı dolar, dolunca kaka bırakır, kaka ağaç tohumu: oyuncu istediği yere eker, fidan büyüyüp ağaç olur. Ağaç sayısı balık sayısına bağlı (kaynak kendiliğinden sınırlı). Kedide dilimli besleme barı: ne kadar beslersen sıçınca o kadar kaka; sıçması şaplak barıyla (2026-10-26). Şimdilik geçici balık yemi (build menüsü); balık tutma gelince oradan, yemek pişirme gelince yemekle beslemek daha anlamlı olabilir.
 
 ## Yardımcı sistemler (park edildi, ana halka oturunca yerleşecek)
 - **Kedi** (var): sevgi; fikir: sevgisi yüksekse hediye bırakır.
