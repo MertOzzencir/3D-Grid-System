@@ -3,30 +3,36 @@ using UnityEngine;
 // Balık: kedinin yemeği (balık tutma gelene kadar geçici olarak build menüsünden konur): sağ tıkla alınır, kedinin üstüne getirilip sol
 // tıklanınca kedi yer (Cat besleme barı bir dilim dolar; bkz. Cat.TryFeed). Geçici görünüm: mavi gövde + kuyruk.
 // Tohum gibi yığınlanır: tutarken aynı türden balıklar toplanır, kedi her tıklamada yığından bir tane yer.
-// Gözler kodla: oynak göz (GooglyEyes), modelde "Head" kemiği varsa ona, yoksa modelin köküne bağlanır. Burun +Z.
+// Gözler kodla: oynak göz (GooglyEyes), modelde "head" kemiği varsa ona, yoksa modelin köküne bağlanır. Burun +Z.
+// Çırpınma kodla (FishFlop): elde tutarken kuyruk çırpar, yerdeyken arada bir çırpınıp zıplar.
 public class Fish : Carryable
 {
     [Tooltip("Geçici görünümün rengi (model yokken)")]
     [SerializeField] private Color placeholderColor = new Color(0.45f, 0.7f, 0.85f);
     [Tooltip("Oynak gözler: yerleri, boyları ve fiziği (Play'de ayarlanırken model gelince yeri değişir)")]
     [SerializeField] private GooglyEyes eyes = new GooglyEyes();
+    [Tooltip("Çırpınma: kemik isimleri, elde ve yerde hareket")]
+    [SerializeField] private FishFlop flop = new FishFlop();
 
     protected override void Awake()
     {
         base.Awake();
-        eyes.Build(FindChild(Visual, "Head") ?? Visual, PlaceholderShader);
+        eyes.Build(FindChild(Visual, "head") ?? Visual, PlaceholderShader);
+        flop.Build(Visual);
     }
 
     protected override void LateUpdate()
     {
         base.LateUpdate();
-        eyes.Tick(Time.deltaTime);
+        bool held = InteractableController.Instance != null && ReferenceEquals(InteractableController.Instance.Held, this);
+        flop.Tick(Time.deltaTime, held, !held && PlacedFootprint != null);
+        eyes.Tick(Time.deltaTime); // çırpınmadan sonra: gözler bu karenin hareketini hissetsin
     }
 
     private static Transform FindChild(Transform parent, string childName)
     {
         foreach (Transform child in parent.GetComponentsInChildren<Transform>(true))
-            if (child.name == childName) return child;
+            if (string.Equals(child.name, childName, System.StringComparison.OrdinalIgnoreCase)) return child;
         return null;
     }
 

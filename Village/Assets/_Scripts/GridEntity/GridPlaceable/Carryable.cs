@@ -16,6 +16,11 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
     [Header("Görünüm")]
     [Tooltip("Eşyanın modeli (prefab ya da FBX; pivot hücrenin ortasında). Boşsa geçici görünüm çizilir.")]
     [SerializeField] private GameObject model;
+    [Tooltip("Modelin pivota göre kayması (birim), dönüşü (derece) ve ölçeği. Play'deyken değiştirince anında görünür; " +
+             "hizalanınca değeri Play'den çıkıp prefab'a yaz.")]
+    [SerializeField] private Vector3 modelOffset;
+    [SerializeField] private Vector3 modelRotation;
+    [SerializeField] private Vector3 modelScale = Vector3.one;
     [Tooltip("Geçici görünümün shader'ı (Village/Lit). Referansla tutulur ki build'e girsin (Shader.Find build'de " +
              "referanssız shader'ı bulamaz, primitive'lerin varsayılan materyali de build'de görünmüyordu).")]
     [SerializeField] private Shader placeholderShader;
@@ -68,7 +73,14 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
     private void BuildVisual()
     {
         GameObject built;
-        if (model != null) built = Instantiate(model, transform, false);
+        if (model != null)
+        {
+            built = Instantiate(model, transform, false);
+            modelBase = (built.transform.localPosition, built.transform.localRotation, built.transform.localScale);
+            hasModel = true;
+            Visual = built.transform;
+            ApplyModelPose();
+        }
         else
         {
             built = new GameObject("Placeholder");
@@ -92,6 +104,22 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
         box.center = any ? bounds.center : Vector3.down * 0.25f;
         box.size = any ? Vector3.Max(bounds.size, Vector3.one * 0.3f) : new Vector3(0.6f, 0.5f, 0.6f);
     }
+
+    private bool hasModel;
+    private (Vector3 position, Quaternion rotation, Vector3 scale) modelBase; // modelin kendi (prefab'taki) duruşu
+
+    // Ofset / dönüş / ölçek modelin kendi duruşunun üstüne
+    private void ApplyModelPose()
+    {
+        if (!hasModel || Visual == null) return;
+        Visual.localPosition = modelBase.position + modelOffset;
+        Visual.localRotation = Quaternion.Euler(modelRotation) * modelBase.rotation;
+        Visual.localScale = Vector3.Scale(modelBase.scale, modelScale);
+        visualRestScale = Visual.localScale;
+    }
+
+    // Play'deyken Inspector'da değiştirince model anında yerine
+    protected virtual void OnValidate() => ApplyModelPose();
 
     // Model yokken geçici görünüm (parent: modelin yeri)
     protected abstract void BuildPlaceholder(Transform parent);
