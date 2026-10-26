@@ -275,13 +275,16 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
             Vector3 center = Center;
             ring.Sort((a, b) => Vector3.Dot((b - center).normalized, want).CompareTo(Vector3.Dot((a - center).normalized, want)));
 
-            bool placed = false;
-            foreach (Vector3 cell in ring)
-                if (TryPlaceAt(piece, cell))
-                {
-                    placed = true;
-                    break;
-                }
+            // Önce tam sağ / sol hizası (istasyonun ortasından geçen çizgide, kenarına yaslanmış; ince parçalar yarım
+            // hücre adımla konabildiği için 2×2'de de ortaya hizalı), olmazsa çevredeki hücreler
+            bool placed = i < 2 && TryPlaceInLine(piece, want);
+            if (!placed)
+                foreach (Vector3 cell in ring)
+                    if (TryPlaceAt(piece, cell))
+                    {
+                        placed = true;
+                        break;
+                    }
             if (placed)
             {
                 StartCoroutine(Jump(piece.transform, start, piece.transform.position, i));
@@ -325,6 +328,26 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
                 if (!inside) cells.Add(transform.TransformPoint(new Vector3(x, 0f, z)));
             }
         return cells;
+    }
+
+    // İstasyonun ortasından direction yönünde: kenarına yaslı, olmazsa yarım birim adımlarla biraz daha uzağa
+    private bool TryPlaceInLine(GridPlaceable piece, Vector3 direction)
+    {
+        Vector3 center = Center;
+        float edge = 0f; // istasyonun kenarı (ortadan, bu yönde)
+        GridFootprint footprint = GetData() != null ? GetData().GetFootprint() : null;
+        if (footprint != null)
+            foreach (Vector3Int cell in footprint.FilledCells())
+                edge = Mathf.Max(edge, Vector3.Dot(transform.TransformPoint(cell) - center, direction) + 0.5f);
+        float halfThickness = piece is FinePlaceable ? 0.25f : 0.5f; // parçanın bu yöndeki yarı kalınlığı
+        Vector3 floor = new Vector3(center.x, transform.position.y, center.z);
+        for (int step = 0; step < 3; step++)
+        {
+            Vector3 position = floor + direction * (edge + halfThickness + step * 0.5f);
+            if (GridManager.Instance.CanPlaceablePlaceOn(piece, position) && GridManager.Instance.PlaceablePlaceOn(piece, position))
+                return true;
+        }
+        return false;
     }
 
     // Bir hücreye (ortası, sonra hücre içinde çeyrek birim kaydırarak)
