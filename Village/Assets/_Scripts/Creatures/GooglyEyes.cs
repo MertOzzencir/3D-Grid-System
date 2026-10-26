@@ -5,6 +5,8 @@ using UnityEngine;
 // Göz bebeği yer çekimiyle aşağı düşer, göz hareket edince ataletle çalkalanır (gözün ivmesinin tersine), kenara
 // çarpınca seker. Her gözün ayrı bir "dinlenme" kayması var (derpRest): ikisi farklı yerlere bakar, şapşik durur.
 // Sağ göz eyePosition'da, sol göz X'te aynası; gözler yanlara (yerel ±X), eyeAngle kadar öne dönük (burun +Z).
+// İki göz ortak bir merkeze (Eyes) bağlı: frameRotation ikisini birlikte kafaya göre döndürür (kafa kemiğinin eksenleri
+// Blender'dan farklı geldiyse gözlerin bütün düzenini çevirmek için); yerleri ve yönleri birlikte döner.
 // Bağlandığı obje (anchor: kafa kemiği ya da modelin kökü) ile hareket eder; Tick her kare (LateUpdate) çağrılır.
 // Yer, açı ve boylar her karede ayarlardan uygulanır: Play'deyken Inspector'dan değiştirince anında görünür.
 [Serializable]
@@ -15,8 +17,8 @@ public class GooglyEyes
     [SerializeField] private Vector3 eyePosition = new Vector3(0.11f, -0.32f, 0.12f);
     [Tooltip("Gözlerin yanlardan öne dönüklüğü (derece; 0 = tam yana bakar)")]
     [SerializeField] private float eyeAngle = 25f;
-    [Tooltip("Sağ gözün ek dönüşü (derece, anchor'ın eksenlerinde). Sol göz aynası (Y ve Z ters).")]
-    [SerializeField] private Vector3 eyeRotation;
+    [Tooltip("İki gözün birlikte, kafaya (anchor) göre dönüşü (derece): gözlerin bütün düzeni döner")]
+    [SerializeField] private Vector3 frameRotation;
     [Tooltip("Gözün çapı ve göz bebeğinin çapı (birim)")]
     [SerializeField] private float eyeSize = 0.1f;
     [SerializeField] private float pupilSize = 0.05f;
@@ -50,6 +52,7 @@ public class GooglyEyes
     }
 
     private Eye left, right;
+    private Transform frame; // iki gözün ortak merkezi (frameRotation)
 
     // anchor: gözlerin bağlanacağı obje (kafa kemiği ya da modelin kökü); shader: Village/Lit (build'e referansla girer)
     public void Build(Transform anchor, Shader shader)
@@ -57,8 +60,11 @@ public class GooglyEyes
         if (!enabled || anchor == null) return;
         var white = new Material(shader != null ? shader : Shader.Find("Universal Render Pipeline/Lit")) { name = "Googly Eye (generated)", color = eyeColor };
         var black = new Material(white) { name = "Googly Pupil (generated)", color = pupilColor };
-        right = BuildEye(anchor, 1f, white, black);
-        left = BuildEye(anchor, -1f, white, black);
+        frame = new GameObject("Eyes").transform;
+        frame.SetParent(anchor, false);
+        frame.localRotation = Quaternion.Euler(frameRotation);
+        right = BuildEye(frame, 1f, white, black);
+        left = BuildEye(frame, -1f, white, black);
     }
 
     private Eye BuildEye(Transform anchor, float side, Material white, Material black)
@@ -85,9 +91,7 @@ public class GooglyEyes
     {
         eye.root.localPosition = new Vector3(eyePosition.x * eye.side, eyePosition.y, eyePosition.z);
         // Dışarı (+Z) yana bakar, eyeAngle kadar öne döner
-        Quaternion look = Quaternion.LookRotation(Quaternion.Euler(0f, -eyeAngle * eye.side, 0f) * new Vector3(eye.side, 0f, 0f), Vector3.up);
-        Quaternion extra = Quaternion.Euler(eyeRotation.x, eyeRotation.y * eye.side, eyeRotation.z * eye.side); // sol göz aynası
-        eye.root.localRotation = extra * look;
+        eye.root.localRotation = Quaternion.LookRotation(Quaternion.Euler(0f, -eyeAngle * eye.side, 0f) * new Vector3(eye.side, 0f, 0f), Vector3.up);
         eye.ball.localScale = new Vector3(eyeSize, eyeSize, eyeSize * bulge);
         eye.pupil.localScale = new Vector3(pupilSize, pupilSize, pupilSize * 0.35f);
     }
@@ -109,6 +113,7 @@ public class GooglyEyes
     public void Tick(float dt)
     {
         if (right == null || dt <= 0f) return;
+        if (frame != null) frame.localRotation = Quaternion.Euler(frameRotation);
         Simulate(right, dt);
         Simulate(left, dt);
     }
