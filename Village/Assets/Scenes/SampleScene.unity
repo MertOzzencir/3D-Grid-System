@@ -2480,7 +2480,9 @@ MonoBehaviour:
     optionAlpha: 0.4
     fadeSpeed: 6
   detachAxeOffset: {x: 0, y: 0.5, z: -1}
-  detachAxeRotation: {x: 45, y: 0, z: 0}
+  detachAxeRotation: {x: 0, y: 0, z: 0}
+  detachAxeBaseOffset: {x: 1, y: 0, z: -1}
+  detachAxeBaseRotation: {x: 0, y: 0, z: 90}
   detachSearchRange: 3
   detachHopDuration: 0.5
   detachHopHeight: 1
