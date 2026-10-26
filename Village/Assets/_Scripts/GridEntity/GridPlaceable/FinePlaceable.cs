@@ -28,8 +28,12 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
     [Tooltip("Kesik (iç) yüzün yönü, döndürülmemiş halde (yerel). Kesme istasyonu bölünen parçaları bu yüz istasyonun " +
              "ortasına bakacak şekilde döndürür: ikiye ayrılmış gibi. Ters çıkıyorsa (-1, 0, 0) yap.")]
     [SerializeField] private Vector3 innerFace = Vector3.right;
+    [Tooltip("İkinci düz (kesik) yüzün yönü, yereldir; (0, 0, 0) = yok. Çeyrek odun gibi iki düz yüzü olan parçada " +
+             "ver: bölününce iki düz yüzün birleştiği köşe istasyonun ortasına ve kameraya bakar (ikiye ayrılmış bütün gibi).")]
+    [SerializeField] private Vector3 secondFace = Vector3.zero;
 
     public Vector3 InnerFace => innerFace;
+    public Vector3 SecondFace => secondFace;
     [Tooltip("Model yokken geçici görünümün (kutu) rengi: prototipte parçalar birbirinden ayırt edilsin. Beyaz = malzemenin kendi rengi.")]
     [SerializeField] private Color placeholderColor = Color.white;
 

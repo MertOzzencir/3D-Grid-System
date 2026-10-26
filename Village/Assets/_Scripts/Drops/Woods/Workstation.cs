@@ -379,7 +379,12 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
             Vector3 want = i == 0 ? -right : i == 1 ? right : toCamera;
             // Parçanın kesik yüzü istasyonun ortasına (gittiği yönün tersine) bakar: soldaki sağa, sağdaki sola, ikiye
             // ayrılmış gibi. Parçalar Deg0'da X'te ince olduğu için bu dönüş onları sağ / sol eksenine de oturtur.
-            piece.Rotation = FacingRotation(piece is FinePlaceable fine ? fine.InnerFace : Vector3.right, -want);
+            // İki düz yüzü olan parça (çeyrek): iki yüzün birleştiği köşe ortaya ve kameraya; sağ ve sol aynı modelin ayna
+            // görüntüsü olduğu için aralarında 90° fark çıkar, bölünmeden önceki bütün gibi durur
+            if (piece is FinePlaceable fine && fine.SecondFace != Vector3.zero)
+                piece.Rotation = FacingRotation(fine.InnerFace.normalized + fine.SecondFace.normalized, -want + toCamera);
+            else
+                piece.Rotation = FacingRotation(piece is FinePlaceable single ? single.InnerFace : Vector3.right, -want);
             Vector3 center = Center;
             ring.Sort((a, b) => Vector3.Dot((b - center).normalized, want).CompareTo(Vector3.Dot((a - center).normalized, want)));
 
