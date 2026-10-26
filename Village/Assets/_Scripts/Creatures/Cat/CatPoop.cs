@@ -4,6 +4,7 @@ using UnityEngine;
 // yarı saydam önizlemesi (PlacementGhost) mouse'un hücresinde gövdesi olacak şekilde görünür: ağacın bütün ayak izi boş
 // ve altı dolu ise (HeldGridIndicator.CanHoldAt) yeşilimsi, değilse kırmızımsı. Sol tık eker: kaka yok olur, ağaç
 // fidan olarak konur ve büyür (Tree.StartAsSapling). Geçici görünüm: üst üste üç kahverengi top.
+// Balık gibi yığınlanır: tutarken aynı türden kakalar toplanır, her sol tık yığından bir tane eker.
 public class CatPoop : Carryable
 {
     [Tooltip("Ekilince çıkacak ağacın verisi (Tree)")]
@@ -19,6 +20,8 @@ public class CatPoop : Carryable
     private GridPlaceable treeProbe; // ağacın kapalı kopyası: ayak izi ve önizleme bununla
     private PlacementGhost ghost;
     private Material validMaterial, invalidMaterial;
+
+    protected override bool Stackable => true;
 
     protected override void BuildPlaceholder(Transform parent)
     {
@@ -57,8 +60,7 @@ public class CatPoop : Carryable
             return false;
         }
         if (tree is Tree growing) growing.StartAsSapling();
-        DestroyPreview();
-        Consume();
+        UseOne(); // yığından bir tane; son taneyse kaka (ve önizleme) yok olur
         return true;
     }
 
