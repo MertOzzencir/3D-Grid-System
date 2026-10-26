@@ -196,6 +196,7 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
     {
         consumed = true;
         Drag.Abort();
+        GridManager.Instance?.PlaceableRemoveOn(this, false); // yerde duruyorsa hücreleri boşalsın
         if (InteractableController.Instance != null) InteractableController.Instance.Release(this);
         Destroy(gameObject);
     }

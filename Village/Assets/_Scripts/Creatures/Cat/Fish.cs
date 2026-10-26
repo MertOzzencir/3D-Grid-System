@@ -1,8 +1,8 @@
 using UnityEngine;
 
-// Balık: kedinin yemeği (balık tutma gelene kadar geçici olarak build menüsünden konur): sağ tıkla alınır, kedinin üstüne getirilip sol
-// tıklanınca kedi yer (Cat besleme barı bir dilim dolar; bkz. Cat.TryFeed). Geçici görünüm: mavi gövde + kuyruk.
-// Tohum gibi yığınlanır: tutarken aynı türden balıklar toplanır, kedi her tıklamada yığından bir tane yer.
+// Balık: kedinin yemeği (balık tutma gelene kadar geçici olarak build menüsünden konur). Kedi görüş alanında ve zıplama
+// menzilinde bir balık görünce (elde tutulan ya da yerde duran) üstüne zıplayıp yer (Cat besleme barı bir dilim dolar). Geçici görünüm: mavi gövde + kuyruk.
+// Tohum gibi yığınlanır: tutarken aynı türden balıklar toplanır, kedi her seferinde yığından bir tane yer.
 // Gözler kodla: oynak göz (GooglyEyes), modelde "head" kemiği varsa ona, yoksa modelin köküne bağlanır. Burun +Z.
 // Çırpınma kodla (FishFlop): elde tutarken kuyruk çırpar, yerdeyken arada bir çırpınıp zıplar.
 public class Fish : Carryable
@@ -47,6 +47,12 @@ public class Fish : Carryable
         Primitive(PrimitiveType.Cube, parent, new Vector3(0f, -0.35f, -0.3f), new Vector3(0.04f, 0.16f, 0.15f), tail,
                   Quaternion.Euler(45f, 0f, 0f));
     }
+
+    // Sahnedeki bütün balıklar (kedi zıplayacak balığı arar)
+    public static readonly System.Collections.Generic.List<Fish> All = new System.Collections.Generic.List<Fish>();
+
+    private void OnEnable() => All.Add(this);
+    private void OnDisable() => All.Remove(this);
 
     // Modelin (ya da geçici görünüşün) kökü: kedi yerken ağzında bunun kopyası durur
     public Transform VisualRoot => Visual;

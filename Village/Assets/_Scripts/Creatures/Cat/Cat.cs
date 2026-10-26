@@ -5,7 +5,8 @@ using UnityEngine;
 //   sol tık kafa → pat-pat (HeadPat)      sol tık kıç → şaplak, kıçını kaldırıp yeri tırmalar (ButtSlap)
 //   sağ tık basılı → göbek modu: sırtüstü döner, eldivenle göbeği okşanır (BellyRub); fazla okşanırsa
 //   arka ayaklarıyla tekmeler (BunnyKick) ve kaçar.
-//   elde balık (Fish) kedinin üstünde sol tık → yer: besleme barı (CatFeeding) bir dilim dolar. Midesi doluyken
+//   balık (Fish) görüşte ve zıplama menzilinde (elde ya da yerde) → ele zıplama gibi izler, çömelir, zıplar, kapıp
+//   hızlıca yer: besleme barı (CatFeeding) bir dilim dolar. Kediyi balıkla yönetirsin (sol tıkla besleme yok). Midesi doluyken
 //   kıçına vurdukça şaplak barı dolar; her dolunca bir kaka (ağaç tohumu, CatPoop) bırakır, bir dilim gider.
 // Animasyonlar CreatureAnimator ile isimden oynatılır; model gelmeden yer tutucu (iki kutu) kendini kurar ve
 // tepkileri basit kutu hareketleriyle gösterir.
@@ -151,6 +152,7 @@ public class Cat : Creature, ISaveState
     private Vector3Int? restoredHeadOffset; // kayıttan: gövde hücresinden kafa hücresine
     private float lastPounceTime = float.MinValue;
     private int hoveredZones; // mouse kedinin bölgelerinden birinin üstündeyse > 0 (besleme barı görünür)
+    private Fish fishInSight;  // zıplanabilecek balık (görüşte, menzilde, kedi yiyebilir)
 
     public GridWalker Walker => walker;
     public float Affection => affection;
@@ -191,10 +193,79 @@ public class Cat : Creature, ISaveState
         if (rig != null) rig.LookTarget = lookTarget;
         if (eyes != null) eyes.LookTarget = lookTarget;
 
+        // Görüşte ve menzilde balık varsa ona zıplar (elden önce: kediyi balıkla yönetirsin). Elden farkı: görüşte kalan
+        // balık da tekrar tetikler (bir tane yedikten sonra yığının kalanına da atlasın); aralık pounceCooldown
+        fishInSight = FindFishInSight();
+        if (fishInSight != null && CanStartPounce(false))
+        {
+            ChangeState(new PounceState(this, fishInSight));
+            return;
+        }
+
         // El görüşe her yeni girdiğinde oyun başlar (görüşte kalan el tekrar tetiklemez)
         bool wasInSight = handInSight;
         handInSight = IsHandInSight();
-        if (handInSight && !wasInSight && CanStartPounce()) ChangeState(new PounceState(this));
+        if (handInSight && !wasInSight && CanStartPounce(true)) ChangeState(new PounceState(this, null));
+    }
+
+    // Görüş alanında, zıplama menzilinde en yakın balık (kedi yiyebiliyorsa; menzil dışındakini umursamaz)
+    private Fish FindFishInSight()
+    {
+        if (feeding.IsFull || !CanEat || !walker.IsPlaced) return null;
+        Fish best = null;
+        float bestDistance = float.MaxValue;
+        Vector3 head = GridWalker.FeetPosition(walker.HeadCell);
+        foreach (Fish fish in Fish.All)
+        {
+            if (fish == null || !CanSee(fish.transform.position)) continue;
+            Vector3 offset = fish.transform.position - head;
+            offset.y = 0f;
+            float distance = offset.magnitude;
+            if (distance > maxLeapDistance + 0.5f || distance >= bestDistance) continue;
+            best = fish;
+            bestDistance = distance;
+        }
+        return best;
+    }
+
+    // Balık hâlâ görüşte ve menzilde mi (izlerken / çömelirken)
+    private bool FishStillInSight(Fish fish) => fish != null && FindFishInSight() == fish;
+
+    // İnişte balık kafanın dibinde mi (yakalar)
+    private bool FishInCatchReach(Fish fish)
+    {
+        if (fish == null) return false;
+        Vector3 offset = fish.transform.position - GridWalker.FeetPosition(walker.HeadCell);
+        offset.y = 0f;
+        return offset.magnitude < 1.2f;
+    }
+
+    // Balığa zıplama hücreleri: balığın hücresi boşsa (elde tutulan balık) oraya, doluysa (yerdeki balık) balığın kediye
+    // en yakın boş komşusuna, balığa bakarak
+    private bool TryGetFishLeapTarget(Fish fish, out Vector3Int head, out Vector3Int body)
+    {
+        head = body = default;
+        if (fish == null) return false;
+        Vector3Int cell = Vector3Int.RoundToInt(fish.transform.position);
+        if (walker.IsWalkable(cell)) return TryGetLeapCells(cell, out head, out body);
+
+        var candidates = new System.Collections.Generic.List<Vector3Int>();
+        foreach (Vector3Int direction in new[] { Vector3Int.right, Vector3Int.left, Vector3Int.forward, Vector3Int.back })
+            candidates.Add(cell + direction);
+        candidates.Sort((a, b) => (GridWalker.FeetPosition(a) - transform.position).sqrMagnitude
+                                  .CompareTo((GridWalker.FeetPosition(b) - transform.position).sqrMagnitude));
+        foreach (Vector3Int candidate in candidates)
+        {
+            // Kedinin şu an durduğu hücre de olabilir (zaten dibindeyse yerinde zıplar)
+            if (candidate == walker.HeadCell)
+            {
+                head = walker.HeadCell;
+                body = walker.BodyCell;
+                return true;
+            }
+            if (walker.IsWalkable(candidate) && TryGetLeapCells(candidate, out head, out body)) return true;
+        }
+        return false;
     }
 
     // Boş el base üstünde, görüş alanında ve bakma mesafesinde
@@ -206,10 +277,11 @@ public class Cat : Creature, ISaveState
         return Vector3.Distance(Glove.SurfacePoint, eye) < radius;
     }
 
-    // Sadece gezinirken / beklerken / otururken; uyurken, sevilirken ya da tepki verirken değil
-    private bool CanStartPounce()
+    // Sadece gezinirken / beklerken / otururken; uyurken, sevilirken ya da tepki verirken değil.
+    // atHand: ele zıplama oyunu (pounceAtHand ile kapatılabilir); balığa zıplama hep açık
+    private bool CanStartPounce(bool atHand)
     {
-        if (!pounceAtHand || Time.time - lastPounceTime < pounceCooldown) return false;
+        if ((atHand && !pounceAtHand) || Time.time - lastPounceTime < pounceCooldown) return false;
         return CurrentState is WanderState || CurrentState is TimedState timed && timed.Name != "Sleep";
     }
 
@@ -220,8 +292,13 @@ public class Cat : Creature, ISaveState
     {
         head = body = default;
         if (!handInSight) return false;
+        return TryGetLeapCells(Vector3Int.RoundToInt(Glove.SurfacePoint + Vector3.up * 0.5f), out head, out body);
+    }
 
-        Vector3Int cell = Vector3Int.RoundToInt(Glove.SurfacePoint + Vector3.up * 0.5f);
+    // İniş hücresi (kafa) cell, gövde onun kediye en yakın boş komşusu
+    private bool TryGetLeapCells(Vector3Int cell, out Vector3Int head, out Vector3Int body)
+    {
+        head = body = default;
         Vector3Int from = walker.HeadCell;
         if (cell == walker.HeadCell || cell == walker.BodyCell || Mathf.Abs(cell.y - from.y) > 1) return false;
         if (new Vector2(cell.x - from.x, cell.z - from.z).magnitude > maxLeapDistance) return false;
@@ -394,23 +471,6 @@ public class Cat : Creature, ISaveState
     private GloveCursor Glove => glove != null ? glove : glove = FindFirstObjectByType<GloveCursor>();
 
     // --- Etkileşim (CreatureZone'dan) ---
-
-    // Elde balık: kedi yiyebiliyorsa (bar dolu değil) balık kafasının üstünde durur, sol tıkla yer
-    public override bool AcceptsZoneTool(IInteractable tool, CreatureZoneType zone, out Vector3 position)
-    {
-        position = default;
-        if (!(tool is Fish) || feeding.IsFull || !walker.IsPlaced || !CanEat) return false;
-        position = (Vector3)walker.HeadCell + Vector3.up * 0.6f;
-        return true;
-    }
-
-    public override bool OnZoneToolUsed(IInteractable tool, CreatureZoneType zone)
-    {
-        if (!(tool is Fish fish) || !CanEat || !feeding.TryFeed()) return false;
-        ChangeState(new EatFishState(this, fish.VisualRoot)); // kopyası ağzına, elde kalan yığından bir tane gider
-        fish.Eat();
-        return true;
-    }
 
     // Yemeğe ara verilmez: yiyorken, göbek modunda, tekmelerken, havadayken ya da eldiven ağzındayken balık almaz
     private bool CanEat => !(CurrentState is EatFishState || CurrentState is BellyState || CurrentState is BunnyKickState ||
@@ -593,14 +653,20 @@ public class Cat : Creature, ISaveState
         private Phase phase;
         private float phaseTime;
         private readonly float watchDuration;
+        private readonly Fish fish; // null: ele zıplama oyunu
 
         public bool Airborne => phase == Phase.Leap;
         public override string Name => $"Pounce.{phase}";
 
-        public PounceState(Cat owner) : base(owner)
+        public PounceState(Cat owner, Fish target) : base(owner)
         {
+            fish = target;
             watchDuration = Random.Range(owner.pounceWatchSeconds.x, owner.pounceWatchSeconds.y);
+            if (fish != null) watchDuration *= 0.5f; // balığa daha hevesli
         }
+
+        // Hedef hâlâ orada mı (el görüşte / balık görüşte ve menzilde)
+        private bool TargetInSight => fish != null ? owner.FishStillInSight(fish) : owner.handInSight;
 
         public override void Enter()
         {
@@ -616,7 +682,7 @@ public class Cat : Creature, ISaveState
             {
                 case Phase.Watch:
                     if (owner.walker.IsMoving) { phaseTime = 0f; return; }
-                    if (!owner.handInSight) { owner.ChooseNext(); return; } // el gitti, ilgisi dağıldı
+                    if (!TargetInSight) { owner.ChooseNext(); return; } // hedef gitti, ilgisi dağıldı
                     if (phaseTime >= watchDuration) Begin(Phase.Crouch);
                     break;
 
@@ -627,15 +693,26 @@ public class Cat : Creature, ISaveState
                         owner.rig.Wiggle = phaseTime > owner.pounceCrouchSeconds * 0.35f ? 1f : 0f;
                     }
                     if (phaseTime < owner.pounceCrouchSeconds) return;
-                    if (owner.TryGetLeapTarget(out Vector3Int head, out Vector3Int body) && Leap(head, body)) return;
+                    Vector3Int head = default, body = default;
+                    bool target = fish != null
+                        ? TargetInSight && owner.TryGetFishLeapTarget(fish, out head, out body)
+                        : owner.TryGetLeapTarget(out head, out body);
+                    if (target && Leap(head, body)) return;
                     if (phaseTime >= owner.pounceCrouchSeconds + owner.pounceWaitSeconds) owner.ChooseNext();
                     break;
 
                 case Phase.Leap:
                     if (owner.rig != null) owner.rig.LeapProgress = owner.walker.JumpProgress;
                     if (owner.walker.IsJumping) return;
+                    // Balık hâlâ dibindeyse kapıp yer
+                    if (fish != null && owner.FishInCatchReach(fish) && owner.feeding.TryFeed())
+                    {
+                        owner.ChangeState(new EatFishState(owner, fish.VisualRoot));
+                        fish.Eat(); // yığından bir tane (elde ya da yerde)
+                        return;
+                    }
                     // El hâlâ oradaysa yakaladı: ağzına alıp kemirir
-                    if (owner.HandInCatchReach())
+                    if (fish == null && owner.HandInCatchReach())
                     {
                         owner.ChangeState(new CaughtState(owner));
                         return;
