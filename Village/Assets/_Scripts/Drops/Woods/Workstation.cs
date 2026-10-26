@@ -265,12 +265,13 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
             if (!(recipe.output.Prefab is GridPlaceable prefab)) break;
             GridPlaceable piece = Instantiate(prefab, start, transform.rotation);
             piece.AssignData(recipe.output);
-            // Parçalar Deg0'da X'te ince: sağ / sol X eksenindeyse Deg0, Z'deyse Deg90
-            piece.Rotation = Mathf.Abs(right.x) > 0.5f ? GridMaskRotator.Rotation.Deg0 : GridMaskRotator.Rotation.Deg90;
 
             // Tercih: 0. sol, 1. sağ, diğerleri kameraya bakan taraf; hücreler bu yöne yakınlığa göre sıralı
             Vector3 toCamera = Camera.main != null ? Vector3.ProjectOnPlane(-Camera.main.transform.forward, Vector3.up).normalized : Vector3.back;
             Vector3 want = i == 0 ? -right : i == 1 ? right : toCamera;
+            // Parçanın kesik yüzü istasyonun ortasına (gittiği yönün tersine) bakar: soldaki sağa, sağdaki sola, ikiye
+            // ayrılmış gibi. Parçalar Deg0'da X'te ince olduğu için bu dönüş onları sağ / sol eksenine de oturtur.
+            piece.Rotation = FacingRotation(piece is FinePlaceable fine ? fine.InnerFace : Vector3.right, -want);
             Vector3 center = Center;
             ring.Sort((a, b) => Vector3.Dot((b - center).normalized, want).CompareTo(Vector3.Dot((a - center).normalized, want)));
 
@@ -290,6 +291,24 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
             Debug.LogWarning($"{name}: {recipe.output.name} için yer yok", this);
             Destroy(piece.gameObject);
         }
+    }
+
+    // Yerel yön (döndürülmemiş halde) dünyada hedef yöne en çok bakacak 90° adımlı dönüş
+    private static GridMaskRotator.Rotation FacingRotation(Vector3 localDirection, Vector3 target)
+    {
+        var best = GridMaskRotator.Rotation.Deg0;
+        float bestDot = float.MinValue;
+        for (int r = 0; r < 4; r++)
+        {
+            var rotation = (GridMaskRotator.Rotation)r;
+            float dot = Vector3.Dot(GridMaskRotator.ToQuaternion(rotation) * localDirection, target);
+            if (dot > bestDot)
+            {
+                bestDot = dot;
+                best = rotation;
+            }
+        }
+        return best;
     }
 
     // Ayak izini çevreleyen hücrelerin ortaları (taban katında)

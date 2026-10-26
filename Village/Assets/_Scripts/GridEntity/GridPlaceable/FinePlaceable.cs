@@ -25,6 +25,11 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
     [SerializeField] private Vector3 modelRotation;
     [Tooltip("Modelin ölçeği (1 = olduğu gibi)")]
     [SerializeField] private Vector3 modelScale = Vector3.one;
+    [Tooltip("Kesik (iç) yüzün yönü, döndürülmemiş halde (yerel). Kesme istasyonu bölünen parçaları bu yüz istasyonun " +
+             "ortasına bakacak şekilde döndürür: ikiye ayrılmış gibi. Ters çıkıyorsa (-1, 0, 0) yap.")]
+    [SerializeField] private Vector3 innerFace = Vector3.right;
+
+    public Vector3 InnerFace => innerFace;
     [Tooltip("Model yokken geçici görünümün (kutu) rengi: prototipte parçalar birbirinden ayırt edilsin. Beyaz = malzemenin kendi rengi.")]
     [SerializeField] private Color placeholderColor = Color.white;
 
