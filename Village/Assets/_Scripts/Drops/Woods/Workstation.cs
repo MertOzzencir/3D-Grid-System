@@ -275,9 +275,9 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
             Vector3 center = Center;
             ring.Sort((a, b) => Vector3.Dot((b - center).normalized, want).CompareTo(Vector3.Dot((a - center).normalized, want)));
 
-            // Önce tam sağ / sol hizası (istasyonun ortasından geçen çizgide, kenarına yaslanmış; ince parçalar yarım
-            // hücre adımla konabildiği için 2×2'de de ortaya hizalı), olmazsa çevredeki hücreler
-            bool placed = i < 2 && TryPlaceInLine(piece, want);
+            // Önce sağ / sol (TryPlaceBeside: iki taraf aynı aday sırasını ayna görüntüsüyle dener, eşit dağılır),
+            // olmazsa çevredeki hücreler
+            bool placed = i < 2 && TryPlaceBeside(piece, want, toCamera);
             if (!placed)
                 foreach (Vector3 cell in ring)
                     if (TryPlaceAt(piece, cell))
@@ -330,26 +330,51 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
         return cells;
     }
 
-    // İstasyonun ortasından direction yönünde: kenarına yaslı, olmazsa yarım birim adımlarla biraz daha uzağa
-    private bool TryPlaceInLine(GridPlaceable piece, Vector3 direction)
+    // Aday sırası (dış sıra, yana kayma): yakından uzağa; eşitse önce dış sıra yakın olan, sonra kameraya doğru kayan.
+    // İki taraf aynı sırayı ayna görüntüsüyle dener: etraf aynıysa sağ ve sol hep eşit düşer.
+    private static readonly (int row, int lateral)[] BesideOrder = BuildBesideOrder();
+
+    private static (int, int)[] BuildBesideOrder()
     {
+        var order = new List<(int row, int lateral)>();
+        for (int row = 0; row < 5; row++)
+            foreach (int lateral in new[] { 0, 1, -1, 2, -2 })
+                order.Add((row, lateral));
+        order.Sort((a, b) =>
+        {
+            int score = (a.row + Mathf.Abs(a.lateral)).CompareTo(b.row + Mathf.Abs(b.lateral));
+            if (score != 0) return score;
+            int row = a.row.CompareTo(b.row);
+            return row != 0 ? row : b.lateral.CompareTo(a.lateral); // kameraya doğru (+) önce
+        });
+        return order.ToArray();
+    }
+
+    // İnce parçayı istasyonun direction yanına koyar: ilk aday tam yanı (ortasından geçen çizgide, kenarına yaslı; yarım
+    // hücre adımla konabildiği için 2×2'de de ortaya hizalı), sonra BesideOrder: dışa doğru parçanın kalınlığı kadar
+    // sıralar, yana doğru parçanın derinliği kadar (önce kameraya doğru). Kutunun ortası tam o noktaya (PlaceCentered).
+    private bool TryPlaceBeside(GridPlaceable piece, Vector3 direction, Vector3 toCamera)
+    {
+        if (!(piece is FinePlaceable fine)) return false;
         Vector3 center = Center;
         float edge = 0f; // istasyonun kenarı (ortadan, bu yönde)
         GridFootprint footprint = GetData() != null ? GetData().GetFootprint() : null;
         if (footprint != null)
             foreach (Vector3Int cell in footprint.FilledCells())
                 edge = Mathf.Max(edge, Vector3.Dot(transform.TransformPoint(cell) - center, direction) + 0.5f);
-        float halfThickness = piece is FinePlaceable ? 0.25f : 0.5f; // parçanın bu yöndeki yarı kalınlığı
+
+        // Yana kayma yönü: direction'a dik, kameraya doğru (iki tarafta da aynı yön)
+        Vector3 side = Vector3.Cross(Vector3.up, direction);
+        if (Vector3.Dot(side, toCamera) < 0f) side = -side;
+        Vector3 size = fine.WorldSize;
+        float thickness = Mathf.Abs(direction.x) * size.x + Mathf.Abs(direction.z) * size.z;
+        float depth = Mathf.Abs(side.x) * size.x + Mathf.Abs(side.z) * size.z;
+
         Vector3 floor = new Vector3(center.x, transform.position.y, center.z);
-        for (int step = 0; step < 3; step++)
+        foreach ((int row, int lateral) in BesideOrder)
         {
-            Vector3 position = floor + direction * (edge + halfThickness + step * 0.5f);
-            if (piece is FinePlaceable fine)
-            {
-                if (fine.PlaceCentered(position)) return true;
-            }
-            else if (GridManager.Instance.CanPlaceablePlaceOn(piece, position) && GridManager.Instance.PlaceablePlaceOn(piece, position))
-                return true;
+            Vector3 position = floor + direction * (edge + thickness * (row + 0.5f)) + side * (depth * lateral);
+            if (fine.PlaceCentered(position)) return true;
         }
         return false;
     }

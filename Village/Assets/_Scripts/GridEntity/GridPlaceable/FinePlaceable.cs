@@ -84,6 +84,9 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
     private void OnValidate() => ApplyModelPose();
 
     // Dönüşe göre boy (90° / 270°: X ile Z yer değiştirir)
+    // Dönüşe göre dünyadaki boyu (birim; X ve Z dünya eksenlerinde)
+    public Vector3 WorldSize => (Vector3)Size * 0.5f;
+
     private Vector3Int Size => Rotation == GridMaskRotator.Rotation.Deg90 || Rotation == GridMaskRotator.Rotation.Deg270
         ? new Vector3Int(fineSize.z, fineSize.y, fineSize.x) : fineSize;
 
