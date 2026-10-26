@@ -140,6 +140,11 @@ MonoBehaviour:
   rotation: 0
   fineSize: {x: 1, y: 2, z: 2}
   followSpeed: 18
+  model: {fileID: 919132149155446097, guid: 6de112bdaf500b54488cdc0509d425aa, type: 3}
+  modelOffset: {x: 0.25, y: 0, z: 0}
+  modelRotation: {x: 90, y: 0, z: 0}
+  modelScale: {x: 1, y: 1, z: 1}
+  innerFace: {x: 1, y: 0, z: 0}
   placeholderColor: {r: 0.8, g: 0.5, b: 0.25, a: 1}
 --- !u!65 &7207851914915010860
 BoxCollider:
