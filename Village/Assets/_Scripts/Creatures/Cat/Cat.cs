@@ -79,6 +79,8 @@ public class Cat : Creature, ISaveState
     [SerializeField] private Vector3 mouthGloveRotation = Vector3.zero;
 
     [Header("Balık yeme")]
+    [Tooltip("Balık kafanın hücresine bu kadar (birim) yakınsa zıplamaz, yürüyüp yer")]
+    [SerializeField] private float nearFishDistance = 1.5f;
     [Tooltip("Balığı ağzında kemirme süresi (saniye); sonunda balık küçülüp kaybolur")]
     [SerializeField] private float eatSeconds = 1.2f;
     [Tooltip("Kemirme temposu (eldivene göre kat): balığı hızlı yer")]
@@ -190,8 +192,9 @@ public class Cat : Creature, ISaveState
         // Kafa ve gözler eldivene bakar: yakındaysa (CatRig / CatEyes kendi mesafesine bakar) ve görüş alanındaysa
         // Kemirirken bakmaz: eldiven zaten ağzında, kafa ona dönmeye çalışırsa kendi kendini kovalar
         Transform lookTarget = !(CurrentState is CaughtState) && Glove != null && CanSee(Glove.transform.position) ? Glove.transform : null;
-        // Balığa zıplarken (izleme, çömelme, havada) kafa ve gözler hep balığa
-        Fish pounceFish = CurrentState is PounceState pounce ? pounce.Fish : null;
+        // Balığa zıplarken (izleme, çömelme, havada) ya da yürürken kafa ve gözler hep balığa
+        Fish pounceFish = CurrentState is PounceState pounce ? pounce.Fish
+                        : CurrentState is ApproachFishState approach ? approach.Fish : null;
         if (pounceFish != null) lookTarget = pounceFish.transform;
         if (rig != null)
         {
@@ -205,7 +208,9 @@ public class Cat : Creature, ISaveState
         fishInSight = FindFishInSight();
         if (fishInSight != null && CanStartPounce(false))
         {
-            ChangeState(new PounceState(this, fishInSight));
+            // Bir hücre yakındaysa zıplamaz: yürüyüp (gerekirse) yer
+            if (FishDistance(fishInSight) <= nearFishDistance) ChangeState(new ApproachFishState(this, fishInSight));
+            else ChangeState(new PounceState(this, fishInSight));
             return;
         }
 
@@ -233,6 +238,23 @@ public class Cat : Creature, ISaveState
             bestDistance = distance;
         }
         return best;
+    }
+
+    // Balığın kafanın hücresinden yatay uzaklığı
+    private float FishDistance(Fish fish)
+    {
+        Vector3 offset = fish.transform.position - GridWalker.FeetPosition(walker.HeadCell);
+        offset.y = 0f;
+        return offset.magnitude;
+    }
+
+    // Balığı yer: besleme barı bir dilim dolar, kopyası ağzına, yığından bir tane gider. Bar doluysa false.
+    private bool EatFish(Fish fish)
+    {
+        if (fish == null || !feeding.TryFeed()) return false;
+        ChangeState(new EatFishState(this, fish.VisualRoot));
+        fish.Eat(); // yığından bir tane (elde ya da yerde)
+        return true;
     }
 
     // Balık hâlâ görüşte ve menzilde mi (izlerken / çömelirken)
@@ -713,12 +735,7 @@ public class Cat : Creature, ISaveState
                     if (owner.rig != null) owner.rig.LeapProgress = owner.walker.JumpProgress;
                     if (owner.walker.IsJumping) return;
                     // Balık hâlâ dibindeyse kapıp yer
-                    if (fish != null && owner.FishInCatchReach(fish) && owner.feeding.TryFeed())
-                    {
-                        owner.ChangeState(new EatFishState(owner, fish.VisualRoot));
-                        fish.Eat(); // yığından bir tane (elde ya da yerde)
-                        return;
-                    }
+                    if (fish != null && owner.FishInCatchReach(fish) && owner.EatFish(fish)) return;
                     // El hâlâ oradaysa yakaladı: ağzına alıp kemirir
                     if (fish == null && owner.HandInCatchReach())
                     {
@@ -810,6 +827,44 @@ public class Cat : Creature, ISaveState
             if (owner.rig == null) return;
             owner.rig.Chew = false;
             owner.rig.Crouch = 0f;
+        }
+    }
+
+    // Yakındaki balığa (nearFishDistance) zıplamadan: ağzının dibindeyse hemen yer, değilse balığın yanına yürüyüp yer.
+    // Balık giderse ya da ulaşamazsa (yol yok, süre doldu) vazgeçer.
+    private class ApproachFishState : CreatureState<Cat>
+    {
+        private const float GiveUpSeconds = 3f;
+        private readonly Fish fish;
+        private bool walking;
+
+        public ApproachFishState(Cat owner, Fish target) : base(owner) { fish = target; }
+
+        public Fish Fish => fish != null ? fish : null; // yok edildiyse null
+
+        public override void Tick()
+        {
+            if (fish == null || owner.StateTime > GiveUpSeconds) { owner.ChooseNext(); return; }
+            if (owner.FishInCatchReach(fish))
+            {
+                if (owner.walker.IsMoving) owner.walker.Stop(); // o anki adım biter
+                else if (!owner.EatFish(fish)) owner.ChooseNext();
+                return;
+            }
+            if (walking)
+            {
+                if (!owner.walker.IsMoving) owner.ChooseNext(); // vardı ama balık kaçtı
+                return;
+            }
+            // Balığın yanına (balığın hücresi boşsa oraya): zıplamadaki gibi kediye en yakın boş komşu
+            if (!owner.TryGetFishLeapTarget(fish, out Vector3Int head, out _) || !owner.walker.MoveTo(head))
+            {
+                owner.ChooseNext();
+                return;
+            }
+            walking = true;
+            owner.Animator?.Play("Walk");
+            owner.SetMood(CatMood.Walk);
         }
     }
 
