@@ -50,6 +50,7 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
     protected virtual bool Stackable => false;
 
     protected GridDragMotor Drag { get; private set; }
+    protected Shader PlaceholderShader => placeholderShader;
     protected Transform Visual { get; private set; }
 
     protected virtual void Awake()
@@ -247,7 +248,7 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
 
     private void Punch() => punchStart = Time.time;
 
-    private void LateUpdate()
+    protected virtual void LateUpdate()
     {
         // Yazı eşyayla dönmez, hep kameraya bakar
         if (label != null && label.gameObject.activeSelf && Camera.main != null)
