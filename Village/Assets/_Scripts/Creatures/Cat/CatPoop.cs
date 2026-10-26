@@ -5,6 +5,7 @@ using UnityEngine;
 // ve altı dolu ise (HeldGridIndicator.CanHoldAt) yeşilimsi, değilse kırmızımsı. Sol tık eker: kaka yok olur, ağaç
 // fidan olarak konur ve büyür (Tree.StartAsSapling). Geçici görünüm: üst üste üç kahverengi top.
 // Balık gibi yığınlanır: tutarken aynı türden kakalar toplanır, her sol tık yığından bir tane eker.
+// Ağaçlar hep aynı görünmesin diye her ekimin dönüşü rastgele (90° adımlı; önizleme de o dönüşte, ekince yenisi seçilir).
 public class CatPoop : Carryable
 {
     [Tooltip("Ekilince çıkacak ağacın verisi (Tree)")]
@@ -54,12 +55,14 @@ public class CatPoop : Carryable
         if (treeProbe == null || !TryGetPlantOrigin(out Vector3Int origin, out bool valid) || !valid) return false;
 
         var tree = (GridPlaceable)treeData.Spawn();
+        tree.Rotation = treeProbe.Rotation;
         if (!GridManager.Instance.PlaceablePlaceOn(tree, origin))
         {
             Destroy(tree.gameObject);
             return false;
         }
         if (tree is Tree growing) growing.StartAsSapling();
+        RandomizeRotation(); // sonraki ağaç başka yöne baksın
         UseOne(); // yığından bir tane; son taneyse kaka (ve önizleme) yok olur
         return true;
     }
@@ -79,13 +82,20 @@ public class CatPoop : Carryable
         if (treeData == null || treeProbe != null) return;
         treeProbe = (GridPlaceable)treeData.Spawn();
         treeProbe.gameObject.SetActive(false); // sadece şekli ve önizlemesi için; oyunda yok
+        RandomizeRotation();
         Shader shader = Shader.Find("Village/Placement Ghost");
         if (shader == null) return;
         validMaterial = new Material(shader) { name = "Plant Ghost Valid (generated)" };
         invalidMaterial = new Material(shader) { name = "Plant Ghost Invalid (generated)" };
         validMaterial.SetColor(ColorId, validColor);
         invalidMaterial.SetColor(ColorId, invalidColor);
-        ghost = new PlacementGhost(treeProbe.gameObject, treeProbe.GetFootprint().FilledCells(), validMaterial, invalidMaterial);
+        ghost = new PlacementGhost(treeProbe.gameObject, treeData.GetFootprint().FilledCells(), validMaterial, invalidMaterial); // hayalet dönüşsüz kurulur
+    }
+
+    // Ekilecek ağacın dönüşü (önizleme ve ayak izi de bununla)
+    private void RandomizeRotation()
+    {
+        if (treeProbe != null) treeProbe.Rotation = (GridMaskRotator.Rotation)Random.Range(0, 4);
     }
 
     private void UpdatePreview()
