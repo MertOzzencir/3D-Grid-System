@@ -2,13 +2,16 @@ using UnityEngine;
 
 // Kesme kütüğü (Workstation): üstüne konan parça (1BR odun, yarım odun) baltayla bölünür. Balta sağ tıkla alınıp
 // kütüğe getirilir, parçanın üstünde (axeOffset, axeRotation; kameraya göre) durur, sol tıkla vurulur (ağaç kesmedeki
-// gibi); hitsToSplit vuruşta parça bölünür, çıktılar kütüğün soluna ve sağına zıplar.
+// gibi); hitsToSplit vuruşta parça bölünür, çıktılar kütüğün soluna ve sağına zıplar. 1×1 odunlar stackLimit kadar üst
+// üste konabilir: balta en alttakini böler, üsttekiler kayarak iner.
 // 2×2. Geçici görünüm (model yokken): ayak izinin ortasında silindir kütük, hücrenin alt yarısı, üstü topHeight'ta.
 public class ChoppingBlock : Workstation
 {
     [Header("Kesme")]
     [Tooltip("Kaç vuruşta bölünür")]
     [SerializeField, Min(1)] private int hitsToSplit = 1;
+    [Tooltip("1×1 odun üst üste kaç tane konabilir (yarım odun hep tek)")]
+    [SerializeField, Min(1)] private int stackLimit = 3;
     [Tooltip("Baltanın parçanın ortasına göre yeri (birim, kameraya göre: X sağ, Y yukarı, Z kameradan uzağa / geriye)")]
     [SerializeField] private Vector3 axeOffset = new Vector3(0f, 0.5f, -1f);
     [Tooltip("Baltanın kütüğün üstündeki dönüşü (derece, kameraya göre: kamera döndükçe balta da döner). Play'deyken " +
@@ -27,6 +30,8 @@ public class ChoppingBlock : Workstation
     }
 
     protected override void OnHeld() => hits = 0;
+
+    protected override int StackLimit(GridPlaceable item) => item is Wood ? stackLimit : 1;
 
     // Ağaçtaki oklar gibi kamerayla 90° adımlarla döner (balta kameraya göre aynı duruşta kalır)
     private static Quaternion AxeFrame() => Quaternion.Euler(0f, (float)CameraController.CurrentFacing, 0f);
