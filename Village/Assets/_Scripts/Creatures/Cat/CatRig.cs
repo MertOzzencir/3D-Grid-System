@@ -157,6 +157,8 @@ public class CatRig : MonoBehaviour
 
     public CatMood Mood { get; set; } = CatMood.Idle;
     public Transform LookTarget { get; set; }
+    // Açıkken hedefe uzaklığa bakmadan döner (balığa zıplarken kafa hep balığa)
+    public bool ForceLook { get; set; }
     private Vector3 lastLookPoint;
     public Transform Head => head;
     public float LookRadius => lookRadius;
@@ -569,7 +571,7 @@ public class CatRig : MonoBehaviour
 
         // Eldiven yakınsa ona döner (gövdeye göre sınırlı açıyla)
         bool canLook = LookTarget != null && Mood != CatMood.Sleep &&
-                       Vector3.Distance(LookTarget.position, head.position) < lookRadius;
+                       (ForceLook || Vector3.Distance(LookTarget.position, head.position) < lookRadius);
         if (canLook) lastLookPoint = LookTarget.position; // görüşten çıkınca son noktadan yumuşakça döner
         lookWeight = Mathf.MoveTowards(lookWeight, canLook ? 1f : 0f, dt * lookBlendSpeed);
         if (lookWeight <= 0f) return;

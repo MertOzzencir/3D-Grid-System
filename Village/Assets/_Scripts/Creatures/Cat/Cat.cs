@@ -190,7 +190,14 @@ public class Cat : Creature, ISaveState
         // Kafa ve gözler eldivene bakar: yakındaysa (CatRig / CatEyes kendi mesafesine bakar) ve görüş alanındaysa
         // Kemirirken bakmaz: eldiven zaten ağzında, kafa ona dönmeye çalışırsa kendi kendini kovalar
         Transform lookTarget = !(CurrentState is CaughtState) && Glove != null && CanSee(Glove.transform.position) ? Glove.transform : null;
-        if (rig != null) rig.LookTarget = lookTarget;
+        // Balığa zıplarken (izleme, çömelme, havada) kafa ve gözler hep balığa
+        Fish pounceFish = CurrentState is PounceState pounce ? pounce.Fish : null;
+        if (pounceFish != null) lookTarget = pounceFish.transform;
+        if (rig != null)
+        {
+            rig.LookTarget = lookTarget;
+            rig.ForceLook = pounceFish != null;
+        }
         if (eyes != null) eyes.LookTarget = lookTarget;
 
         // Görüşte ve menzilde balık varsa ona zıplar (elden önce: kediyi balıkla yönetirsin). Elden farkı: görüşte kalan
@@ -656,6 +663,7 @@ public class Cat : Creature, ISaveState
         private readonly Fish fish; // null: ele zıplama oyunu
 
         public bool Airborne => phase == Phase.Leap;
+        public Fish Fish => fish != null ? fish : null; // yok edildiyse null
         public override string Name => $"Pounce.{phase}";
 
         public PounceState(Cat owner, Fish target) : base(owner)
