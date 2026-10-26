@@ -3,7 +3,7 @@ using UnityEngine;
 // Kesme kütüğü (Workstation): üstüne konan parça (1BR odun, yarım odun) baltayla bölünür. Balta sağ tıkla alınıp
 // kütüğe getirilir, parçanın üstünde (axeOffset, axeRotation; kameraya göre) durur, sol tıkla vurulur (ağaç kesmedeki
 // gibi); hitsToSplit vuruşta parça bölünür, çıktılar kütüğün soluna ve sağına zıplar. 1×1 odunlar stackLimit kadar üst
-// üste konabilir: balta en alttakini böler, üsttekiler kayarak iner.
+// üste konabilir: balta en son konanı (en üstteki) böler, duruşu da onun üstünde (HoldPoint yığına göre).
 // 2×2. Geçici görünüm (model yokken): ayak izinin ortasında silindir kütük, hücrenin alt yarısı, üstü topHeight'ta.
 public class ChoppingBlock : Workstation
 {

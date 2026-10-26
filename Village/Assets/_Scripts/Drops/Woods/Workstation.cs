@@ -10,7 +10,7 @@ using UnityEngine;
 // Üstteki parça istasyonun çocuğu olur, collider'ları kapanır; yerine üstte "Top" collider'ı (WorkstationTop) açılır:
 // aletler ve parçalar oraya hedeflenir, sağ tıkla tutulunca parça istasyondan alınır.
 // Yığın: aynı türden parçalar StackLimit kadar üst üste konabilir (kesme kütüğünde 1×1 odun 3'e kadar). Alet hep en
-// alttakini (held) işler; o bölününce üsttekiler kayarak bir kat iner. Elle (sağ tık) en üstteki alınır.
+// üsttekini (held, en son konan) işler; aletin yeri de onun üstü (HoldPoint). Elle (sağ tık) da en üstteki alınır.
 // Tarifler Inspector'da: girdi SO → çıktı SO × adet. Çıktısı boş tarif: parça konur ama bölünmez. Üstteki parça kaydedilmez.
 // Görünüm: Model atanırsa o (modelin pivotu ayak izinin ortasına konur: 2×2'de dört hücrenin ortası), yoksa alt sınıfın
 // kodla kurduğu geçici görünüm (prototip). Kökte collider yoksa görünümü saran kutu eklenir (tutulabilsin).
@@ -48,9 +48,8 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
     private WorkstationTop top;
     private readonly List<GridPlaceable> pieces = new List<GridPlaceable>(); // yığın, alttan üste
     private readonly Dictionary<GridPlaceable, List<Collider>> disabledColliders = new Dictionary<GridPlaceable, List<Collider>>();
-    private Coroutine slideRoutine;
 
-    protected GridPlaceable held; // işlenen parça: yığının en altı
+    protected GridPlaceable held; // işlenen parça: yığının en üstü (en son konan)
     protected Recipe heldRecipe;
     protected Transform visual; // istasyonun görünümü (model ya da geçici)
     protected Quaternion visualRest;
@@ -68,8 +67,19 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
         }
     }
 
-    // Üst yüzeyin üstündeki 1 birimlik yerin ortası (Top collider'ı, aletlerin referansı)
-    protected Vector3 HoldPoint => Center + Vector3.up * (topHeight + 0.5f);
+    // İşlenen parçanın (yığının en üstü) 1 birimlik yerinin ortası, yığın boşsa üst yüzeyin üstü (aletlerin referansı)
+    protected Vector3 HoldPoint => Center + Vector3.up * (topHeight + BelowWorked + 0.5f);
+
+    // İşlenen parçanın altındaki parçaların yüksekliği
+    private float BelowWorked
+    {
+        get
+        {
+            float below = 0f;
+            for (int i = 0; i < pieces.Count - 1; i++) below += HeightOf(pieces[i]);
+            return below;
+        }
+    }
 
     // Parçanın yüksekliği (birim): ince parçalar kendi boyunda (kalas yarım birim), diğerleri 1
     protected static float HeightOf(GridPlaceable item) => item is FinePlaceable fine ? fine.Height : 1f;
@@ -91,8 +101,8 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
     // Aynı türden kaç parça üst üste konabilir (alt sınıf: kesme kütüğünde 1×1 odun 3)
     protected virtual int StackLimit(GridPlaceable item) => 1;
 
-    // Üstteki parçanın tepesi (alet buraya iner)
-    protected Vector3 PieceTop => Center + Vector3.up * (topHeight + (held != null ? HeightOf(held) : 1f));
+    // İşlenen parçanın (yığının en üstü) tepesi (alet buraya iner)
+    protected Vector3 PieceTop => Center + Vector3.up * (topHeight + BelowWorked + (held != null ? HeightOf(held) : 1f));
 
     protected virtual void Awake()
     {
@@ -200,31 +210,20 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
             }
         disabledColliders[item] = colliders;
         pieces.Add(item);
-        bool first = pieces.Count == 1;
-        RefreshStack(false);
-        if (first) OnHeld();
+        RefreshStack();
+        OnHeld(); // en son konan işlenir, baştan
         return true;
     }
 
-    // Elle alındı (sağ tıkla tutuldu): en üstteki parça bırakılır, collider'ları açılır
+    // En üstteki (işlenen) parça bırakılır, collider'ları açılır: elle alındı (sağ tık) ya da bölünecek. Altında parça
+    // kaldıysa sıradaki o, baştan işlenir.
     public GridPlaceable Release()
     {
         if (pieces.Count == 0) return null;
-        bool wasWorked = pieces.Count == 1; // tek parçaysa işlenen parça gidiyor
         GridPlaceable item = TakeAt(pieces.Count - 1);
-        RefreshStack(false);
-        if (wasWorked) OnReleased();
-        return item;
-    }
-
-    // İşlenen (en alttaki) parça bölünmek üzere bırakılır; üsttekiler kayarak bir kat iner
-    private GridPlaceable ReleaseBottom()
-    {
-        if (pieces.Count == 0) return null;
-        GridPlaceable item = TakeAt(0);
-        RefreshStack(true);
+        RefreshStack();
         if (pieces.Count == 0) OnReleased();
-        else OnHeld(); // sıradaki parça baştan işlenir
+        else OnHeld();
         return item;
     }
 
@@ -240,10 +239,10 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
         return item;
     }
 
-    // held / tarif ve Top collider'ı yığına göre; parçalar yerlerine (slide: bir kat inen parçalar kayarak)
-    private void RefreshStack(bool slide)
+    // held / tarif ve Top collider'ı yığına göre; parçalar yerlerine
+    private void RefreshStack()
     {
-        held = pieces.Count > 0 ? pieces[0] : null;
+        held = pieces.Count > 0 ? pieces[pieces.Count - 1] : null;
         heldRecipe = RecipeFor(held);
         if (pieces.Count == 0)
         {
@@ -253,13 +252,7 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
         float height = StackHeight;
         top.Fit(Center + Vector3.up * (topHeight + height * 0.5f), height);
         top.SetActive(true);
-        if (slideRoutine != null) StopCoroutine(slideRoutine);
-        if (slide) slideRoutine = StartCoroutine(SlideToPlaces());
-        else
-        {
-            slideRoutine = null;
-            for (int i = 0; i < pieces.Count; i++) pieces[i].transform.position = StackPoint(i);
-        }
+        for (int i = 0; i < pieces.Count; i++) pieces[i].transform.position = StackPoint(i);
     }
 
     // Yığındaki i. parçanın yeri
@@ -270,23 +263,6 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
         return Center + Vector3.up * (topHeight + below + HeightOf(pieces[index]) * 0.5f);
     }
 
-    // Bölünen parçanın yerine üsttekiler kayarak iner (hızlanarak düşer gibi)
-    private IEnumerator SlideToPlaces()
-    {
-        var from = new Vector3[pieces.Count];
-        for (int i = 0; i < pieces.Count; i++) from[i] = pieces[i].transform.position;
-        const float duration = 0.18f;
-        for (float elapsed = 0f; elapsed < duration; elapsed += Time.deltaTime)
-        {
-            float t = elapsed / duration;
-            t *= t;
-            for (int i = 0; i < pieces.Count && i < from.Length; i++)
-                if (pieces[i] != null) pieces[i].transform.position = Vector3.Lerp(from[i], StackPoint(i), t);
-            yield return null;
-        }
-        for (int i = 0; i < pieces.Count; i++) pieces[i].transform.position = StackPoint(i);
-        slideRoutine = null;
-    }
 
     protected virtual void OnHeld() { }
     protected virtual void OnReleased() { }
@@ -344,10 +320,10 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
     protected void SplitHeld()
     {
         Recipe recipe = heldRecipe;
-        GridPlaceable item = ReleaseBottom();
+        Vector3 start = HoldPoint; // bölünen parçanın yeri (bırakılmadan önce)
+        GridPlaceable item = Release();
         Destroy(item.gameObject);
 
-        Vector3 start = HoldPoint;
         Vector3 right = CameraRight();
         List<Vector3> ring = RingCells();
         for (int i = 0; i < recipe.count; i++)
