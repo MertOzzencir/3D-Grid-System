@@ -8,7 +8,7 @@ using UnityEngine;
 // İki göz ortak bir merkeze (Eyes) bağlı: frameRotation ikisini birlikte kafaya göre döndürür (kafa kemiğinin eksenleri
 // Blender'dan farklı geldiyse gözlerin bütün düzenini çevirmek için); yerleri ve yönleri birlikte döner.
 // Bağlandığı obje (anchor: kafa kemiği ya da modelin kökü) ile hareket eder; Tick her kare (LateUpdate) çağrılır.
-// Yer, açı ve boylar her karede ayarlardan uygulanır: Play'deyken Inspector'dan değiştirince anında görünür.
+// Yer, açı, dönüş ve boylar gözler kurulurken (Build) bir kez uygulanır.
 [Serializable]
 public class GooglyEyes
 {
@@ -117,7 +117,6 @@ public class GooglyEyes
     public void Tick(float dt)
     {
         if (right == null || dt <= 0f) return;
-        if (frame != null) frame.localRotation = Quaternion.Euler(frameRotation);
         Simulate(right, dt);
         Simulate(left, dt);
     }
@@ -125,7 +124,6 @@ public class GooglyEyes
     private void Simulate(Eye eye, float dt)
     {
         if (eye.root == null) return;
-        Layout(eye);
         dt = Mathf.Min(dt, 0.05f);
         Vector3 position = eye.root.position;
         Vector3 velocity = (position - eye.lastPosition) / dt;
