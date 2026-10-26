@@ -48,6 +48,9 @@ public class Fish : Carryable
                   Quaternion.Euler(45f, 0f, 0f));
     }
 
+    // Modelin (ya da geçici görünüşün) kökü: kedi yerken ağzında bunun kopyası durur
+    public Transform VisualRoot => Visual;
+
     // Kedi yığından bir tane yedi (son taneyse balık yok olur)
     public void Eat() => UseOne();
 }

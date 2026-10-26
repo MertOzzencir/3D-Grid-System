@@ -77,6 +77,15 @@ public class Cat : Creature, ISaveState
     [Tooltip("Eldivenin ağızdaki duruşuna ek dönüş (derece). Varsayılan: parmaklar kedinin sağına ve aşağı sarkar, avuç kedinin yüzüne bakar.")]
     [SerializeField] private Vector3 mouthGloveRotation = Vector3.zero;
 
+    [Header("Balık yeme")]
+    [Tooltip("Balığı ağzında kemirme süresi (saniye); sonunda balık küçülüp kaybolur")]
+    [SerializeField] private float eatSeconds = 1.2f;
+    [Tooltip("Kemirme temposu (eldivene göre kat): balığı hızlı yer")]
+    [SerializeField] private float eatChewSpeed = 2.2f;
+    [Tooltip("Balığın ağızdaki yeri ve dönüşü (ağız noktasına göre; Play'deyken yeni beslemede görünür)")]
+    [SerializeField] private Vector3 fishMouthOffset = Vector3.zero;
+    [SerializeField] private Vector3 fishMouthRotation = new Vector3(0f, 90f, 0f);
+
     [Header("Dokunma (el üstündeyken, tuşa basmadan)")]
     [Tooltip("Elin değdiği yerin içeri göçmesi (birim)")]
     [SerializeField] private float touchDepth = 0.035f;
@@ -390,17 +399,22 @@ public class Cat : Creature, ISaveState
     public override bool AcceptsZoneTool(IInteractable tool, CreatureZoneType zone, out Vector3 position)
     {
         position = default;
-        if (!(tool is Fish) || feeding.IsFull || !walker.IsPlaced) return false;
+        if (!(tool is Fish) || feeding.IsFull || !walker.IsPlaced || !CanEat) return false;
         position = (Vector3)walker.HeadCell + Vector3.up * 0.6f;
         return true;
     }
 
     public override bool OnZoneToolUsed(IInteractable tool, CreatureZoneType zone)
     {
-        if (!(tool is Fish fish) || !feeding.TryFeed()) return false;
+        if (!(tool is Fish fish) || !CanEat || !feeding.TryFeed()) return false;
+        ChangeState(new EatFishState(this, fish.VisualRoot)); // kopyası ağzına, elde kalan yığından bir tane gider
         fish.Eat();
         return true;
     }
+
+    // Yemeğe ara verilmez: yiyorken, göbek modunda, tekmelerken, havadayken ya da eldiven ağzındayken balık almaz
+    private bool CanEat => !(CurrentState is EatFishState || CurrentState is BellyState || CurrentState is BunnyKickState ||
+                             CurrentState is CaughtState || (CurrentState is PounceState pounce && pounce.Airborne));
 
     public override void OnZoneHover(CreatureZoneType zone, bool entered)
         => hoveredZones = Mathf.Max(0, hoveredZones + (entered ? 1 : -1));
@@ -711,6 +725,58 @@ public class Cat : Creature, ISaveState
             if (owner.rig == null) return;
             owner.rig.Chew = false;
             owner.rig.Crouch = 0f;
+        }
+    }
+
+    // Balık yeme: eldiveni kemirmenin kısa ve hızlı hali. Balığın görünüşünün kopyası ağızda durur, kedi çömelip hızlı
+    // hızlı kemirir (rig.ChewTimeScale), sürenin sonunda balık küçülüp kaybolur. Giriş kilitlenmez. Klip ("EatFish")
+    // gelirse o oynar.
+    private class EatFishState : CreatureState<Cat>
+    {
+        private const float ShrinkSeconds = 0.25f;
+        private readonly Transform source;
+        private Transform fish;
+        private Vector3 fishScale;
+
+        public EatFishState(Cat owner, Transform fishVisual) : base(owner) { source = fishVisual; }
+
+        public override void Enter()
+        {
+            owner.walker.Stop();
+            owner.Animator?.Play("EatFish");
+            owner.SetMood(CatMood.Hunt);
+            if (owner.eyes != null) owner.eyes.Mood = CatMood.Happy;
+            if (owner.rig != null)
+            {
+                owner.rig.Crouch = 0.8f;
+                owner.rig.Chew = true;
+                owner.rig.ChewTimeScale = owner.eatChewSpeed;
+            }
+            if (source == null) return;
+            Transform mouth = owner.mouth != null ? owner.mouth : owner.transform;
+            // Elindeki balığın boyunda ağza (dünya ölçeği korunur)
+            fish = Instantiate(source.gameObject).transform;
+            fish.name = "Eaten Fish";
+            fish.SetParent(mouth, true);
+            fish.SetLocalPositionAndRotation(owner.fishMouthOffset, Quaternion.Euler(owner.fishMouthRotation));
+            fishScale = fish.localScale;
+        }
+
+        public override void Tick()
+        {
+            float left = owner.eatSeconds - owner.StateTime;
+            if (fish != null && left < ShrinkSeconds)
+                fish.localScale = fishScale * Mathf.Clamp01(left / ShrinkSeconds);
+            if (left <= 0f) owner.ChangeState(new TimedState(owner, "Idle", owner.idleSeconds));
+        }
+
+        public override void Exit()
+        {
+            if (fish != null) Destroy(fish.gameObject);
+            if (owner.rig == null) return;
+            owner.rig.Chew = false;
+            owner.rig.Crouch = 0f;
+            owner.rig.ChewTimeScale = 1f;
         }
     }
 

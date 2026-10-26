@@ -130,6 +130,8 @@ public class CatRig : MonoBehaviour
 
     // Eldiveni ağzında kemiriyor: kafa eğik inip kalkar, arada sallar; ön patiler sarılır
     public bool Chew { get; set; }
+    // Kemirme temposu (1 = eldiven; balığı hızlı yer)
+    public float ChewTimeScale { get; set; } = 1f;
     private float chewWeight, chewTime;
     private float crouchWeight, wiggleWeight, wigglePhase;
     private Vector3 rootYawAxis;
@@ -328,7 +330,7 @@ public class CatRig : MonoBehaviour
             chewTime = 0f;
             return;
         }
-        chewTime += dt;
+        chewTime += dt * ChewTimeScale;
         float w = Mathf.SmoothStep(0f, 1f, chewWeight);
 
         if (head != null)
