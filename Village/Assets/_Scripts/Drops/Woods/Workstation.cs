@@ -344,7 +344,11 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
         for (int step = 0; step < 3; step++)
         {
             Vector3 position = floor + direction * (edge + halfThickness + step * 0.5f);
-            if (GridManager.Instance.CanPlaceablePlaceOn(piece, position) && GridManager.Instance.PlaceablePlaceOn(piece, position))
+            if (piece is FinePlaceable fine)
+            {
+                if (fine.PlaceCentered(position)) return true;
+            }
+            else if (GridManager.Instance.CanPlaceablePlaceOn(piece, position) && GridManager.Instance.PlaceablePlaceOn(piece, position))
                 return true;
         }
         return false;

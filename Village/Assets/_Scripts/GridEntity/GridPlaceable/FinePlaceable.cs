@@ -121,6 +121,19 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
         return true;
     }
 
+    // Kutunun ortası center'da olacak şekilde konur (ince grid'e yuvarlanır). PlaceAt'ten farkı: çift boyutta orta bir
+    // sınıra denk gelince bir yana kaymaz (örn. kesme kütüğünün tam yanına hizalı)
+    public bool PlaceCentered(Vector3 center)
+    {
+        if (Grid == null) return false;
+        Vector3Int min = Grid.WorldToFine(center - (Vector3)(Size - Vector3Int.one) * 0.25f);
+        if (!Grid.CanFineOccupy(min, Size, this)) return false;
+        hasSavedMin = false;
+        Occupy(min);
+        transform.SetPositionAndRotation(CenterOf(min, Size), GridRotation);
+        return true;
+    }
+
     private void Occupy(Vector3Int min)
     {
         if (occupiedCells != null) ReleaseCells();
