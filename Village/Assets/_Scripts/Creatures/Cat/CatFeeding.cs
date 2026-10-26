@@ -4,15 +4,15 @@ using UnityEngine;
 
 // Kedinin beslenmesi (Cat'te bir alan, ayarları Cat'in Inspector'ında "Feeding"): dilimli besleme barı. Her balık
 // (Fish) bir dilim doldurur. Sıçması şaplakla: midesi doluyken kıçına vurdukça (Cat ButtSlap → OnSlap) şaplak barı dolar,
-// slapsToPoop şaplakta dolunca midedeki dolu dilim kadar kaka (CatPoop, ağaç tohumu) yanındaki boş hücrelere zıplar, iki
-// bar da boşalır. Midesi boşsa vurmak barı doldurmaz. Bir süre vurulmazsa (slapDecayDelay) şaplak barı yavaşça geri
+// slapsToPoop şaplakta dolunca bir kaka (CatPoop, ağaç tohumu) yanındaki boş hücreye zıplar, besleme barından bir dilim
+// gider, şaplak barı boşalır; midede dilim kaldıkça yeniden şaplakla bir tane daha. Midesi boşsa vurmak barı doldurmaz. Bir süre vurulmazsa (slapDecayDelay) şaplak barı yavaşça geri
 // iner (slapDecay). Barlar kedinin üstünde üst üste, kameraya dönük: üstte besleme (dilimli), altında şaplak (düz
 // dolan); elde balık varken ya da mouse kedinin üstündeyken görünür ("Village/Grid Fade"). Dolu dilim ve şaplak barı
 // kayda girer (Cat.SaveState).
 [Serializable]
 public class CatFeeding
 {
-    [Tooltip("Besleme barının dilim sayısı: kedi en fazla bu kadar balık yer, sıçınca bu kadar kaka yapar")]
+    [Tooltip("Besleme barının dilim sayısı: kedi en fazla bu kadar balık yer; her dilim bir kaka")]
     [SerializeField, Min(1)] private int slices = 4;
     [Tooltip("Kaç şaplakta sıçar (midesi doluyken)")]
     [SerializeField, Min(1)] private int slapsToPoop = 5;
@@ -83,11 +83,12 @@ public class CatFeeding
         UpdateBar(cat, showBar);
     }
 
-    // Dolu dilim kadar kaka, kedinin yanındaki boş hücrelere (her biri yerini kaplar, sonraki bir başkasına düşer)
+    // Şaplak barı doldu: bir dilim harcanır, bir kaka kedinin yanındaki boş hücreye zıplar (midede dilim kaldıysa yeniden
+    // şaplakla bir tane daha)
     private void Poop(Cat cat)
     {
-        int count = fed;
-        fed = 0;
+        int count = 1;
+        fed--;
         slaps = 0f;
         if (poopData == null)
         {

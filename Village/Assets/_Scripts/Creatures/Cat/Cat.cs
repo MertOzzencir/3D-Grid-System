@@ -6,7 +6,7 @@ using UnityEngine;
 //   sağ tık basılı → göbek modu: sırtüstü döner, eldivenle göbeği okşanır (BellyRub); fazla okşanırsa
 //   arka ayaklarıyla tekmeler (BunnyKick) ve kaçar.
 //   elde balık (Fish) kedinin üstünde sol tık → yer: besleme barı (CatFeeding) bir dilim dolar. Midesi doluyken
-//   kıçına vurdukça şaplak barı dolar; dolunca midedeki dilim kadar kaka (ağaç tohumu, CatPoop) bırakır.
+//   kıçına vurdukça şaplak barı dolar; her dolunca bir kaka (ağaç tohumu, CatPoop) bırakır, bir dilim gider.
 // Animasyonlar CreatureAnimator ile isimden oynatılır; model gelmeden yer tutucu (iki kutu) kendini kurar ve
 // tepkileri basit kutu hareketleriyle gösterir.
 // Grid'de "yürüyen placeable": build menüsünden konur, kayıtla gelir (ISaveState: kafanın yönü + sevgi), durduğu iki
