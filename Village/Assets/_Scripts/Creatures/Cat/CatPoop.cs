@@ -109,5 +109,9 @@ public class CatPoop : Carryable
         validMaterial = invalidMaterial = null;
     }
 
-    private void OnDestroy() => DestroyPreview();
+    protected override void OnDestroy()
+    {
+        base.OnDestroy();
+        DestroyPreview();
+    }
 }
