@@ -16,6 +16,9 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
     [Header("Görünüm")]
     [Tooltip("Eşyanın modeli (prefab ya da FBX; pivot hücrenin ortasında). Boşsa geçici görünüm çizilir.")]
     [SerializeField] private GameObject model;
+    [Tooltip("Geçici görünümün shader'ı (Village/Lit). Referansla tutulur ki build'e girsin (Shader.Find build'de " +
+             "referanssız shader'ı bulamaz, primitive'lerin varsayılan materyali de build'de görünmüyordu).")]
+    [SerializeField] private Shader placeholderShader;
     [Tooltip("Ortaya çıkınca (örn. kediden düşünce) yerine zıplama süresi ve yüksekliği")]
     [SerializeField] private float hopDuration = 0.45f;
     [SerializeField] private float hopHeight = 0.8f;
@@ -92,9 +95,9 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
     // Model yokken geçici görünüm (parent: modelin yeri)
     protected abstract void BuildPlaceholder(Transform parent);
 
-    // Geçici görünüm parçası: collider'sız primitive, renkli
-    protected static GameObject Primitive(PrimitiveType type, Transform parent, Vector3 localPosition, Vector3 scale, Color color,
-                                          Quaternion? rotation = null)
+    // Geçici görünüm parçası: collider'sız primitive, renkli (placeholderShader ile; yoksa primitive'in kendi materyali)
+    protected GameObject Primitive(PrimitiveType type, Transform parent, Vector3 localPosition, Vector3 scale, Color color,
+                                   Quaternion? rotation = null)
     {
         GameObject part = GameObject.CreatePrimitive(type);
         Destroy(part.GetComponent<Collider>());
@@ -102,7 +105,9 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
         part.transform.localPosition = localPosition;
         part.transform.localRotation = rotation ?? Quaternion.identity;
         part.transform.localScale = scale;
-        part.GetComponent<Renderer>().material.color = color;
+        var renderer = part.GetComponent<Renderer>();
+        if (placeholderShader != null) renderer.material = new Material(placeholderShader) { name = "Placeholder (generated)" };
+        renderer.material.color = color;
         return part;
     }
 

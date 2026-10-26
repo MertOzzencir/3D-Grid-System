@@ -22,6 +22,8 @@ public class CatFeeding
     [SerializeField] private float slapDecay = 0.6f;
     [Tooltip("Kakanın verisi (CatPoop)")]
     [SerializeField] private GridPlaceableSO poopData;
+    [Tooltip("Village/Grid Fade. Referansla tutulur ki build'e girsin.")]
+    [SerializeField] private Shader barShader;
 
     [Header("Bar")]
     [Tooltip("Barın kedinin pivotuna göre yeri (dünya ekseninde)")]
@@ -132,7 +134,7 @@ public class CatFeeding
     private bool EnsureBar(Cat cat)
     {
         if (bar != null) return true;
-        Shader shader = Shader.Find("Village/Grid Fade");
+        Shader shader = barShader != null ? barShader : Shader.Find("Village/Grid Fade");
         if (shader == null) return false;
         var obj = new GameObject("Feed Bar");
         obj.transform.SetParent(cat.transform, false);

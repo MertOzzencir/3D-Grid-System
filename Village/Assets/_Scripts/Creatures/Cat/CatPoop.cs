@@ -15,6 +15,8 @@ public class CatPoop : Carryable
     [Tooltip("Önizleme: ekilebilir / ekilemez yer rengi (A: saydamlık)")]
     [SerializeField] private Color validColor = new Color(0.45f, 1f, 0.55f, 0.4f);
     [SerializeField] private Color invalidColor = new Color(1f, 0.35f, 0.3f, 0.4f);
+    [Tooltip("Village/Placement Ghost. Referansla tutulur ki build'e girsin (build mode önizlemesi de bunu kullanır).")]
+    [SerializeField] private Shader ghostShader;
 
     private static readonly int ColorId = Shader.PropertyToID("_Color");
 
@@ -83,7 +85,7 @@ public class CatPoop : Carryable
         treeProbe = (GridPlaceable)treeData.Spawn();
         treeProbe.gameObject.SetActive(false); // sadece şekli ve önizlemesi için; oyunda yok
         RandomizeRotation();
-        Shader shader = Shader.Find("Village/Placement Ghost");
+        Shader shader = ghostShader != null ? ghostShader : Shader.Find("Village/Placement Ghost");
         if (shader == null) return;
         validMaterial = new Material(shader) { name = "Plant Ghost Valid (generated)" };
         invalidMaterial = new Material(shader) { name = "Plant Ghost Invalid (generated)" };

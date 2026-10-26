@@ -46,4 +46,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CatPoop
   data: {fileID: 11400000, guid: 513ed088322546fc9c4959c3d35f64c5, type: 2}
   rotation: 0
+  placeholderShader: {fileID: 4800000, guid: 926dc37fc1464f3ca97c9a9d7b9666f3, type: 3}
+  ghostShader: {fileID: 4800000, guid: 4929356f12bde0d46be8fb6021dea11d, type: 3}
   treeData: {fileID: 11400000, guid: c77f984198677104cb1f3054ac8bf6a4, type: 2}

@@ -46,3 +46,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Fish
   data: {fileID: 11400000, guid: de94be7d129949f3aeb560b50f7b11b9, type: 2}
   rotation: 0
+  placeholderShader: {fileID: 4800000, guid: 926dc37fc1464f3ca97c9a9d7b9666f3, type: 3}
