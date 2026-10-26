@@ -18,6 +18,13 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
     [SerializeField] private float followSpeed = 18f;
     [Tooltip("İsteğe bağlı model (pivot kutunun ortasında). Atanırsa prefab'taki geçici görünüm (kutu) gizlenir.")]
     [SerializeField] private GameObject model;
+    [Tooltip("Modelin pivota göre kayması (birim). Play'deyken değiştirince anında görünür: collider'a (yeşil kutu) göre " +
+             "hizalanınca değeri Play'den çıkıp prefab'a yaz.")]
+    [SerializeField] private Vector3 modelOffset;
+    [Tooltip("Modelin dönüşü (derece)")]
+    [SerializeField] private Vector3 modelRotation;
+    [Tooltip("Modelin ölçeği (1 = olduğu gibi)")]
+    [SerializeField] private Vector3 modelScale = Vector3.one;
     [Tooltip("Model yokken geçici görünümün (kutu) rengi: prototipte parçalar birbirinden ayırt edilsin. Beyaz = malzemenin kendi rengi.")]
     [SerializeField] private Color placeholderColor = Color.white;
 
@@ -49,8 +56,27 @@ public class FinePlaceable : GridPlaceable, IInteractable, ISaveState
             return;
         }
         foreach (Renderer r in GetComponentsInChildren<Renderer>()) r.enabled = false; // geçici kutu
-        Instantiate(model, transform, false).name = "Model";
+        GameObject built = Instantiate(model, transform, false);
+        built.name = "Model";
+        modelInstance = built.transform;
+        modelBase = (modelInstance.localPosition, modelInstance.localRotation, modelInstance.localScale);
+        ApplyModelPose();
     }
+
+    private Transform modelInstance;
+    private (Vector3 position, Quaternion rotation, Vector3 scale) modelBase; // modelin kendi (prefab'taki) duruşu
+
+    // Ofset / dönüş / ölçek modelin kendi duruşunun üstüne
+    private void ApplyModelPose()
+    {
+        if (modelInstance == null) return;
+        modelInstance.localPosition = modelBase.position + modelOffset;
+        modelInstance.localRotation = Quaternion.Euler(modelRotation) * modelBase.rotation;
+        modelInstance.localScale = Vector3.Scale(modelBase.scale, modelScale);
+    }
+
+    // Play'deyken Inspector'da değiştirince model anında yerine
+    private void OnValidate() => ApplyModelPose();
 
     // Dönüşe göre boy (90° / 270°: X ile Z yer değiştirir)
     private Vector3Int Size => Rotation == GridMaskRotator.Rotation.Deg90 || Rotation == GridMaskRotator.Rotation.Deg270
