@@ -79,10 +79,11 @@ public class ArrowBase : MonoBehaviour
 
         if (isSelected)
         {
-            Vector3 localRight = Quaternion.Euler(transform.localEulerAngles) * Vector3.right;
+            // Okun kendi sağına (ebeveynin uzayında): ağaç döndürülmüş olsa da doğru yana kayar
+            Vector3 localRight = transform.localRotation * Vector3.right;
             localRight.y = 0f;
 
-            transform.localPosition = localPosition + transform.right / 3f + Vector3.up * currentY;
+            transform.localPosition = localPosition + localRight / 3f + Vector3.up * currentY;
         }
         else
         {

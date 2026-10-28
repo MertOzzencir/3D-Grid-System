@@ -54,8 +54,9 @@ public class Tree : ResourceEntity, IStickyToolTarget, ISaveState
 
     private TreeHitFeedback HitFeedback => hitFeedback ??= new TreeHitFeedback(this, hitShake, chopDent);
 
-    // Gövde, ayak izinin ortasında durur (pivot'a göre, yatay)
-    private Vector3 TrunkCenterLocal
+    // Gövde, ayak izinin ortasında durur: pivot'tan gövdeye yatay kayma, DÜNYA eksenlerinde (ayak izi dönmüş haliyle
+    // tutulur). Ağaç döndürülmüşse (kakadan ekilen ağaçlar rastgele döner) yerel uzaya çevrilmeden kullanılmaz.
+    private Vector3 TrunkOffset
     {
         get
         {
@@ -94,7 +95,7 @@ public class Tree : ResourceEntity, IStickyToolTarget, ISaveState
 
         Vector3 point = ray.GetPoint(enter);
         // Seçim yarıçapının dışında: yeni ok seçilmez, seçili ok varsa balta onda kalır (kaymasın)
-        if (Vector3.Distance(point, transform.position + TrunkCenterLocal) <= targetRadius)
+        if (Vector3.Distance(point, transform.position + TrunkOffset) <= targetRadius)
             Select(FindClosestArrow(point));
         return selectedArrow != null ? selectedArrow.GetTransform().position : transform.position;
     }
@@ -106,7 +107,7 @@ public class Tree : ResourceEntity, IStickyToolTarget, ISaveState
         if (!TryGetArrowPlane(out Plane plane) || !plane.Raycast(mouseRay, out float enter)) return false;
 
         Vector3 point = mouseRay.GetPoint(enter);
-        Vector3 trunk = transform.position + TrunkCenterLocal;
+        Vector3 trunk = transform.position + TrunkOffset;
         float height = (PlacedFootprint ?? GetFootprint()).Size.y;
         Vector3 closestOnAxis = new Vector3(trunk.x, Mathf.Clamp(point.y, trunk.y, trunk.y + height), trunk.z);
         return Vector3.Distance(point, closestOnAxis) <= releaseDistance;
@@ -206,12 +207,15 @@ public class Tree : ResourceEntity, IStickyToolTarget, ISaveState
 
     // --- Oklar ---
 
-    // Oklar gövdenin kameraya göre sol yanında durur ve kamerayla birlikte 90° adımlarla döner.
-    // 3x3 ağaçta eski sabit tablonun aynısını verir: 0°→(0,0,1), -90°→(1,0,0), -180°→(2,0,1), 90°→(1,0,2)
+    // Oklar gövdenin kameraya göre sol yanında durur ve kamerayla birlikte 90° adımlarla döner. Yön ve yer dünyada
+    // hesaplanıp ağacın yerel uzayına çevrilir: ağaç döndürülmüş olsa da (kakadan ekilen ağaçlar) oklar kameraya göre
+    // aynı yerde. Dönmemiş 3x3 ağaçta eski sabit tablonun aynısını verir: 0°→(0,0,1), -90°→(1,0,0), -180°→(2,0,1), 90°→(1,0,2)
     private void GetArrowFrame(out Vector3 localPosition, out Quaternion localRotation)
     {
-        localRotation = Quaternion.Euler(0f, (float)CameraController.CurrentFacing, 0f);
-        localPosition = TrunkCenterLocal + localRotation * (Vector3.left * arrowDistance);
+        Quaternion world = Quaternion.Euler(0f, (float)CameraController.CurrentFacing, 0f);
+        Quaternion toLocal = Quaternion.Inverse(transform.rotation);
+        localRotation = toLocal * world;
+        localPosition = toLocal * (TrunkOffset + world * (Vector3.left * arrowDistance));
     }
 
     // Kesilmemiş okları gövdenin yanına dizer; her ok kendi yüksekliğini korur
@@ -284,7 +288,7 @@ public class Tree : ResourceEntity, IStickyToolTarget, ISaveState
     // Vuruş yüksekliğindeki gövde merkezi ve gövdeden dışarı (baltaya doğru) yatay yön
     private void GetHitFrame(Vector3 hitPoint, out Vector3 trunkCenter, out Vector3 outward)
     {
-        trunkCenter = transform.position + TrunkCenterLocal;
+        trunkCenter = transform.position + TrunkOffset;
         trunkCenter.y = hitPoint.y;
 
         outward = hitPoint - trunkCenter;
