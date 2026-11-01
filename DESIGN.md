@@ -10,7 +10,31 @@ Sistemlerin görsel haritası: `Docs/system-map.html` (https://claude.ai/artifac
 - **Cezasızlık:** enerji / stamina yok, bitki kurumaz-ölmez, kaçırılınca kaybolan süreli etkinlik yok.
 - Kancalar olumlu olmalı: sürpriz, tamamlama, görünür ilerleme. Öldürme temalı sistem yok (balık tutma hariç).
 
-## Ana döngü
+## Yön değişikliği (2026-11-01): oyunun kalbi inşa
+
+Kullanıcı: en eğlenceli kısım blueprint'leri tamamlamak; oyuncu huzur bulsun. Tarla bulmacası ve yemek oyunun yapısına
+oturmadı, döngüyü karıştırıyordu. Oyun tek cümleye indi:
+
+> **Kedinle küçük bir adada, malzemeyi elinle toplayıp işleyerek blueprint'leri tamamlıyorsun; her tamamlanan yapı
+> adaya yeni bir hayat getiriyor.**
+
+```
+topla ──► işle ──► inşa et (blueprint) ──► sakin taşınır ──► yeni şey açılır ──┐
+  ▲                                                                            │
+  └────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Topla:** kedi → kaka → ağaç → odun (balıkla beslenir; balıkçılık bunun için). İleride başka malzemeler.
+- **İşle:** kesme kütüğü, testere sehpası (1×1 odun → yarım / çeyrek / kalas / çıta).
+- **İnşa et:** blueprint'leri elle doldurmak (oyunun kalbi).
+- **Sakinler (öneri, ayrıntısı açık):** tamamlanan yapıya bir sakin taşınır (örn. kulübe → kirpi, iskele → balıkçı
+  kuş). Her sakin adaya küçük bir şey katar: yeni malzeme, yeni blueprint ya da bir kolaylık. Kedi ilk sakin. Ada
+  yavaş yavaş canlanır: görünür ilerleme bu.
+- **Park edildi (silinmedi, kod duruyor):** yüzen tarla + hasat yolu bulmacası, yemek pişirme, NPC ilişkisi. Aşağıdaki
+  "Ana döngü" ve ilgili bölümler eski tasarım; gerekirse dönülür.
+- Sonraki adım önerisi: tek küçük ada, ~20 dakikalık dilim (ilk blueprint → ilk sakin), mevcut sistemlerle.
+
+## Ana döngü (eski, park edildi)
 
 ```
         ┌──────────── yapılar her sisteme işlev katar (genel kurallı, kontrollü) ────────────┐
@@ -113,6 +137,9 @@ Ada ilerler ─► Sonraki ada (lineer) ─► Yeni malzeme (sınırlı kaynak) 
 20. Tarlanın ekinleri ve büyüme durumu kaydedilmez: oyun kapanınca tarla ekinlerden boş açılır.
 
 ## Açık sorular
+- (2026-11-01) Sakinler tam olarak ne getirir: yeni malzeme, yeni blueprint, kolaylık, yoksa sadece canlılık?
+- (2026-11-01) Blueprint'ler nereden gelir: her tamamlanan yapı bir sonrakini mi açar, adada mı bulunur, sakinler mi verir?
+- (2026-11-01) Balıkçılık bu döngüde nasıl (kediyi beslemek için)?
 - Yemek pişirmenin mekaniği (işlevsel, farklı).
 - Tohumlar nereden gelir (NPC, hasat, dükkân)? "Son ekimi hatırla" ileride gemi upgrade'i.
 - Gemi upgrade'leri neyle alınır (henüz para birimi yok)?
