@@ -14,6 +14,7 @@ public class InteractableController : MonoBehaviour
 
     private IInteractable currentInteracted;
     private bool tryingToInteract = false;
+    private bool heldByLeft; // sol tıkla başlatılan tutma (BeginHoldWithLeft): sol tık bırakılınca biter
     private IHoverable hovered;
     private Vector3 lastMousePosition;
     private float mouseSpeed; // ekran yüksekliği / saniye, kısa süreli yumuşatılmış
@@ -92,6 +93,7 @@ public class InteractableController : MonoBehaviour
         // Elde bir şey olmasa da sıfırlanmalı: yoksa boşluğa sağ tıklayıp bırakınca Update,
         // mouse'un altından geçen her objeyi tıklamadan tutmaya çalışır
         tryingToInteract = false;
+        heldByLeft = false;
 
         if (currentInteracted == null) return;
         currentInteracted.ContractCancel();
@@ -110,6 +112,20 @@ public class InteractableController : MonoBehaviour
         if (current != currentInteracted) return;
         currentInteracted = null;
         tryingToInteract = false;
+        heldByLeft = false;
+    }
+
+    // Sol tıkla tutmaya başlatır (örn. kafesteki insana sol tıklayınca eline gelir): sol tık basılı kaldıkça tutulur,
+    // bırakılınca normal bırakma (ContractCancel). Elde zaten bir şey varsa olmaz (false).
+    public bool BeginHoldWithLeft(IInteractable target)
+    {
+        if (currentInteracted != null || target == null) return false;
+        currentInteracted = target;
+        heldByLeft = true;
+        currentInteracted.InteractContractBeginnig();
+        OnNewInteractable?.Invoke(currentInteracted);
+        SetHovered(null);
+        return true;
     }
 
     private void FinishInteract(bool obj)
@@ -118,6 +134,13 @@ public class InteractableController : MonoBehaviour
         if (currentInteracted == null)
         {
             if (obj) TryClick();
+            return;
+        }
+
+        // Sol tıkla başlayan tutma sol tık bırakılınca biter
+        if (heldByLeft)
+        {
+            if (!obj) CancelInteract();
             return;
         }
 

@@ -55,6 +55,16 @@ MonoBehaviour:
   waitSeconds: {x: 1.5, y: 4}
   turnSharpness: 8
   rig: {fileID: 5283940604}
+  slapJiggle:
+    depth: 0.1
+    radius: 1
+    duration: 1.5
+    oscillations: 5
+    waveLength: 0.5
+    waveAmount: 0.562
+    swellAmount: 0.06
+    swellOscillations: 2
+    swellCenterDepth: 0.25
 --- !u!114 &5283940604
 MonoBehaviour:
   m_ObjectHideFlags: 0

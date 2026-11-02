@@ -9,7 +9,15 @@ using UnityEngine;
 // ve sallanır (eldiven popodaki
 // tutma noktasına oturur: IGloveGrip). El hızlanınca gövde geride kalır, dururken de hafifçe sağa sola sallanır.
 // Bırakınca mouse'un altındaki (yoksa en yakın) durulabilir hücreye iner, ayağa kalkar ve dolaşmaya devam eder.
-public class Slave : Creature, IInteractable, IGloveGrip
+// Boş bir kafesin üstüne bırakılırsa içine girer (EnterCage): kafesin child'ı olur, grid'de hücre kaplamaz, dört ayak
+// üstünde (diz ve eller yerde) bekler (kullanıcı: hasat olmayı bekler). Sol tıkla (kendisine ya da kafese) kafesten
+// çıkıp ele gelir: sol tık basılı kaldıkça taşınır, bırakınca normal bırakma (kullanıcı). Kıça sol tık şaplak (kedideki
+// gibi: eldiven bastırır, kıçta vertex'lerle jöle dalgası yayılır (CreatureJiggle, shader'da), kafa sallanır); her yerde
+// (kafeste de) çalışır.
+// Collider'lar mesh'ten kemik başına ölçülür (kedideki gibi kapsül / küre, SlavePart): eldiven gövdenin içine girmez,
+// dört ayak pozunda da gövdeyle birlikte durur. Mesh okunamazsa kökteki kaba kutu kalır. Hemen bırakılırsa (tıklayıp
+// geçmek) kafese geri girmez, yanındaki en yakın boş hücreye iner. Sağ tıkla tutulursa da çıkar.
+public class Slave : Creature, IInteractable, IGloveGrip, IClickable
 {
     [Header("Dolaşma")]
     [Tooltip("Birim / saniye")]
@@ -44,8 +52,27 @@ public class Slave : Creature, IInteractable, IGloveGrip
     [SerializeField] private float idleSwing = 12f;
     [Tooltip("Dururken sallanma hızı (saniyedeki salınım)")]
     [SerializeField] private float idleSwingRate = 0.7f;
+    [Header("Şaplak")]
+    [Tooltip("Kıçın titremesi (materyal Village/Creature Jiggle Lit olmalı)")]
+    [SerializeField] private CreatureJiggle slapJiggle = new CreatureJiggle();
+    [Tooltip("Eldivenin vurmadan önce kalkması (birim)")]
+    [SerializeField] private float slapLift = 0.25f;
+    [Tooltip("Eldivenin vuruş süresi (saniye)")]
+    [SerializeField] private float slapDuration = 0.16f;
+
+    [Header("Collider")]
+    [Tooltip("Kemik collider'larının kalınlığı: vertex'lerin bu oranı içinde kalır (1 en dıştaki vertex'e kadar)")]
+    [SerializeField, Range(0.5f, 1f)] private float colliderFitPercentile = 0.85f;
+    [Tooltip("Şaplak alanı: kıçın arkasında (tutma noktasında) bu yarıçapta küre. Büyüdükçe kıça vurmak kolaylaşır.")]
+    [SerializeField] private float rearZoneRadius = 0.32f;
+    [Tooltip("Şaplak alanının tutma noktasına göre kayması (kökün yerel uzayında; -Z kıçın gerisi)")]
+    [SerializeField] private Vector3 rearZoneOffset = new Vector3(0f, 0f, 0.05f);
+
+    [Header("İniş")]
     [Tooltip("Bırakınca hücreye inip ayağa kalkma süresi (saniye)")]
     [SerializeField] private float landSeconds = 0.35f;
+    [Tooltip("Kafese girme süresi (saniye): kısa ve sert, içine atılır gibi (kullanıcı)")]
+    [SerializeField] private float cageEnterSeconds = 0.12f;
 
     private Vector3Int cell;
     private bool placed;
@@ -58,6 +85,12 @@ public class Slave : Creature, IInteractable, IGloveGrip
     private float swingTime;
     private Quaternion pickupRotation; // tutulduğu andaki duruş: yüzüstü duruşa yumuşakça geçilir
     private Coroutine landing;
+    private Cage cage; // içinde olduğu kafes (yoksa null)
+    private SkinnedMeshRenderer bodyRenderer;
+    private Cage pickedFromCage; // bu taşımada çıkarıldığı kafes
+    private float pickupTime;
+    [Tooltip("Kafesten sol tıkla alınıp bu süreden kısa tutulursa (tıklayıp bırakmak) kafese geri girmez, yanına iner")]
+    [SerializeField] private float quickClickSeconds = 0.25f;
     private readonly RaycastHit[] hitBuffer = new RaycastHit[16];
 
     public Vector3Int Cell => cell;
@@ -76,6 +109,8 @@ public class Slave : Creature, IInteractable, IGloveGrip
         gripPoint.localRotation = Quaternion.LookRotation(Vector3.up, Vector3.forward);
     }
 
+    private void Start() => BuildColliders();
+
     public override void OnPlaced(Vector3Int origin)
     {
         base.OnPlaced(origin);
@@ -88,7 +123,7 @@ public class Slave : Creature, IInteractable, IGloveGrip
     {
         if (!placed) return; // sadece grid'e konunca (önizleme kopyası yürümesin)
         base.Update();
-        if (rig != null) rig.Tick(CurrentSpeed, held, holdVelocity);
+        if (rig != null) rig.Tick(CurrentSpeed, held, holdVelocity, cage != null && landing == null);
     }
 
     // --- Taşıma (IInteractable, IGloveGrip) ---
@@ -99,6 +134,9 @@ public class Slave : Creature, IInteractable, IGloveGrip
     public void InteractContractBeginnig()
     {
         if (landing != null) { StopCoroutine(landing); landing = null; }
+        pickedFromCage = cage;
+        pickupTime = Time.time;
+        LeaveCage();
         held = true;
         ChangeState(null);
         CurrentSpeed = 0f;
@@ -118,7 +156,7 @@ public class Slave : Creature, IInteractable, IGloveGrip
 
         // El: mouse'un altındaki yüzeyin carryHeight üstü, yumuşak takip
         Vector3 target = holdPoint;
-        if (TryMouseGround(out Vector3 ground)) target = ground + Vector3.up * carryHeight;
+        if (TryMouseGround(out Vector3 ground, out _)) target = ground + Vector3.up * carryHeight;
         Vector3 previous = holdPoint;
         holdPoint = Vector3.Lerp(holdPoint, target, 1f - Mathf.Exp(-carryFollowSharpness * dt));
         Vector3 velocity = (holdPoint - previous) / dt;
@@ -158,7 +196,24 @@ public class Slave : Creature, IInteractable, IGloveGrip
     public void ContractCancel()
     {
         held = false;
-        Vector3Int start = TryMouseGround(out Vector3 ground) ? Vector3Int.RoundToInt(ground + Vector3.up * 0.5f) : cell;
+        bool overGround = TryMouseGround(out Vector3 ground, out Collider hitCollider);
+
+        // Boş kafesin üstüne bırakıldı: içine girer
+        Cage dropCage = hitCollider != null ? hitCollider.GetComponentInParent<Cage>() : null;
+        Cage fromCage = pickedFromCage;
+        pickedFromCage = null;
+        if (dropCage != null && dropCage == fromCage && Time.time - pickupTime < quickClickSeconds)
+        {
+            LandBeside(dropCage);
+            return;
+        }
+        if (dropCage != null && dropCage.IsEmpty)
+        {
+            EnterCage(dropCage, instant: false);
+            return;
+        }
+
+        Vector3Int start = overGround ? Vector3Int.RoundToInt(ground + Vector3.up * 0.5f) : cell;
         if (!TryFindLandingCell(start, out Vector3Int target) && !TryFindLandingCell(cell, out target))
         {
             Debug.LogWarning($"{name} could not find a cell to land on", this);
@@ -169,20 +224,239 @@ public class Slave : Creature, IInteractable, IGloveGrip
         landing = StartCoroutine(Land(target));
     }
 
-    // Mouse'un altındaki ilk yüzey (kendisi hariç)
-    private bool TryMouseGround(out Vector3 point)
+    // Mouse'un altındaki ilk yüzey (kendisi hariç) ve collider'ı
+    private bool TryMouseGround(out Vector3 point, out Collider hitCollider)
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         int count = Physics.RaycastNonAlloc(ray, hitBuffer, 500f, ~0, QueryTriggerInteraction.Ignore);
         float best = float.MaxValue;
         point = default;
+        hitCollider = null;
         for (int i = 0; i < count; i++)
         {
             if (hitBuffer[i].transform.IsChildOf(transform) || hitBuffer[i].distance >= best) continue;
             best = hitBuffer[i].distance;
             point = hitBuffer[i].point;
+            hitCollider = hitBuffer[i].collider;
         }
         return best < float.MaxValue;
+    }
+
+    // --- Kafes ---
+
+    // Kafese girer: kafesin ortasına iner, yüzü kafesin kapısına (kafesin +Z'si, kullanıcı), kafesin child'ı olur. instant: kayıttan yükleme (animasyonsuz)
+    public void EnterCage(Cage target, bool instant)
+    {
+        cage = target;
+        target.SetOccupant(this);
+        placed = true;
+        held = false;
+        ChangeState(null);
+        CurrentSpeed = 0f;
+        GridManager.Instance.PlaceableRemoveOn(this, false); // kafesin hücrelerinde durur, kendi hücresi yok
+
+        Vector3 localPosition = target.LocalCenter;
+        Quaternion localRotation = Quaternion.identity; // kafesin önü (kapı) yönünde
+
+        if (instant)
+        {
+            transform.SetParent(target.transform, false);
+            transform.localPosition = localPosition;
+            transform.localRotation = localRotation;
+            return;
+        }
+        landing = StartCoroutine(LandInCage(target, localPosition, localRotation));
+    }
+
+    private System.Collections.IEnumerator LandInCage(Cage target, Vector3 localPosition, Quaternion localRotation)
+    {
+        Vector3 fromPosition = transform.position;
+        Quaternion fromRotation = transform.rotation;
+        for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(cageEnterSeconds, 0.01f))
+        {
+            float eased = t * t; // hızlanarak düşer, yumuşak iniş yok
+            transform.SetPositionAndRotation(Vector3.Lerp(fromPosition, target.transform.TransformPoint(localPosition), eased),
+                                             Quaternion.Slerp(fromRotation, target.transform.rotation * localRotation, eased));
+            yield return null;
+        }
+        transform.SetParent(target.transform, false);
+        transform.localPosition = localPosition;
+        transform.localRotation = localRotation;
+        landing = null;
+    }
+
+    // Sol tık (elde bir şey yokken): kafesteyse çıkar
+    public void OnClicked(RaycastHit hit) => TakeOutOfCage();
+
+    // Bir collider'ına sol tık: kıçsa şaplak, değilse kafesten çıkar
+    public void OnPartClicked(bool rear, RaycastHit hit)
+    {
+        if (rear) Slap(hit);
+        else TakeOutOfCage();
+    }
+
+    private void Slap(RaycastHit hit)
+    {
+        if (GloveCursor.Instance != null) GloveCursor.Instance.PlayPress(slapLift, slapDuration);
+        if (bodyRenderer != null) StartCoroutine(slapJiggle.Play(new Renderer[] { bodyRenderer }, hit.point, -hit.normal));
+        if (rig != null) rig.PlaySlap();
+    }
+
+    // --- Collider'lar ---
+
+    // Mesh'in her vertex'i en çok bağlı olduğu kemiğe sayılır, her kemiğin vertex'lerine kapsül (uzunsa) ya da küre
+    // (yuvarlaksa) oturtulur; collider kemiğin child'ı olur, kemikle döner. Kalça (Root) kıç bölgesi.
+    private void BuildColliders()
+    {
+        SkinnedMeshRenderer skin = null;
+        foreach (SkinnedMeshRenderer candidate in GetComponentsInChildren<SkinnedMeshRenderer>())
+            if (skin == null || candidate.sharedMesh.vertexCount > skin.sharedMesh.vertexCount) skin = candidate;
+        bodyRenderer = skin;
+        if (skin == null || skin.sharedMesh == null || skin.bones.Length == 0) return;
+        if (!skin.sharedMesh.isReadable)
+        {
+            Debug.LogWarning("Slave: mesh okunamıyor; FBX import ayarlarında Model → Read/Write'ı aç. Kaba kutu collider kullanılıyor.", this);
+            return;
+        }
+
+        var baked = new Mesh();
+        skin.BakeMesh(baked, true);
+        Vector3[] vertices = baked.vertices;
+        BoneWeight[] weights = skin.sharedMesh.boneWeights;
+        Destroy(baked);
+        if (weights.Length != vertices.Length) return;
+
+        Transform[] bones = skin.bones;
+        var groups = new Dictionary<Transform, List<Vector3>>();
+        Transform skinTransform = skin.transform;
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            Transform bone = bones[weights[i].boneIndex0];
+            if (bone == null) continue;
+            if (!groups.TryGetValue(bone, out List<Vector3> list)) groups[bone] = list = new List<Vector3>();
+            list.Add(skinTransform.position + skinTransform.rotation * vertices[i]);
+        }
+
+        int built = 0;
+        foreach (var pair in groups)
+            if (pair.Value.Count >= 12 && FitCollider(pair.Key, pair.Value)) built++;
+
+        // Kemik collider'ları kurulduysa kökteki kaba kutu kapanır (eldiven gövdenin içine girmesin)
+        if (built > 0 && TryGetComponent(out BoxCollider box)) box.enabled = false;
+        if (built > 0) AddRearZone(System.Array.Find(bones, b => b != null && string.Equals(b.name, "Root", System.StringComparison.OrdinalIgnoreCase)));
+    }
+
+    // Kıçın arkasında büyükçe bir küre: eldiven kıçın o yanındayken avuç çoğunlukla buna değer, şaplak rahat tutar
+    // (kalça kemiğinin kendi collider'ı dar kalıyordu). Kalça kemiğinin child'ı: dört ayak pozunda da kıçla gider.
+    private void AddRearZone(Transform hips)
+    {
+        if (hips == null || rearZoneRadius <= 0f) return;
+        var zone = new GameObject("Rear Zone");
+        zone.transform.SetParent(hips, false);
+        zone.transform.position = transform.TransformPoint(gripLocalPosition + rearZoneOffset);
+        var sphere = zone.AddComponent<SphereCollider>();
+        sphere.radius = rearZoneRadius / Mathf.Max(hips.lossyScale.x, 0.0001f);
+        zone.AddComponent<SlavePart>().Setup(this, true);
+    }
+
+    private bool FitCollider(Transform bone, List<Vector3> points)
+    {
+        // Ağırlık merkezi ve uzanma yönü (kovaryansın en büyük öz vektörü, kuvvet yinelemesiyle)
+        Vector3 center = Vector3.zero;
+        foreach (Vector3 p in points) center += p;
+        center /= points.Count;
+
+        float xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+        foreach (Vector3 p in points)
+        {
+            Vector3 d = p - center;
+            xx += d.x * d.x; xy += d.x * d.y; xz += d.x * d.z;
+            yy += d.y * d.y; yz += d.y * d.z; zz += d.z * d.z;
+        }
+        Vector3 axis = new Vector3(1f, 0.7f, 0.3f).normalized;
+        for (int iteration = 0; iteration < 24; iteration++)
+        {
+            axis = new Vector3(xx * axis.x + xy * axis.y + xz * axis.z,
+                               xy * axis.x + yy * axis.y + yz * axis.z,
+                               xz * axis.x + yz * axis.y + zz * axis.z);
+            if (axis.sqrMagnitude < 1e-12f) { axis = Vector3.up; break; }
+            axis.Normalize();
+        }
+
+        // Eksen boyunca uzanma ve eksenden uzaklıklar
+        float min = float.MaxValue, max = float.MinValue;
+        var radial = new float[points.Count];
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector3 d = points[i] - center;
+            float along = Vector3.Dot(d, axis);
+            min = Mathf.Min(min, along);
+            max = Mathf.Max(max, along);
+            radial[i] = (d - axis * along).magnitude;
+        }
+        System.Array.Sort(radial);
+        float radius = Mathf.Max(0.02f, radial[Mathf.Clamp(Mathf.RoundToInt(radial.Length * colliderFitPercentile) - 1, 0, radial.Length - 1)]);
+        float length = max - min;
+        Vector3 middlePoint = center + axis * ((min + max) * 0.5f);
+
+        var part = new GameObject($"{bone.name} Collider");
+        part.transform.SetParent(bone, false);
+        part.transform.SetPositionAndRotation(middlePoint, Quaternion.LookRotation(axis, Mathf.Abs(Vector3.Dot(axis, transform.up)) > 0.95f ? transform.forward : transform.up));
+        float scale = Mathf.Max(bone.lossyScale.x, 0.0001f);
+
+        // Neredeyse yuvarlak (kafa gibi): küre; uzunsa kapsül
+        if (length < radius * 2.6f)
+        {
+            var sphere = part.AddComponent<SphereCollider>();
+            sphere.radius = Mathf.Max(radius, length * 0.5f) / scale;
+        }
+        else
+        {
+            var capsule = part.AddComponent<CapsuleCollider>();
+            capsule.direction = 2; // yerel Z = eksen
+            capsule.radius = radius / scale;
+            capsule.height = Mathf.Max(length, radius * 2f) / scale;
+        }
+
+        part.AddComponent<SlavePart>().Setup(this, string.Equals(bone.name, "Root", System.StringComparison.OrdinalIgnoreCase));
+        return true;
+    }
+
+    // Kafesten çıkıp ele gelir (sol tık basılı kaldıkça taşınır)
+    public void TakeOutOfCage()
+    {
+        if (cage == null || held || InteractableController.Instance == null) return;
+        InteractableController.Instance.BeginHoldWithLeft(this);
+    }
+
+    // Kafesin yanındaki en yakın durulabilir hücreye iner, sonra dolaşmaya döner
+    private void LandBeside(Cage source)
+    {
+        Vector3 center = source.LocalCenter;
+        Vector3Int start = Vector3Int.RoundToInt(source.transform.TransformPoint(new Vector3(center.x, 0f, center.z)));
+        if (!TryFindLandingCell(start, out Vector3Int target))
+        {
+            Debug.LogWarning($"{name} has no free cell next to the cage: back inside", this);
+            EnterCage(source, instant: false);
+            return;
+        }
+        GridManager.Instance.TryMovePlaceable(this, target, GetFootprint());
+        cell = target;
+        landing = StartCoroutine(Land(target));
+    }
+
+    // Kafesten çıkar (eldivenle tutulunca, sol tıkla)
+    private void LeaveCage()
+    {
+        if (cage == null) return;
+        if (cage.Occupant == this) cage.SetOccupant(null);
+        cage = null;
+        transform.SetParent(null, true);
+    }
+
+    private void OnDestroy()
+    {
+        if (cage != null && cage.Occupant == this) cage.SetOccupant(null);
     }
 
     // start'a en yakın durulabilir hücre (2 hücre yarıçap, bir kat aşağı / yukarı)

@@ -43,12 +43,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 4172839501}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e4e2d71d43a044b39caf7dac188a7358, type: 3}
+  m_Script: {fileID: 11500000, guid: 8ad731e219984f0bada5a9b19c509014, type: 3}
   m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::MovablePlaceable
+  m_EditorClassIdentifier: Assembly-CSharp::Cage
   data: {fileID: 11400000, guid: d5d479f84e134644af4dc3a27ceb6a3c, type: 2}
   rotation: 0
   followSpeed: 10
+  occupantData: {fileID: 11400000, guid: 0d8236bfbf8f402eb2a5e8962f084f10, type: 2}
 --- !u!65 &4172839504
 BoxCollider:
   m_ObjectHideFlags: 0

@@ -73,11 +73,43 @@ public class SlaveRig : MonoBehaviour
         public float headLift = 20f;
     }
 
+    [Serializable]
+    private class CagedSettings
+    {
+        [Tooltip("Başlangıçta gövdenin öne eğilmesi (derece). Eller yere değene kadar kendisi ayarlanır.")]
+        public float startBend = 70f;
+        [Tooltip("Eğilmenin sınırları (derece)")]
+        public Vector2 bendLimits = new Vector2(20f, 85f);
+        [Tooltip("Dizin yerden yüksekliği (birim; dizin kalınlığının yarısı)")]
+        public float kneeRadius = 0.07f;
+        [Tooltip("Elin (bilek) yerden yüksekliği (birim)")]
+        public float handRadius = 0.05f;
+        [Tooltip("Kafanın kalkması (derece): yere değil öne baksın")]
+        public float headLift = 35f;
+        [Tooltip("Dört ayak pozuna geçiş yumuşaklığı")]
+        public float blendSharpness = 25f;
+    }
+
+    [Serializable]
+    private class SlapSettings
+    {
+        [Tooltip("Şaplakta gövdenin öne sarsılması (derece; 0 kapalı: şaplak hissi kıçtaki jöle dalgasından gelir, kullanıcı)")]
+        public float kick = 0f;
+        [Tooltip("Şaplakta kafanın sağa sola sallanması (derece, kedideki gibi)")]
+        public float headShake = 8f;
+        [Tooltip("Sarsıntının süresi (saniye)")]
+        public float duration = 0.6f;
+        [Tooltip("Süre boyunca kaç kez sallansın")]
+        public float oscillations = 2.5f;
+    }
+
     [Tooltip("Modelin kökü (Model child'ı); boşsa ilk SkinnedMeshRenderer'ın modelinden bulunur")]
     [SerializeField] private Transform model;
     [SerializeField] private WalkSettings walk = new WalkSettings();
     [SerializeField] private IdleSettings idle = new IdleSettings();
     [SerializeField] private HeldSettings heldSettings = new HeldSettings();
+    [SerializeField] private CagedSettings cagedSettings = new CagedSettings();
+    [SerializeField] private SlapSettings slapSettings = new SlapSettings();
 
     private class Bone
     {
@@ -87,6 +119,13 @@ public class SlaveRig : MonoBehaviour
 
     private Bone root, chest, neck, head, upperArmL, upperArmR, lowerArmL, lowerArmR, upperLegL, upperLegR, lowerLegL, lowerLegR;
     private Bone handL, handR, footL, footR;
+    private float cagedBlend;  // 0 ayakta, 1 dört ayak (kafeste)
+    private float crawlBend;   // gövdenin öne eğilmesi (derece), eller yere değene kadar ayarlanır
+    private float crawlDrop;   // modelin aşağı inmesi (dizler yere değsin)
+    private float slapTime = float.MaxValue;
+
+    // Şaplak: gövde öne sarsılıp sönerek sallanır, kafa sağa sola
+    public void PlaySlap() => slapTime = 0f;
     private Vector3 modelBasePosition;
     private float phase;     // yürüme döngüsü (radyan)
     private float walkBlend; // 0 duruyor, 1 yürüyor
@@ -121,6 +160,7 @@ public class SlaveRig : MonoBehaviour
         handR = Find("Hand.R");
         footL = Find("FootBottom.L");
         footR = Find("FootBottom.R");
+        crawlBend = cagedSettings.startBend;
         ready = true;
     }
 
@@ -133,12 +173,13 @@ public class SlaveRig : MonoBehaviour
     }
 
     // Slave her kare çağırır: speed o anki yürüme hızı (dururken 0), held: popodan tutulmuş taşınıyor,
-    // heldVelocity: taşınırken elin (popo) dünya hızı
-    public void Tick(float speed, bool held, Vector3 heldVelocity)
+    // heldVelocity: taşınırken elin (popo) dünya hızı, caged: kafeste dört ayak üstünde
+    public void Tick(float speed, bool held, Vector3 heldVelocity, bool caged)
     {
         if (!ready) return;
 
         float dt = Time.deltaTime;
+        cagedBlend = Mathf.Lerp(cagedBlend, caged ? 1f : 0f, 1f - Mathf.Exp(-cagedSettings.blendSharpness * dt));
         heldBlend = Mathf.Lerp(heldBlend, held ? 1f : 0f, 1f - Mathf.Exp(-walk.blendSharpness * dt));
 
         // Uzuvlar hıza yayla yetişir: el durunca biraz daha ileri gidip geri gelirler
@@ -207,8 +248,56 @@ public class SlaveRig : MonoBehaviour
             AddRotation(head, right, -heldSettings.headLift * heldBlend, up, 0f);
         }
 
+        if (cagedBlend > 0.001f) PoseCrawl(right, forward, up);
+        else crawlDrop = 0f;
+
+        if (slapTime < slapSettings.duration)
+        {
+            slapTime += Time.deltaTime;
+            float t = slapTime / Mathf.Max(slapSettings.duration, 0.01f);
+            float wave = Mathf.Sin(t * slapSettings.oscillations * Mathf.PI * 2f) * (1f - t) * (1f - t);
+            AddRotation(root, right, wave * slapSettings.kick, up, 0f);
+            AddRotation(head, up, wave * slapSettings.headShake, right, 0f);
+        }
+
         // Adım ortasında (bacaklar dikken) en yüksek
-        model.localPosition = modelBasePosition + Vector3.up * (walk.bob * w * (0.5f + 0.5f * Mathf.Cos(phase * 2f)));
+        model.localPosition = modelBasePosition + Vector3.up * (walk.bob * w * (0.5f + 0.5f * Mathf.Cos(phase * 2f)) + crawlDrop);
+    }
+
+    // Dört ayak (kafeste): gövde kalçadan öne eğilir, uyluklar ve kollar dik aşağı, baldırlar geriye yerde, kafa öne
+    // bakar. Model dizler yere değecek kadar iner; eğilme her kare elleri yere yaklaştıracak yönde ayarlanır (modelin
+    // ölçülerinden bağımsız: kol ve bacak boyu ne olursa olsun eller ve dizler yere oturur).
+    private void PoseCrawl(Vector3 right, Vector3 forward, Vector3 up)
+    {
+        float k = cagedBlend;
+        AddRotation(root, right, crawlBend * k, up, 0f);
+        AddRotation(head, right, -cagedSettings.headLift * k, up, 0f);
+        Aim(upperLegL, lowerLegL, Vector3.down, k);
+        Aim(upperLegR, lowerLegR, Vector3.down, k);
+        Aim(lowerLegL, footL, -forward, k);
+        Aim(lowerLegR, footR, -forward, k);
+        Aim(upperArmL, lowerArmL, Vector3.down, k);
+        Aim(upperArmR, lowerArmR, Vector3.down, k);
+        Aim(lowerArmL, handL, Vector3.down, k);
+        Aim(lowerArmR, handR, Vector3.down, k);
+
+        if (lowerLegL == null || lowerLegR == null) return;
+        // Kemikler şu an geçen karenin inişiyle duruyor: inişsiz yükseklikler bulunur, yenisi hesaplanır
+        float floor = transform.position.y - 0.5f;
+        // En alçakta kalan dayanak (diz ya da el) yere oturur: hiçbir yer zeminin içine girmez
+        float knee = Mathf.Min(lowerLegL.transform.position.y, lowerLegR.transform.position.y) - crawlDrop - cagedSettings.kneeRadius;
+        float lowest = knee;
+        if (handL != null && handR != null)
+            lowest = Mathf.Min(lowest, Mathf.Min(handL.transform.position.y, handR.transform.position.y) - crawlDrop - cagedSettings.handRadius);
+        crawlDrop = (floor - lowest) * k;
+
+        if (handL == null || handR == null || k < 0.9f) return;
+        // Eller ve dizler aynı inişle duruyor: aradaki fark eğilmeyi söyler
+        float kneeNow = Mathf.Min(lowerLegL.transform.position.y, lowerLegR.transform.position.y);
+        float handNow = Mathf.Min(handL.transform.position.y, handR.transform.position.y);
+        float gap = (handNow - kneeNow) - (cagedSettings.handRadius - cagedSettings.kneeRadius);
+        // Eller dizlerden yukarıda kaldıysa daha çok eğil, yere gömüldüyse doğrul
+        crawlBend = Mathf.Clamp(crawlBend + gap * 150f * Time.deltaTime, cagedSettings.bendLimits.x, cagedSettings.bendLimits.y);
     }
 
     // Kemiği (başından çocuğuna giden yönü) dünyada direction'a çevirir; weight kadar (0 hiç, 1 tam)
