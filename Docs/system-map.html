@@ -284,10 +284,10 @@ const NODES = [
     files: ["Player/PlayerBuildMenu.cs", "Player/BuildCatalogSO.cs", "GridEntity/GridPlaceable/MovablePlaceable.cs"],
     next: "İnsan (rig, kafes içi hareket) → domuz → para birimi." },
   { id: "slave", name: "İnsan", status: "wip", x: 640, y: 95, tag: "Slave",
-    what: "Kafeste bakılacak insan (2026-11-02). Şimdilik grid'de rastgele hücreye yürüyüp bekliyor; yürüme animasyonu kodla, kullanıcının kambur pozunun üstüne.",
-    how: ["Tek hücre, 2 kat boy", "Bekle → rastgele hedef → yol bul → yürü", "SlaveRig: bacak, kol, yalpa, nefes"],
+    what: "Kafeste bakılan insan (2026-11-02). Dışarıda rastgele dolaşır; popodan tutulup yüzüstü sarkarak taşınır; kafese bırakılınca dört ayak üstünde hasadı bekler. Kıça sol tık şaplak (jöle dalgası).",
+    how: ["Tek hücre, 2 kat boy", "Taşıma: sarkaç, kollar gidilen yöne uzanır", "Kafes: tek kişi, sol tıkla çıkarılıp ele gelir", "Kemik collider'ları mesh'ten"],
     files: ["Creatures/Slave/Slave.cs", "Creatures/Slave/SlaveRig.cs"],
-    next: "Kafes bağlantısı, sonra para birimi düşürmesi." },
+    next: "Hasat: para birimi düşürmesi, sonra domuz." },
   { id: "album", name: "Koleksiyon albümü", status: "parked", x: 1080, y: 95, tag: "fikir",
     what: "Boyama kitabı temalı albüm: balık, ürün, kedi hediyeleri çıkartma olur. Hasat koşullarının ödülü olabilir.",
     how: [], files: [], next: "Park edildi." }
