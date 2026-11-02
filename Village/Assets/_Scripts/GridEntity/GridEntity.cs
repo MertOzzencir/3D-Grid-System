@@ -19,6 +19,20 @@ public abstract class GridEntity : MonoBehaviour
     // Modelin olması gereken görsel rotasyonu
     public Quaternion GridRotation => GridMaskRotator.ToQuaternion(rotation);
 
+    // Ayak izi (ve model) pivot hücresinin etrafında döner: 2×2 bir obje köşesinden döner gibi görünür. Ortası dönmeden
+    // önceki yerinde kalsın diye pivotun kayması gereken hücre sayısı (yatay; tek-çift boyutlarda yuvarlanır).
+    // Pivotu mouse'un hücresine koyan yerler buna eklerse obje kendi ortası etrafında döner.
+    public Vector3Int RotationCenterShift
+    {
+        get
+        {
+            Vector3 rotatedCenter = GetFootprint().Center;
+            rotatedCenter.y = 0f;
+            Vector3 shift = Quaternion.Inverse(GridRotation) * rotatedCenter - rotatedCenter;
+            return new Vector3Int(Mathf.RoundToInt(shift.x), 0, Mathf.RoundToInt(shift.z));
+        }
+    }
+
     public virtual void OnPlaced(Vector3Int origin)
     {
         OriginWorldPosition = origin;

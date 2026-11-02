@@ -255,9 +255,9 @@ public class GloveCursor : MonoBehaviour
             if (held != null) BeginGrab(held, ray);
         }
 
-        // UI'ın üstünde ya da build mode'da eldiven gizlenir, sistem imleci görünür
+        // UI'ın üstünde, build mode'da ya da oyuncu menüsünden yapı yerleştirirken eldiven gizlenir, sistem imleci görünür
         bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
-        bool hide = overUI || PlacementController.IsBuildMode;
+        bool hide = overUI || PlacementController.IsBuildMode || PlayerBuildMenu.IsPlacing;
         SetHidden(hide);
         if (hide) return;
 

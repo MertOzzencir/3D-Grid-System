@@ -10,6 +10,15 @@ Sistemlerin görsel haritası: `Docs/system-map.html` (https://claude.ai/artifac
 - **Cezasızlık:** enerji / stamina yok, bitki kurumaz-ölmez, kaçırılınca kaybolan süreli etkinlik yok.
 - Kancalar olumlu olmalı: sürpriz, tamamlama, görünür ilerleme. Öldürme temalı sistem yok (balık tutma hariç).
 
+## Tema (2026-11-02): domuz patronlar, kafesteki insanlar
+Kullanıcı bir dertten yola çıkarak temayı kendisi kurdu ("sistemi kafamda kurdum"): **incremental base building**.
+Domuzlar zengin kapital sahipleri; insanlar hayvan gibi kafeslerde bakılır ve bir para birimi düşürür. Oyuncu bu parayla
+domuzları besler, domuza hizmet ederek sistemde yükselmeye ve sevdiği kızı elde etmeye çalışır.
+- Kullanıcının sırası: kafes (tek parça model, oyuncu inşa menüsünden direkt konur; blueprint'ler ayrıca ele alınacak)
+  → insan modeli + rig, kafes içi basit hareketler → domuz → para birimi ve mantığı.
+- Oyuncu inşa menüsü yapıldı (alt bar + kategoriler, hep açık).
+- Açık: ton, son, para biriminin adı ve akışı, blueprint'lerin bu temadaki yeri, sci-fi parodi fikri kalıyor mu.
+
 ## Yön değişikliği (2026-11-01): oyunun kalbi inşa
 
 Kullanıcı: en eğlenceli kısım blueprint'leri tamamlamak; oyuncu huzur bulsun. Tarla bulmacası ve yemek oyunun yapısına

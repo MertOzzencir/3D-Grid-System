@@ -109,7 +109,7 @@ public abstract class Workstation : GridPlaceable, IInteractable, IStickyToolTar
 
     protected virtual void Awake()
     {
-        drag = new GridDragMotor(this, followSpeed);
+        drag = new GridDragMotor(this, followSpeed, keepCenterOnRotate: true); // 2×2 istasyonlar köşeden değil ortadan dönsün
         BuildVisual();
         var topObject = new GameObject("Top");
         topObject.transform.SetParent(transform, false);

@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fca9e232c77ebe1449c1bbd8e3cfff7c, type: 3}
+  m_Name: Cage-Placeable Data
+  m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
+  Name: Cage
+  Icon: {fileID: 0}
+  saveId:
+  size: {x: 2, y: 2, z: 2}
+  layers:
+  - cells: 01010101
+  - cells: 01010101
+  layoutSize: {x: 2, y: 2, z: 2}
+  legacySize: {x: 0, y: 0}
+  legacyMask:
+  Prefab: {fileID: 4172839503, guid: f9ce25862a5240f28f3cf3f1a22d1eee, type: 3}

@@ -247,6 +247,7 @@ GameObject:
   - component: {fileID: 82442285}
   - component: {fileID: 82442286}
   - component: {fileID: 82442287}
+  - component: {fileID: 82442288}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -373,6 +374,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6b8f1dd1111282d4e946c60501a3d2f1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ToolController
+--- !u!114 &82442288
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 82442280}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8430605ca714c0b4485bcd1c5973d87b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerBuildMenu
+  catalog: {fileID: 11400000, guid: e22c18cd90511814fb6af56f8c0ddb8c, type: 2}
+  interactableController: {fileID: 82442286}
+  toolController: {fileID: 82442287}
+  ghostShader: {fileID: 0}
+  validColor: {r: 0.45, g: 1, b: 0.55, a: 0.45}
+  invalidColor: {r: 1, g: 0.35, b: 0.3, a: 0.45}
+  panelSprite: {fileID: 0}
+  barColor: {r: 0.12, g: 0.1, b: 0.09, a: 0.85}
+  tabColor: {r: 0.25, g: 0.21, b: 0.18, a: 0.95}
+  tabSelectedColor: {r: 0.95, g: 0.75, b: 0.35, a: 1}
+  cardColor: {r: 0.32, g: 0.27, b: 0.23, a: 1}
+  cardSelectedColor: {r: 0.55, g: 0.85, b: 0.45, a: 1}
+  textColor: {r: 1, g: 1, b: 1, a: 1}
+  barHeight: 150
+  tabHeight: 44
+  tabWidth: 150
+  cardSize: {x: 120, y: 120}
+  spacing: 10
+  sortingOrder: 10
 --- !u!1 &189971928
 GameObject:
   m_ObjectHideFlags: 0

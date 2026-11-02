@@ -11,6 +11,7 @@ public class GridDragMotor
     private readonly GridPlaceable owner;
     private readonly IInteractable interactable;
     private readonly float followSpeed;
+    private readonly bool keepCenterOnRotate;
     private readonly RaycastHit[] hitBuffer = new RaycastHit[20];
 
     private IToolTarget currentTarget;
@@ -24,10 +25,12 @@ public class GridDragMotor
     // Şu an üstünde durulan (kabul eden) hedef; yoksa null
     public IToolTarget CurrentTarget => currentTarget;
 
-    public GridDragMotor(GridPlaceable owner, float followSpeed)
+    // keepCenterOnRotate: taşırken R ile dönünce obje köşesinden değil kendi ortası etrafında döner (GridEntity.RotationCenterShift)
+    public GridDragMotor(GridPlaceable owner, float followSpeed, bool keepCenterOnRotate = false)
     {
         this.owner = owner;
         this.followSpeed = followSpeed;
+        this.keepCenterOnRotate = keepCenterOnRotate;
         interactable = owner as IInteractable;
         if (interactable == null)
             Debug.LogError($"{owner.name} uses GridDragMotor but doesn't implement IInteractable", owner);
@@ -71,13 +74,15 @@ public class GridDragMotor
 
         ClearTarget();
 
-        Vector3 gridPos = GridManager.Instance.GetGridWorldPosition(hit.point + HoverOffset, out bool onGrid);
+        Vector3 gridPos = GridManager.Instance.GetGridWorldPosition(hit.point + HoverOffset + RotationShift, out bool onGrid);
         if (onGrid)
         {
             lastValidGridPosition = gridPos;
             FollowTowards(gridPos, owner.GridRotation);
         }
     }
+
+    private Vector3 RotationShift => keepCenterOnRotate ? (Vector3)owner.RotationCenterShift : Vector3.zero;
 
     private bool TryKeepStickyTarget()
     {
@@ -123,7 +128,7 @@ public class GridDragMotor
         Vector3 dropPos = lastValidGridPosition;
         if (TryRaycast(out RaycastHit hit, out _))
         {
-            Vector3 gridPos = GridManager.Instance.GetGridWorldPosition(hit.point + HoverOffset, out bool onGrid);
+            Vector3 gridPos = GridManager.Instance.GetGridWorldPosition(hit.point + HoverOffset + RotationShift, out bool onGrid);
             if (onGrid) dropPos = gridPos;
         }
 
