@@ -15,11 +15,12 @@ MonoBehaviour:
   Name: Cage
   Icon: {fileID: 0}
   saveId:
-  size: {x: 2, y: 2, z: 2}
+  size: {x: 3, y: 3, z: 3}
   layers:
-  - cells: 01010101
-  - cells: 01010101
-  layoutSize: {x: 2, y: 2, z: 2}
+  - cells: 010101010101010101
+  - cells: 010101010101010101
+  - cells: 010101010101010101
+  layoutSize: {x: 3, y: 3, z: 3}
   legacySize: {x: 0, y: 0}
   legacyMask:
   Prefab: {fileID: 4172839503, guid: f9ce25862a5240f28f3cf3f1a22d1eee, type: 3}
