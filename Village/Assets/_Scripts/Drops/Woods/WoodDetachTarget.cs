@@ -77,7 +77,7 @@ public class WoodDetachTarget : IWoodSlotView
     public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept)
     {
         accept = false;
-        if (!(interacted is Axe)) return default;
+        if (!(interacted is Axe) || WoodMerger.IsLanding(owner)) return default;
 
         Collect(WoodMergeTarget.FacingSide(owner));
         if (entries.Count == 0)

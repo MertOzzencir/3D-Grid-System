@@ -87,6 +87,7 @@ public class WoodMergeTarget : IWoodSlotView
     public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept)
     {
         accept = false;
+        if (WoodMerger.IsLanding(owner)) return default; // havada uçarken hedef olmaz
         if (!TryGetPiece(interacted, out GridPlaceable carried, out int carriedLength) || ReferenceEquals(carried, owner)) return default;
 
         WoodSide facing = FacingSide(owner);

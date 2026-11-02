@@ -282,7 +282,27 @@ public class WoodMerger : MonoBehaviour
     public void PlayHop(Transform piece, Vector3 fromPosition, Quaternion fromRotation)
         => StartCoroutine(Hop(piece, fromPosition, fromRotation));
 
+    // Havada uçan (zıplama / doğma animasyonundaki) odunlar: birleştirme ve sökme hedefi olmaz, kamera onlara odaklanmaz
+    // (kullanıcı: ağaç keserken çıkan odun havadayken kamera ona kayıyordu)
+    private static readonly System.Collections.Generic.HashSet<Transform> hopping = new System.Collections.Generic.HashSet<Transform>();
+
+    public static bool IsLanding(GridPlaceable piece)
+        => piece != null && (hopping.Contains(piece.transform) || (piece is SourceBase source && source.IsSpawning));
+
     private System.Collections.IEnumerator Hop(Transform piece, Vector3 fromPosition, Quaternion fromRotation)
+    {
+        hopping.Add(piece);
+        try
+        {
+            yield return HopMotion(piece, fromPosition, fromRotation);
+        }
+        finally
+        {
+            hopping.Remove(piece);
+        }
+    }
+
+    private System.Collections.IEnumerator HopMotion(Transform piece, Vector3 fromPosition, Quaternion fromRotation)
     {
         Vector3 toPosition = piece.position;
         Quaternion toRotation = piece.rotation;

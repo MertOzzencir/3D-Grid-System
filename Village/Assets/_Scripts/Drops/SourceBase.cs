@@ -11,6 +11,8 @@ public class SourceBase : GridPlaceable
     private Vector3 visualLocalPosition;
 
     public Transform Visual => visual;
+    // Doğma animasyonu sürüyor (havada uçuyor): o sırada hedef olmaz (WoodMerger.IsLanding)
+    public bool IsSpawning { get; private set; }
 
     public void Collect()
     {
@@ -30,6 +32,7 @@ public class SourceBase : GridPlaceable
     {
         Vector3 startPosition = start;
         float elapsed = 0f;
+        IsSpawning = true;
 
         while (elapsed < duration)
         {
@@ -44,6 +47,7 @@ public class SourceBase : GridPlaceable
             yield return null;
         }
         visual.transform.position = target + visualLocalPosition;
+        IsSpawning = false;
     }
 
 
