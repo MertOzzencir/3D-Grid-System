@@ -67,46 +67,28 @@ public class WoodMerger : MonoBehaviour
         CameraController.MovementLocked = busy;
     }
 
-    // target hem GridPlaceable hem IWoodStack olmalı (Wood ya da MergedWood)
-    // carried: tek 1×1 (Wood) ya da yanları boş dik yığın (MergedWood.IsStack), carriedLength boyu
-    public void Merge(GridPlaceable target, GridPlaceable carried, int carriedLength, WoodSlot slot)
+    // target hem GridPlaceable hem IWoodStack olmalı (Wood ya da MergedWood). carried: tek 1×1 (Wood) ya da dik yığın
+    // (MergedWood.IsStack), carriedLength boyu. cell: eklenen parçanın ilk hücresi, normal: uzandığı yön (dünya; yapıştığı
+    // yüzden dışarı). Sonuç (yeni yapı) aynı yerde ve dönüşte kurulur; döndürür (olmadıysa null).
+    public GridPlaceable Merge(GridPlaceable target, GridPlaceable carried, int carriedLength, Vector3Int cell, Vector3Int normal)
     {
         var stack = (IWoodStack)target;
 
-        // Hedef silinmeden önce sonucu hesapla
-        Vector3 position = target.OriginWorldPosition;
+        // Hedef silinmeden önce sonucu hesapla (yapının yerel uzayında)
+        Vector3Int position = target.OriginWorldPosition;
         GridMaskRotator.Rotation rotation = target.Rotation;
-        int baseLength = stack.BaseLength;
-        int[] segments = stack.BaseSegments;
-        int[][] sides;
-        int[][][] sideSegments;
+        var inverse = (GridMaskRotator.Rotation)((4 - (int)rotation) % 4);
+        Vector3Int start = GridMaskRotator.RotateOffset(cell - position, inverse);
+        Vector3Int direction = GridMaskRotator.RotateOffset(normal, inverse);
 
-        if (slot.IsTop)
-        {
-            baseLength += carriedLength;
-            sides = WoodLayout.SidesAfterTopMerge(stack, carriedLength);
-            sideSegments = WoodLayout.SideSegmentsAfterTopMerge(stack, carriedLength);
-            segments = WoodLayout.SegmentsAfterTopMerge(segments, carriedLength);
-        }
-        else if (slot.IsEnd)
-        {
-            // Yan odunun ucuna: o yan odun uzar (tepedeki gibi: eklenen 1×1 ucuna iple bağlanır)
-            sides = WoodLayout.CopySides(stack);
-            sideSegments = WoodLayout.CopySideSegments(stack);
-            int length = sides[(int)slot.Side][slot.Layer - 1];
-            int[] old = sideSegments[(int)slot.Side][slot.Layer - 1] ?? new[] { length };
-            sideSegments[(int)slot.Side][slot.Layer - 1] = WoodLayout.SegmentsAfterTopMerge(old, carriedLength);
-            sides[(int)slot.Side][slot.Layer - 1] = length + carriedLength;
-        }
+        var shape = new System.Collections.Generic.List<MergedWood.Cell>();
+        if (target is MergedWood existing) shape.AddRange(existing.Cells);
         else
-        {
-            sides = WoodLayout.CopySides(stack);
-            sideSegments = WoodLayout.CopySideSegments(stack);
-            sides[(int)slot.Side][slot.Layer - 1] = carriedLength;
-        }
+            foreach (Vector3Int local in stack.LocalCells) shape.Add(new MergedWood.Cell(local, Vector3Int.up));
+        for (int i = 0; i < carriedLength; i++)
+            shape.Add(new MergedWood.Cell(start + direction * i, direction));
 
-        // Hedefin ipi (sonuç aynı yerde, aynı dönüşte kurulur): sadece yeni eklenen ip sarılarak gelir. İp sadece yan kolun
-        // ana oduna bağlandığı yerde olduğu için yeni ip = yana yeni kol eklendiyse onun bağlantısı.
+        // Hedefin ipi (sonuç aynı yerde, aynı dönüşte kurulur): sadece yeni eklenen ip sarılarak gelir
         System.Collections.Generic.List<WoodRope.Face> previousRope = target is MergedWood oldMerged ? oldMerged.RopeFaces : null;
 
         // Taşınan odun yok olacak: geri yerleştirilmeye çalışılmasın diye iptal değil, sadece bırakıyoruz
@@ -114,25 +96,20 @@ public class WoodMerger : MonoBehaviour
         Destroy(carried.gameObject);
         GridManager.Instance.PlaceableRemoveOn(target, true);
 
-        // Yanlarda hiç odun yoksa ve ana odun tek parçaysa sonuç sıradan (tek parça) bir odun
-        GridPlaceable result = WoodLayout.IsEmpty(sides) && segments.Length == 1
-            ? SpawnLongWood(baseLength)
-            : SpawnMergedWood(baseLength, sides, segments, sideSegments);
-
+        GridPlaceable result = shape.Count == 1 ? SpawnLongWood(1) : SpawnMergedWood(shape);
         result.Rotation = rotation;
         if (!GridManager.Instance.PlaceablePlaceOn(result, position))
         {
             Debug.LogWarning($"{result.name} grid'e yerleştirilemedi", result);
-            return;
+            return null;
         }
 
         // Parçanın geldiği yönden itilmiş gibi: yandan eklenen parça o yandan iter → obje ters yöne eğilir.
-        // Tepeden gelen parça yukarıdan bastırır → eğilme yok, sadece basılıp yaylanır.
-        Vector3 push = slot.IsTop
-            ? Vector3.zero
-            : -(result.GridRotation * (Vector3)WoodLayout.SideDirection(slot.Side));
+        // Üstten gelen parça yukarıdan bastırır → eğilme yok, sadece basılıp yaylanır.
+        Vector3 push = direction.y != 0 ? Vector3.zero : -(result.GridRotation * (Vector3)direction);
         PlayWobble(result, push);
         if (result is MergedWood merged) merged.PlayRopeAnimation(previousRope);
+        return result;
     }
 
     // Ek yerinden söker: ana odunun parçaları arasıysa üstteki kısım (o yükseklikteki yan odunlarıyla) ayrılır, yan odunun
@@ -337,19 +314,25 @@ public class WoodMerger : MonoBehaviour
         return wood;
     }
 
+    private GridPlaceable SpawnMergedWood(System.Collections.Generic.IEnumerable<MergedWood.Cell> shape)
+    {
+        MergedWood merged = NewMergedWood();
+        merged.BuildCells(shape, catalog);
+        merged.name = $"MergedWood {merged.Cells.Count}";
+        return merged;
+    }
+
+    private MergedWood NewMergedWood()
+    {
+        if (mergedWoodPrefab != null) return Instantiate(mergedWoodPrefab);
+        Debug.LogWarning("WoodMerger: Merged Wood Prefab atanmamış; oluşan obje kaydedilemeyecek.", this);
+        return new GameObject().AddComponent<MergedWood>();
+    }
+
+    // Eski kol yapısından (sökme ve dik yığın kullanır)
     private GridPlaceable SpawnMergedWood(int baseLength, int[][] sides, int[] segments, int[][][] sideSegments)
     {
-        MergedWood merged;
-        if (mergedWoodPrefab != null)
-        {
-            merged = Instantiate(mergedWoodPrefab);
-        }
-        else
-        {
-            Debug.LogWarning("WoodMerger: Merged Wood Prefab atanmamış; oluşan obje kaydedilemeyecek.", this);
-            merged = new GameObject().AddComponent<MergedWood>();
-        }
-
+        MergedWood merged = NewMergedWood();
         merged.name = $"MergedWood {baseLength}BR";
         merged.Build(baseLength, sides, catalog, segments, sideSegments);
         return merged;

@@ -14,6 +14,13 @@ public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiec
     // --- IWoodStack ---
     public int BaseLength => Length;
     public int[] BaseSegments => new[] { Length };
+    public System.Collections.Generic.IEnumerable<Vector3Int> LocalCells
+    {
+        get
+        {
+            for (int y = 0; y < Length; y++) yield return new Vector3Int(0, y, 0);
+        }
+    }
     public int PieceAt(WoodSide side, int layer) => 0;
     public int[] SideSegments(WoodSide side, int layer) => null;
     public Renderer[] PieceRenderers(WoodSide side) => System.Array.Empty<Renderer>();

@@ -4,8 +4,11 @@ using UnityEngine;
 // Yan ve katman numaralaması için bkz. WoodLayout / WoodSlot.
 public interface IWoodStack
 {
-    // Dik duran ana odunun uzunluğu = her yandaki katman sayısı
+    // Dik duran ana odunun uzunluğu (pivottan yukarı kesintisiz dik sütun)
     int BaseLength { get; }
+
+    // Kapladığı hücreler, pivota göre (döndürülmemiş)
+    System.Collections.Generic.IEnumerable<Vector3Int> LocalCells { get; }
 
     // Ana odunun parçaları, aşağıdan yukarı: hep 1×1'ler, aralarındaki ek yerleri iple bağlı
     int[] BaseSegments { get; }

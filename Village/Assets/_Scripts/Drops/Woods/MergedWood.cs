@@ -2,36 +2,52 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// Yanlarında odun olan dik odun: ana (base) odun + dört yanın katmanlarındaki yatık parçalar.
-// Boş katmanlarına tek parça odun eklenebilir (hedef); kendisi başka bir oduna eklenemez ama taşınıp döndürülebilir.
-// Balta getirilince ek yerlerinden sökülür (WoodDetachTarget).
+// Birbirine değen 1×1 odunlardan yapı (kullanıcı 2026-11-03: küp yapabilecek sistem). Her hücrede yatık ya da dik bir 1×1
+// durur (Cell: yeri + uzandığı yön). Referans ana odun: pivottan (0, 0, 0) yukarı kesintisiz dik sütun; kamera odağı,
+// birleştirmenin başlangıcı ve ip ona göre. Boş komşu hücrelere odun eklenir (WoodMergeTarget); kendisi taşınıp döndürülür.
+// İp sadece ana oduna doğrudan değen parçaların değme yüzünde (küpün içinde ip yok, kullanıcı).
+// Baltayla sökme şimdilik kapalı (kullanıcı: yeni sisteme göre sonra yazılacak; WoodDetachTarget eski kol yapısına göre).
 public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlueprintPiece, IWoodStack, ISaveState
 {
-    // Unity iç içe dizi (int[][]) kaydedemediği için her yan bu sınıfla tutulur
+    // Bir hücredeki 1×1: yeri (pivota göre, döndürülmemiş) ve uzandığı yön (yukarı = dik; yapıştığı yüzün yönü)
+    public struct Cell
+    {
+        public Vector3Int Position;
+        public Vector3Int Axis;
+
+        public Cell(Vector3Int position, Vector3Int axis)
+        {
+            Position = position;
+            Axis = axis;
+        }
+    }
+
+    // Eski kayıt (ana odun + dört yanın kolları): yüklenirken hücrelere çevrilir
     [Serializable]
     private class Side
     {
         public int[] layers; // [katman - 1] = o katmandaki odunun uzunluğu, 0 = boş
-        public string[] segments; // [katman - 1] = o odunun parçaları "3,2" (içten dışa); boş = tek parça (eski kayıtta yok)
+        public string[] segments;
     }
 
     // Kayıttaki durumu: prefab'ı boş, görseli bu değerlerden yeniden kurulur
     [Serializable]
     private class State
     {
+        public int[] cells; // hücre başına 6 sayı: x, y, z, yön x, yön y, yön z
         public int baseLength;
-        public int[] segments; // ana odunun parçaları (aşağıdan yukarı); eski kayıtta yok
+        public int[] segments;
         public Side[] sides;
-        public List<int> layers; // eski format (sadece sağ yan): [0] = tepe, [k] = sağ yandaki k. katman
+        public List<int> layers; // en eski format (sadece sağ yan)
     }
 
     private const float ColliderThickness = 0.75f; // sadece görselde mesh bulunamazsa
 
     [SerializeField] private float followSpeed = 10f;
 
-    [SerializeField] private int baseLength;
-    [SerializeField] private int[] segments = new int[0]; // ana odunun parçaları (aşağıdan yukarı)
-    [SerializeField] private Side[] sides = new Side[0];
+    private readonly List<Cell> cells = new List<Cell>();
+    private readonly Dictionary<Vector3Int, Renderer[]> cellRenderers = new Dictionary<Vector3Int, Renderer[]>();
+    private int baseLength;
 
     private GridDragMotor drag;
     private WoodMergeTarget mergeTarget;
@@ -39,19 +55,60 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     private GridFootprint[] footprints; // rotasyon başına bir kez hesaplanır
     private string signature;           // şekil değişmedikçe aynı
     private int signatureSteps;
-    private readonly List<Renderer>[] sideRenderers = NewSideRenderers();
     private GameObject rope;
     private List<WoodRope.Face> ropeFaces = new List<WoodRope.Face>(); // ipin değme yüzleri (yerel)
 
     public List<WoodRope.Face> RopeFaces => ropeFaces;
+    public IReadOnlyList<Cell> Cells => cells;
 
+    // Ana odun: pivottan yukarı kesintisiz dik sütunun boyu
     public int BaseLength => baseLength;
-    // Yanları boş: iple bağlı dik 1×1'lerden yığın. Eski 2BR / 3BR odun gibi davranır: taşınıp başka bir oduna tek parça
-    // olarak eklenebilir (WoodMergeTarget.TryGetPiece)
-    public bool IsStack => WoodLayout.IsEmpty(ToArrays());
-    public int[] BaseSegments => segments != null && segments.Length > 0 ? (int[])segments.Clone() : WoodLayout.DefaultSegments(baseLength);
 
-    public Renderer[] PieceRenderers(WoodSide side) => sideRenderers[(int)side].ToArray();
+    // Sadece dik sütun (iple bağlı 1×1'lerden yığın): eski 2BR / 3BR odun gibi taşınıp başka bir oduna tek parça olarak
+    // eklenebilir (WoodMergeTarget.TryGetPiece)
+    public bool IsStack
+    {
+        get
+        {
+            foreach (Cell cell in cells)
+                if (cell.Position.x != 0 || cell.Position.z != 0) return false;
+            return true;
+        }
+    }
+
+    public int[] BaseSegments => WoodLayout.DefaultSegments(baseLength);
+
+    public IEnumerable<Vector3Int> LocalCells
+    {
+        get
+        {
+            foreach (Cell cell in cells) yield return cell.Position;
+        }
+    }
+
+    // O hücredeki parçanın renderer'ları (kamerayı kapatanları saydamlaştırmak için); yoksa boş
+    public Renderer[] RenderersAt(Vector3Int local) => cellRenderers.TryGetValue(local, out Renderer[] found) ? found : Array.Empty<Renderer>();
+
+    // Eski kol yapısının sorguları (sökme kodu derlensin diye; sökme şimdilik kapalı): o yandaki kattan dışa kesintisiz uzunluk
+    public int PieceAt(WoodSide side, int layer)
+    {
+        if (layer < 1 || layer > baseLength) return 0;
+        Vector3Int direction = WoodLayout.SideDirection(side);
+        Vector3Int start = direction + Vector3Int.up * WoodLayout.SideRow(baseLength, layer);
+        int length = 0;
+        while (Contains(start + direction * length)) length++;
+        return length;
+    }
+
+    public int[] SideSegments(WoodSide side, int layer) => null;
+    public Renderer[] PieceRenderers(WoodSide side) => Array.Empty<Renderer>();
+
+    private bool Contains(Vector3Int position)
+    {
+        foreach (Cell cell in cells)
+            if (cell.Position == position) return true;
+        return false;
+    }
 
     // İp sarılarak gelsin (birleştirme anında; kayıttan yüklenince ip hazır). previous: birleşmeden önceki yapının değme
     // yüzleri (aynı uzayda; tek odunsa null): sadece yeni eklenen kenarlar oynar
@@ -64,52 +121,14 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         grow.Play(added, existing);
     }
 
-    private static List<Renderer>[] NewSideRenderers()
-    {
-        var result = new List<Renderer>[WoodLayout.SideCount];
-        for (int s = 0; s < result.Length; s++)
-            result[s] = new List<Renderer>();
-        return result;
-    }
-
-    public int[] SideSegments(WoodSide side, int layer)
-    {
-        int s = (int)side;
-        if (s >= sides.Length || sides[s]?.segments == null || layer < 1 || layer > sides[s].segments.Length) return null;
-        return ParseSegments(sides[s].segments[layer - 1]);
-    }
-
-    private static int[] ParseSegments(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return null;
-        string[] parts = text.Split(',');
-        var result = new int[parts.Length];
-        for (int i = 0; i < parts.Length; i++)
-            if (!int.TryParse(parts[i], out result[i])) return null;
-        return result;
-    }
-
-    // Yan odunun parçaları: hep 1×1'ler (eski kayıttaki 2BR / 3BR parçalar da 1'lere bölünür)
-    private static int[] SegmentsFor(int[] stored, int length) => WoodLayout.DefaultSegments(length);
-
-    public int PieceAt(WoodSide side, int layer)
-    {
-        int s = (int)side;
-        if (s >= sides.Length || sides[s]?.layers == null || layer < 1 || layer > sides[s].layers.Length) return 0;
-        return sides[s].layers[layer - 1];
-    }
-
-    // Döndürmeden bağımsız: aynı şeklin her yöndeki hali aynı imzayı verir, ayna görüntüsü farklı verir.
-    // Örn. 2BR, forward'ın 2. katmanında 1BR → "MergedWood:2|0,1|0,0|0,0|0,0" (standart dönüşte)
+    // Döndürmeden bağımsız: aynı şeklin her yöndeki hali aynı imzayı verir, ayna görüntüsü farklı verir. Sadece dik sütunsa
+    // aynı boydaki dik odunun yerine geçer ("Wood:2" slot'u)
     public string BlueprintSignature
     {
         get
         {
-            // Yanları boş yığın (iple bağlı dik 1×1'ler) blueprint'te aynı boydaki dik odunun yerine geçer ("Wood:2" slot'u)
             if (signature == null)
-                signature = WoodLayout.IsEmpty(ToArrays())
-                    ? $"Wood:{baseLength}"
-                    : "MergedWood:" + WoodLayout.CanonicalSignature(baseLength, ToArrays(), out signatureSteps);
+                signature = IsStack ? $"Wood:{baseLength}" : "MergedWood:" + CanonicalSignature(cells, out signatureSteps);
             return signature;
         }
     }
@@ -124,6 +143,33 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         }
     }
 
+    // 4 dönüşün (pivot etrafında, F→R yönünde) imzasından sıralamada en küçüğü; parçanın yönü eksen olarak (x / y / z)
+    private static string CanonicalSignature(List<Cell> shape, out int steps)
+    {
+        string best = null;
+        steps = 0;
+        var parts = new List<string>();
+        for (int k = 0; k < WoodLayout.SideCount; k++)
+        {
+            parts.Clear();
+            foreach (Cell cell in shape)
+            {
+                Vector3Int p = GridMaskRotator.RotateOffset(cell.Position, (GridMaskRotator.Rotation)k);
+                Vector3Int a = GridMaskRotator.RotateOffset(cell.Axis, (GridMaskRotator.Rotation)k);
+                char axis = a.y != 0 ? 'y' : a.x != 0 ? 'x' : 'z';
+                parts.Add($"{p.x},{p.y},{p.z}{axis}");
+            }
+            parts.Sort(string.CompareOrdinal);
+            string candidate = string.Join(";", parts);
+            if (best == null || string.CompareOrdinal(candidate, best) < 0)
+            {
+                best = candidate;
+                steps = k;
+            }
+        }
+        return best;
+    }
+
     private void Awake()
     {
         drag = new GridDragMotor(this, followSpeed);
@@ -131,80 +177,66 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         detachTarget = new WoodDetachTarget(this);
     }
 
-    // sides: WoodLayout.EmptySides biçiminde, [yan][katman - 1] = uzunluk (0 = boş)
-    // segments: ana odunun parçaları; artık hep 1×1'ler (eski kayıt uyumu için parametre duruyor, kullanılmaz)
-    // sideSegments: eski kayıt uyumu için duruyor; yan odunlar da hep 1×1'lerden kurulur
-    public void Build(int baseLength, int[][] sides, WoodCatalogSO catalog, int[] segments = null, int[][][] sideSegments = null)
+    // Eski kol yapısından (ana odun + dört yanın katmanlarındaki kollar) kurar: hücrelere çevirip BuildCells.
+    // sides: WoodLayout.EmptySides biçiminde, [yan][katman - 1] = uzunluk (0 = boş). segments / sideSegments eski kayıt
+    // uyumu için duruyor, kullanılmaz (her şey 1×1)
+    public void Build(int length, int[][] sides, WoodCatalogSO catalog, int[] segments = null, int[][][] sideSegments = null)
     {
-        this.baseLength = baseLength;
-        this.segments = WoodLayout.DefaultSegments(baseLength);
-        this.sides = new Side[WoodLayout.SideCount];
-        for (int s = 0; s < WoodLayout.SideCount; s++)
-        {
-            this.sides[s] = new Side { layers = (int[])sides[s].Clone(), segments = new string[sides[s].Length] };
-            for (int layer = 1; layer <= sides[s].Length; layer++)
+        var shape = new List<Cell>();
+        for (int y = 0; y < length; y++)
+            shape.Add(new Cell(new Vector3Int(0, y, 0), Vector3Int.up));
+        for (int s = 0; s < WoodLayout.SideCount && s < sides.Length; s++)
+            for (int layer = 1; layer <= length && layer <= sides[s].Length; layer++)
             {
-                int[] stored = sideSegments != null && s < sideSegments.Length && sideSegments[s] != null && layer <= sideSegments[s].Length
-                    ? sideSegments[s][layer - 1] : null;
-                if (sides[s][layer - 1] > 0 && stored != null && stored.Length > 1)
-                    this.sides[s].segments[layer - 1] = string.Join(",", SegmentsFor(stored, sides[s][layer - 1]));
+                Vector3Int direction = WoodLayout.SideDirection((WoodSide)s);
+                Vector3Int start = direction + Vector3Int.up * WoodLayout.SideRow(length, layer);
+                for (int i = 0; i < sides[s][layer - 1]; i++)
+                    shape.Add(new Cell(start + direction * i, direction));
             }
-        }
+        BuildCells(shape, catalog);
+    }
+
+    public void BuildCells(IEnumerable<Cell> shape, WoodCatalogSO catalog)
+    {
+        cells.Clear();
+        var seen = new HashSet<Vector3Int>();
+        foreach (Cell cell in shape)
+            if (seen.Add(cell.Position)) cells.Add(cell);
+
+        baseLength = 0;
+        while (seen.Contains(new Vector3Int(0, baseLength, 0))) baseLength++;
+
         footprints = null;
         signature = null;
+        cellRenderers.Clear();
 
-        foreach (List<Renderer> list in sideRenderers)
-            list.Clear();
-
-        // Ana odun: 1×1'ler üst üste. 1×1'lerin arasına ip yok (kullanıcı: ip sadece yan kolun ana oduna bağlandığı yerde)
+        // Her hücreye bir 1×1, uzandığı yöne yatırılmış (dik olanlar dik)
         ropeFaces = new List<WoodRope.Face>();
         Material woodMaterial = null;
-        int height = 0;
-        foreach (int segment in this.segments)
+        Wood prefab = catalog.GetWood(1);
+        foreach (Cell cell in cells)
         {
-            GameObject segmentVisual = AddPiece(catalog.GetWood(segment), new Vector3Int(0, height, 0), Quaternion.identity, segment);
-            if (woodMaterial == null && segmentVisual != null)
-            {
-                Renderer renderer = segmentVisual.GetComponentInChildren<Renderer>();
-                if (renderer != null) woodMaterial = renderer.sharedMaterial;
-            }
-            height += segment;
-        }
-        foreach ((WoodSlot slot, int length) in FilledSlots())
-        {
-            // Yan odun 1×1'lerden (içten dışa); aralarına ip yok, ip sadece ana oduna bağlandığı yerde
-            Vector3Int start = WoodLayout.PieceStart(baseLength, slot);
-            Vector3Int outward = WoodLayout.SideDirection(slot.Side);
-            GameObject visual = null;
-            int offset = 0;
-            foreach (int segment in SegmentsFor(SideSegments(slot.Side, slot.Layer), length))
-            {
-                GameObject segmentVisual = AddPiece(catalog.GetWood(segment), start + outward * offset, WoodLayout.PieceRotation(slot), segment);
-                if (segmentVisual != null)
-                {
-                    visual ??= segmentVisual;
-                    sideRenderers[(int)slot.Side].AddRange(segmentVisual.GetComponentsInChildren<Renderer>());
-                }
-                offset += segment;
-            }
+            GameObject visual = AddPiece(prefab, cell.Position, Quaternion.FromToRotation(Vector3.up, cell.Axis));
             if (visual == null) continue;
+            Renderer[] renderers = visual.GetComponentsInChildren<Renderer>();
+            cellRenderers[cell.Position] = renderers;
+            if (woodMaterial == null && renderers.Length > 0) woodMaterial = renderers[0].sharedMaterial;
+        }
 
-            // Ana odunla değdiği yüz (ip buraya)
-            Vector3 direction = WoodLayout.SideDirection(slot.Side);
-            ropeFaces.Add(new WoodRope.Face
+        // İp: ana odunun yanına doğrudan değen parçaların değme yüzü (küpün içinde, parçaların arasında ip yok)
+        foreach (Cell cell in cells)
+        {
+            Vector3Int p = cell.Position;
+            if (p.x == 0 && p.z == 0 && p.y < baseLength) continue; // ana odunun kendisi
+            for (int s = 0; s < WoodLayout.SideCount; s++)
             {
-                center = (Vector3)WoodLayout.PieceStart(baseLength, slot) - direction * 0.5f,
-                normal = direction,
-                up = Vector3.up
-            });
-            if (woodMaterial == null)
-            {
-                Renderer renderer = visual.GetComponentInChildren<Renderer>();
-                if (renderer != null) woodMaterial = renderer.sharedMaterial;
+                Vector3Int direction = WoodLayout.SideDirection((WoodSide)s);
+                Vector3Int inner = p - direction;
+                if (inner.x != 0 || inner.z != 0 || inner.y < 0 || inner.y >= baseLength) continue;
+                ropeFaces.Add(new WoodRope.Face { center = (Vector3)p - (Vector3)direction * 0.5f, normal = direction, up = Vector3.up });
             }
         }
 
-        // Bütün değme yerlerine tek parça ip (üst üste binmez)
         if (WoodMerger.Instance != null) rope = WoodMerger.Instance.Rope.Build(transform, ropeFaces, woodMaterial);
     }
 
@@ -212,45 +244,24 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     {
         if (footprints == null)
         {
-            var cells = new List<Vector3Int>(WoodLayout.BaseCells(baseLength));
-            foreach ((WoodSlot slot, int length) in FilledSlots())
-                cells.AddRange(WoodLayout.PieceCells(baseLength, slot, length));
-
-            footprints = GridMaskRotator.AllRotations(new GridFootprint(cells.ToArray()));
+            var positions = new Vector3Int[cells.Count];
+            for (int i = 0; i < cells.Count; i++) positions[i] = cells[i].Position;
+            footprints = GridMaskRotator.AllRotations(new GridFootprint(positions));
         }
         return footprints[(int)Rotation];
     }
 
-    private IEnumerable<(WoodSlot slot, int length)> FilledSlots()
-    {
-        for (int s = 0; s < WoodLayout.SideCount; s++)
-            for (int layer = 1; layer <= baseLength; layer++)
-            {
-                int length = PieceAt((WoodSide)s, layer);
-                if (length > 0) yield return (WoodSlot.At((WoodSide)s, layer), length);
-            }
-    }
-
-    private int[][] ToArrays()
-    {
-        int[][] result = WoodLayout.EmptySides(baseLength);
-        for (int s = 0; s < WoodLayout.SideCount; s++)
-            for (int layer = 1; layer <= baseLength; layer++)
-                result[s][layer - 1] = PieceAt((WoodSide)s, layer);
-        return result;
-    }
-
     // Parçanın modelini child olarak ekler, root'a da parçayı kaplayan bir collider koyar
     // (InteractableController collider'ın kendi objesinde IInteractable arıyor). Eklenen modeli döndürür.
-    private GameObject AddPiece(Wood woodPrefab, Vector3Int start, Quaternion rotation, int length)
+    private GameObject AddPiece(Wood woodPrefab, Vector3Int start, Quaternion rotation)
     {
         if (woodPrefab == null)
         {
-            Debug.LogWarning($"WoodCatalog'da {length} uzunluğunda odun yok", this);
+            Debug.LogWarning("WoodCatalog'da 1×1 odun yok", this);
             return null;
         }
 
-        var holder = new GameObject($"Piece {length}BR").transform;
+        var holder = new GameObject("Piece 1BR").transform;
         holder.SetParent(transform, false);
         holder.localPosition = start;
         holder.localRotation = rotation;
@@ -265,9 +276,8 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         }
         else
         {
-            Vector3 axis = rotation * Vector3.up;
-            Vector3 size = rotation * new Vector3(ColliderThickness, length, ColliderThickness);
-            box.center = (Vector3)start + axis * (length - 1) / 2f;
+            Vector3 size = rotation * new Vector3(ColliderThickness, 1f, ColliderThickness);
+            box.center = start;
             box.size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
         }
         return visual;
@@ -308,48 +318,69 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     public void ContractCancel() => drag.Cancel();
 
     // --- ISaveState ---
-    public string CaptureState() => JsonUtility.ToJson(new State { baseLength = baseLength, segments = segments, sides = sides });
+    public string CaptureState()
+    {
+        var data = new int[cells.Count * 6];
+        for (int i = 0; i < cells.Count; i++)
+        {
+            Cell cell = cells[i];
+            data[i * 6] = cell.Position.x;
+            data[i * 6 + 1] = cell.Position.y;
+            data[i * 6 + 2] = cell.Position.z;
+            data[i * 6 + 3] = cell.Axis.x;
+            data[i * 6 + 4] = cell.Axis.y;
+            data[i * 6 + 5] = cell.Axis.z;
+        }
+        return JsonUtility.ToJson(new State { cells = data, baseLength = baseLength });
+    }
 
     public void RestoreState(string state)
     {
         State loaded = JsonUtility.FromJson<State>(state);
-        int[][] loadedSides = WoodLayout.EmptySides(loaded.baseLength);
-        var loadedSegments = new int[WoodLayout.SideCount][][];
+        if (loaded.cells != null && loaded.cells.Length >= 6)
+        {
+            var shape = new List<Cell>();
+            for (int i = 0; i + 5 < loaded.cells.Length; i += 6)
+                shape.Add(new Cell(new Vector3Int(loaded.cells[i], loaded.cells[i + 1], loaded.cells[i + 2]),
+                                   new Vector3Int(loaded.cells[i + 3], loaded.cells[i + 4], loaded.cells[i + 5])));
+            BuildCells(shape, WoodMerger.Instance.Catalog);
+            return;
+        }
 
+        // Eski kayıt: ana odun + kollar
+        int[][] loadedSides = WoodLayout.EmptySides(loaded.baseLength);
         if (loaded.sides != null && loaded.sides.Length == WoodLayout.SideCount)
         {
             for (int s = 0; s < WoodLayout.SideCount; s++)
-            {
                 if (loaded.sides[s]?.layers != null)
                     Array.Copy(loaded.sides[s].layers, loadedSides[s], Mathf.Min(loaded.sides[s].layers.Length, loaded.baseLength));
-                if (loaded.sides[s]?.segments != null)
-                {
-                    loadedSegments[s] = new int[loaded.baseLength][];
-                    for (int layer = 1; layer <= Mathf.Min(loaded.sides[s].segments.Length, loaded.baseLength); layer++)
-                        loadedSegments[s][layer - 1] = ParseSegments(loaded.sides[s].segments[layer - 1]);
-                }
-            }
         }
         else if (loaded.layers != null)
         {
-            // Eski kayıt: sadece sağ yan vardı; [0] tepe (hep boş), [k] sağ yandaki k. katman
+            // En eski kayıt: sadece sağ yan vardı; [0] tepe (hep boş), [k] sağ yandaki k. katman
             for (int layer = 1; layer < loaded.layers.Count && layer <= loaded.baseLength; layer++)
                 loadedSides[(int)WoodSide.Right][layer - 1] = loaded.layers[layer];
         }
-
-        Build(loaded.baseLength, loadedSides, WoodMerger.Instance.Catalog, loaded.segments, loadedSegments);
+        Build(loaded.baseLength, loadedSides, WoodMerger.Instance.Catalog);
     }
 
-    // --- IToolTarget: boş bir katmana tek parça odun getirildiğinde (birleştirme) ya da balta getirildiğinde (sökme) ---
+    // --- IToolTarget: boş bir yere odun getirildiğinde (birleştirme). Balta (sökme) şimdilik kapalı. ---
     public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept)
-        => interacted is Axe ? detachTarget.GetToolTargetPosition(interacted, out accept) : mergeTarget.GetToolTargetPosition(interacted, out accept);
-    public Quaternion GetToolTargetRotation() => detachTarget.HasSelection ? detachTarget.GetToolTargetRotation() : mergeTarget.GetToolTargetRotation();
+    {
+        if (interacted is Axe)
+        {
+            accept = false;
+            return default;
+        }
+        return mergeTarget.GetToolTargetPosition(interacted, out accept);
+    }
+    public Quaternion GetToolTargetRotation() => mergeTarget.GetToolTargetRotation();
     public void OnToolTargetExit()
     {
         mergeTarget.OnToolTargetExit();
         detachTarget.OnToolTargetExit();
     }
-    public bool OnToolUsed(IInteractable tool) => tool is Axe ? detachTarget.OnToolUsed(tool) : mergeTarget.OnToolUsed(tool);
+    public bool OnToolUsed(IInteractable tool) => !(tool is Axe) && mergeTarget.OnToolUsed(tool);
     public bool IsStillTargeted(IInteractable interacted, Ray mouseRay)
-        => interacted is Axe ? detachTarget.IsStillTargeted(interacted, mouseRay) : mergeTarget.IsStillTargeted(interacted, mouseRay);
+        => !(interacted is Axe) && mergeTarget.IsStillTargeted(interacted, mouseRay);
 }
