@@ -21,6 +21,8 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private float targetReleasePixels = 150f;
     [Tooltip("Yan parçaların ana oduna bağlandığı yere sarılan ip")]
     [SerializeField] private WoodRope rope = new WoodRope();
+    [Tooltip("Kol ile derinlik odunu arasındaki 45° çivi (prototip; model atanabilir)")]
+    [SerializeField] private WoodNail nail = new WoodNail();
     [Tooltip("Odun elde tutulurken çevresindeki hücrelerin 3 boyutlu göstergesi")]
     [SerializeField] private HeldGridIndicator heldGrid = new HeldGridIndicator();
 
@@ -44,6 +46,7 @@ public class WoodMerger : MonoBehaviour
     public WoodCatalogSO Catalog => catalog;
     public DitherFade FrontFade => frontFade;
     public WoodRope Rope => rope;
+    public WoodNail Nail => nail;
     public float TargetReleasePixels => targetReleasePixels;
     public GameObject SnapIndicatorPrefab => snapIndicatorPrefab;
     public Vector3 DetachAxeOffset => detachAxeOffset;
@@ -74,41 +77,60 @@ public class WoodMerger : MonoBehaviour
     {
         var stack = (IWoodStack)target;
 
-        // Hedef silinmeden önce sonucu hesapla (yapının yerel uzayında)
+        // Sonucu yapının yerel uzayında hesapla
         Vector3Int position = target.OriginWorldPosition;
         GridMaskRotator.Rotation rotation = target.Rotation;
         var inverse = (GridMaskRotator.Rotation)((4 - (int)rotation) % 4);
         Vector3Int start = GridMaskRotator.RotateOffset(cell - position, inverse);
         Vector3Int direction = GridMaskRotator.RotateOffset(normal, inverse);
 
-        var shape = new System.Collections.Generic.List<MergedWood.Cell>();
-        if (target is MergedWood existing) shape.AddRange(existing.Cells);
-        else
+        var shape = new System.Collections.Generic.List<MergedWood.Cell>(); // sadece Wood hedefte kullanılır
+        if (!(target is MergedWood))
             foreach (Vector3Int local in stack.LocalCells) shape.Add(new MergedWood.Cell(local, Vector3Int.up));
         for (int i = 0; i < carriedLength; i++)
             shape.Add(new MergedWood.Cell(start + direction * i, direction));
 
-        // Hedefin ipi (sonuç aynı yerde, aynı dönüşte kurulur): sadece yeni eklenen ip sarılarak gelir
-        System.Collections.Generic.List<WoodRope.Face> previousRope = target is MergedWood oldMerged ? oldMerged.RopeFaces : null;
 
         // Taşınan odun yok olacak: geri yerleştirilmeye çalışılmasın diye iptal değil, sadece bırakıyoruz
         InteractableController.Instance.Release((IInteractable)carried);
         Destroy(carried.gameObject);
-        GridManager.Instance.PlaceableRemoveOn(target, true);
 
-        GridPlaceable result = shape.Count == 1 ? SpawnLongWood(1) : SpawnMergedWood(shape);
-        result.Rotation = rotation;
-        if (!GridManager.Instance.PlaceablePlaceOn(result, position))
+        GridPlaceable result;
+        if (target is MergedWood grown)
         {
-            Debug.LogWarning($"{result.name} grid'e yerleştirilemedi", result);
-            return null;
+            // Artımlı (kullanıcı: baştan kurmak ms spike yapıyordu): aynı obje kalır, sadece yeni hücreler eklenir, grid'deki
+            // footprint yerinde genişletilir
+            var added = new System.Collections.Generic.List<MergedWood.Cell>();
+            for (int i = 0; i < carriedLength; i++) added.Add(new MergedWood.Cell(start + direction * i, direction));
+            grown.AddCells(added, catalog);
+            grown.name = $"MergedWood {grown.Cells.Count}";
+            if (!GridManager.Instance.TryMovePlaceable(grown, position, grown.GetFootprint()))
+                Debug.LogWarning($"{grown.name} grid'de genişletilemedi", grown);
+            result = grown;
+        }
+        else
+        {
+            // Tek odun / dik yığın (Wood) ilk birleşmede MergedWood'a dönüşür
+            GridManager.Instance.PlaceableRemoveOn(target, true);
+            result = shape.Count == 1 ? SpawnLongWood(1) : SpawnMergedWood(shape);
+            result.Rotation = rotation;
+            if (!GridManager.Instance.PlaceablePlaceOn(result, position))
+            {
+                Debug.LogWarning($"{result.name} grid'e yerleştirilemedi", result);
+                return null;
+            }
         }
 
         // Parçanın geldiği yönden itilmiş gibi: yandan eklenen parça o yandan iter → obje ters yöne eğilir.
         // Üstten gelen parça yukarıdan bastırır → eğilme yok, sadece basılıp yaylanır.
         Vector3 push = direction.y != 0 ? Vector3.zero : -(result.GridRotation * (Vector3)direction);
         PlayWobble(result, push);
-        if (result is MergedWood merged) merged.PlayRopeAnimation(previousRope);
+        if (result is MergedWood merged)
+        {
+            // Sadece bu birleştirmede kurulan ip parçaları ve çiviler oynar
+            merged.PlayRopeAnimation();
+            merged.PlayNailAnimation();
+        }
         return result;
     }
 

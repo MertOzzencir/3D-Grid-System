@@ -65,9 +65,12 @@ public class WoodMergeTarget : IWoodSlotView
     private Vector3 attachMouse;
     private Vector2 lastInput;
 
-    // Seçili yerin önünde kalıp onu kapatan parçalar yarı saydam (bkz. DitherFade)
+    // Seçili yeri kameradan kapatan parçalar yarı saydam (bkz. DitherFade, FadeBlockers)
     private readonly List<Renderer> faded = new List<Renderer>();
     private readonly List<Renderer> fadeBuffer = new List<Renderer>();
+    private readonly HashSet<Vector3Int> fadeCells = new HashSet<Vector3Int>();
+    private const float FadeProbe = 0.35f; // köşe ışınlarının hücre ortasından uzaklığı
+    private const float FadeStep = 0.1f;   // ışın boyunca adım
 
     public WoodMergeTarget(GridPlaceable owner)
     {
@@ -358,6 +361,8 @@ public class WoodMergeTarget : IWoodSlotView
     // Ana odunun tepesi (uzatma yeri) de bu gezinmeye katılır (kullanıcı: kollar varken tepeye çıkılamıyordu):
     //   A / D ile ana odunun sütununa gelince, en üst kattaysan (kolların hizası) tepe seçilir; tepedeyken A / D bir kat
     //   aşağıdaki (kolların) hattına iner. W ile yukarıda hiçbir yer yoksa tepeye çıkılır.
+// W / S: o katta aynı sütunda yer yoksa o katın en yakın sütunundaki yer (kullanıcı: üst katta sadece ana odunun yanı
+// uygunken uzaktaki sütundan yukarı çıkılamıyordu).
     private void MoveLine(int dc, int dr, int length)
     {
         int top = stack.BaseLength; // tepenin satırı (ana odunun üstündeki hücre)
@@ -371,11 +376,29 @@ public class WoodMergeTarget : IWoodSlotView
                 SetSelection(CellAt(0, top, 0), Vector3Int.up);
                 return;
             }
+            if (dr != 0)
+            {
+                if (r < 0 || r > top) break;
+                if (TrySelectRow(r, length)) return;
+                continue;
+            }
             if (TrySelectLine(c, r, length)) return;
             if (dc != 0 && row == top && TrySelectLine(c, top - 1, length)) return; // tepeden yanlara: kolların hattı
         }
 
         if (dr > 0 && topValid && row < top) SetSelection(CellAt(0, top, 0), Vector3Int.up);
+    }
+
+    // r katında bulunulan sütuna en yakın sütundaki görünen yer (eşitse önce sağ)
+    private bool TrySelectRow(int r, int length)
+    {
+        int reach = WoodLayout.MaxBaseLength * 2;
+        for (int offset = 0; offset <= reach; offset++)
+        {
+            if (TrySelectLine(column + offset, r, length)) return true;
+            if (offset > 0 && TrySelectLine(column - offset, r, length)) return true;
+        }
+        return false;
     }
 
     private bool TrySelectLine(int c, int r, int length)
@@ -397,17 +420,28 @@ public class WoodMergeTarget : IWoodSlotView
         candidateDirections.Add(selectedNormal);
     }
 
-    // Seçili yerin önünde (kameraya daha yakın) ve hemen çevresinde duran parçalar seçimi kapatmasın: yarı saydam
+    // Seçili yeri kapatan parçalar yarı saydam (kullanıcı: önceki "önündeki ve çevresindeki" kuralı tutarsızdı): kameradan
+    // seçili yerin hücrelerine (ortası + köşelere yakın dört nokta) ışınlar, yol üstünde çarptığı yapı hücreleri. Hücreler
+    // grid'de adım adım yürünerek bulunur (collider'lar tek objede, hangi 1×1 olduğu ayırt edilemiyor).
     private void FadeBlockers()
     {
         if (!(owner is MergedWood merged)) return;
         fadeBuffer.Clear();
-        foreach (Vector3Int part in cluster)
-        {
-            Vector3Int offset = part - selectedCell;
-            if (Dot(offset, toward) <= 0 || Mathf.Abs(Dot(offset, right)) > 1 || Mathf.Abs(offset.y) > 1) continue;
-            fadeBuffer.AddRange(merged.RenderersAt(ToLocal(part, true)));
-        }
+        fadeCells.Clear();
+        Transform camera = Camera.main.transform;
+        Vector3 eye = camera.position;
+        foreach (Vector3Int[] cells in candidateCells)
+            foreach (Vector3Int cell in cells)
+                for (int k = 0; k < 5; k++)
+                {
+                    Vector3 target = cell;
+                    if (k > 0) target += camera.right * ((k & 1) == 0 ? FadeProbe : -FadeProbe)
+                                       + camera.up * (k <= 2 ? FadeProbe : -FadeProbe);
+                    MarchToCamera(target, eye);
+                }
+        foreach (Vector3Int part in fadeCells)
+            foreach (Renderer renderer in merged.RenderersAt(ToLocal(part, true)))
+                if (!fadeBuffer.Contains(renderer)) fadeBuffer.Add(renderer); // ip birden çok hücrede
 
         bool same = fadeBuffer.Count == faded.Count;
         for (int i = 0; same && i < faded.Count; i++) same = faded[i] == fadeBuffer[i];
@@ -416,6 +450,20 @@ public class WoodMergeTarget : IWoodSlotView
         RestoreFaded();
         faded.AddRange(fadeBuffer);
         if (faded.Count > 0) WoodMerger.Instance.FrontFade.FadeOut(faded.ToArray());
+    }
+
+    // target'tan kameraya doğru adım adım: geçtiği yapı hücreleri fadeCells'e. Yapının sınırını geçince durur.
+    private void MarchToCamera(Vector3 target, Vector3 eye)
+    {
+        Vector3 toEye = eye - target;
+        float distance = Mathf.Min(toEye.magnitude, WoodLayout.MaxBaseLength * 3f);
+        Vector3 direction = toEye.normalized;
+        Vector3Int start = Vector3Int.RoundToInt(target);
+        for (float s = FadeStep; s < distance; s += FadeStep)
+        {
+            Vector3Int cell = Vector3Int.RoundToInt(target + direction * s);
+            if (cell != start && cluster.Contains(cell)) fadeCells.Add(cell);
+        }
     }
 
     private void RestoreFaded()

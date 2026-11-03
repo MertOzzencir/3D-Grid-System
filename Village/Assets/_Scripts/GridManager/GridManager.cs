@@ -30,12 +30,22 @@ public class GridManager : MonoBehaviour
     public bool PlaceBase(GridBase entity, Vector3 position)
     {
         bool placed = PlaceGeneric(entity, position, d => d.Base, (d, e) => d.Base = e);
-        if (placed) BasesChanged?.Invoke();
+        if (placed)
+        {
+            baseBatcher.Add(entity);
+            BasesChanged?.Invoke();
+        }
         return placed;
     }
 
+    // Base görselleri bölge bölge tek mesh (BaseChunkBatcher); değişen bölgeler kare sonunda kurulur
+    private readonly BaseChunkBatcher baseBatcher = new BaseChunkBatcher();
+
+    private void LateUpdate() => baseBatcher.Flush();
+
     public bool RemoveBase(GridBase entity, bool destroy = true)
     {
+        baseBatcher.Remove(entity);
         bool removed = RemoveGeneric(entity, d => d.Base, d => d.Base = null, destroy);
         if (removed) BasesChanged?.Invoke();
         return removed;

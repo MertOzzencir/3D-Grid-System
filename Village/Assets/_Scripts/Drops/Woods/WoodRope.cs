@@ -28,6 +28,9 @@ public class WoodRope
     [Tooltip("Odunun hücreden taşan kısmı (birim, 1BR ~0.045): ip hücre sınırından bu kadar + kalınlığı kadar dışarıda, " +
              "odunun yüzeyine oturur")]
     [SerializeField] private float surface = 0.045f;
+    [Tooltip("Sal bağı: uç uca dizili parçaların ek yerlerinde, ana odundan her bu kadar ek yerinde bir (0. ek yeri ana " +
+             "odunun kendisi) bütün kesiti saran ip bandı. 0 = bant yok, sadece ana oduna bağlandığı yer.")]
+    [SerializeField, Range(0, 6)] private int bandSpacing = 2;
     [Tooltip("Köşelerin yuvarlaklığı (birim): ip köşede bu yarıçapta bir yayla döner")]
     [SerializeField] private float cornerRadius = 0.12f;
     [Tooltip("Sıkılık: ipin köşeleri odunun yuvarlak kenarına doğru bu kadar (birim) içeri çekilir (köşede havada durmasın)")]
@@ -58,6 +61,8 @@ public class WoodRope
 
     private const int Sides = 12;
     private const float Step = 0.02f; // ipin boyunca örnek aralığı (örgü için sık)
+
+    public int BandSpacing => bandSpacing;
 
     private Material generatedMaterial;
     private Material generatedFrom;
