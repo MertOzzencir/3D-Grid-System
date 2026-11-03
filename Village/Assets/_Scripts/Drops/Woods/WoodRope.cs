@@ -59,8 +59,9 @@ public class WoodRope
     [Tooltip("Düğüm oturunca saçılan ip lifi sayısı (0 = yok)")]
     [SerializeField, Range(0, 30)] private int knotFibers = 10;
 
-    private const int Sides = 12;
-    private const float Step = 0.02f; // ipin boyunca örnek aralığı (örgü için sık)
+    // Hafifletildi (kullanıcı: sahnede çok üçgen): önce 12 köşe, 0.02 aralık
+    private const int Sides = 8;
+    private const float Step = 0.04f; // ipin boyunca örnek aralığı (örgü için yeterince sık)
 
     public int BandSpacing => bandSpacing;
 

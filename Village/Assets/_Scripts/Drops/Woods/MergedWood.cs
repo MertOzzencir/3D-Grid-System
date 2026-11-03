@@ -307,7 +307,30 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         }
 
         RebuildJoints();
+        UpdateHiddenPieces();
         return fresh.Count;
+    }
+
+    // Görünmeyen parçalar çizilmez (kullanıcı: sahnede çok üçgen): dört yanı ve üstü dolu olan 1×1 hiçbir açıdan
+    // görünmüyor (kamera hep yukarıda, alt yüz kameraya bakmaz). Renderer'ı kapanır (WoodInstancer kapalıları atlar);
+    // komşusu gidince (sökme) yeniden açılır.
+    private static readonly Vector3Int[] CoverNeighbours =
+        { Vector3Int.up, Vector3Int.right, Vector3Int.left, new Vector3Int(0, 0, 1), new Vector3Int(0, 0, -1) };
+
+    private void UpdateHiddenPieces()
+    {
+        foreach (KeyValuePair<Vector3Int, Renderer[]> pair in pieceRenderers)
+        {
+            bool hidden = true;
+            foreach (Vector3Int offset in CoverNeighbours)
+                if (!occupied.Contains(pair.Key + offset))
+                {
+                    hidden = false;
+                    break;
+                }
+            foreach (Renderer renderer in pair.Value)
+                if (renderer != null) renderer.enabled = !hidden;
+        }
     }
 
     // İp (ana odunun yanına doğrudan değen parçaların değme yüzü + sal bağı bantları) ve çiviler: yeni şekle göre hesaplanır,

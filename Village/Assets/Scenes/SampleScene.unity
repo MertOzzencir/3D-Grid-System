@@ -2487,6 +2487,7 @@ MonoBehaviour:
     color: {r: 0.86, g: 0.74, b: 0.52, a: 1}
     thickness: 0.05625
     surface: 0.01
+    bandSpacing: 2
     cornerRadius: 0.6
     cornerPull: 0.1
     edgeBow: 0.04
@@ -2500,6 +2501,28 @@ MonoBehaviour:
     looseness: 0.45
     knotPopDuration: 0.25
     knotFibers: 10
+  woodInstancing: 1
+  instancedWoodShader: {fileID: 4800000, guid: ba1ed19a548d07f4e91bd637b44c1665, type: 3}
+  nail:
+    enabled: 1
+    nailPrefab: {fileID: 0}
+    angle: 45
+    count: 2
+    spacing: 0.35
+    headOffset: 0.1
+    surface: 0.03
+    length: 0.3
+    radius: 0.02
+    headRadius: 0.045
+    headHeight: 0.02
+    material: {fileID: 0}
+    color: {r: 0.32, g: 0.32, b: 0.35, a: 1}
+    animation:
+      delay: 0.15
+      stagger: 0.08
+      rise: 0.3
+      duration: 0.09
+      punch: 0.4
   heldGrid:
     enabled: 1
     range: 1
