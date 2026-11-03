@@ -32,6 +32,7 @@ public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiec
     {
         drag = new GridDragMotor(this, followSpeed);
         mergeTarget = new WoodMergeTarget(this);
+        if (Visual != null) WoodInstancer.Register(Visual.gameObject); // GPU instancing ile çizilir
     }
 
     // --- IInteractable: bu odun elde taşınırken ---

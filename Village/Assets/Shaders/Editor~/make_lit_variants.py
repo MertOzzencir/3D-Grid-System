@@ -1,4 +1,5 @@
-# URP Lit.shader'dan deformasyonlu / efektli kopyalar üretir (Village/Tree Chop Lit, Village/Wood Wobble Lit) ve düz
+# URP Lit.shader'dan deformasyonlu / efektli kopyalar üretir (Village/Tree Chop Lit, Village/Wood Wobble Lit,
+# Village/Wood Instanced Lit) ve düz
 # kopyasını (Village/Lit: efekt yok, URP Lit kullanan materyaller bunu kullanır).
 # Lit'ten farklar: shader adı + pass'lerde vertex (ve istenirse fragment), URP'nin kendi fonksiyonundan önce sarmalanır.
 # Hepsinde ForwardLit fragment'ı Toon.hlsl'deki ToonLitPassFragment'a gider: toon kapalıyken (ToonStyle) birebir Lit.
@@ -23,6 +24,12 @@ VARIANTS = [
     dict(name="Village/Wood Wobble Lit", output="WoodWobbleLit.shader",
          description="birleşmede jöle gibi sallanma (Wobble.hlsl) + noktalı saydamlık (Fade.hlsl)",
          vertex=("Wobble.hlsl", "ApplyWobble"), fragment=("Fade.hlsl", "ApplyFade")),
+    # instanced: True → vertex ve fragment sarmalayıcıları efektten önce UNITY_SETUP_INSTANCE_ID çağırır (instance başına
+    # değerler; çizen Graphics.RenderMeshInstanced, bkz. WoodInstancer.cs)
+    dict(name="Village/Wood Instanced Lit", output="WoodInstancedLit.shader",
+         description="1×1 odunların GPU instancing'i: instance başına jöle sallanması + noktalı saydamlık (WoodInstanced.hlsl)",
+         vertex=("WoodInstanced.hlsl", "ApplyWoodInstanced"), fragment=("WoodInstanced.hlsl", "ApplyWoodFade"),
+         instanced=True),
     dict(name="Village/Creature Jiggle Lit", output="CreatureJiggleLit.shader",
          description="vuruşta yerel jöle titreşimi, örn. kediye şaplak (Jiggle.hlsl)",
          vertex=("Jiggle.hlsl", "ApplyJiggle"), fragment=None),
@@ -147,11 +154,12 @@ def make_variant(urp, lit, v):
 
         args = f"input.{position}.xyz" + (f", input.{normal}" if normal else "")
         t = t.replace(pragma, f"#pragma vertex {wrapper}")
+        setup = "UNITY_SETUP_INSTANCE_ID(input);\n                " if v.get("instanced") else ""
         additions.setdefault(pass_include, []).append(
             f"#include \"{vertex_include}\"\n"
             f"            Varyings {wrapper}(Attributes input)\n"
             f"            {{\n"
-            f"                {vertex_apply}({args});\n"
+            f"                {setup}{vertex_apply}({args});\n"
             f"                return {original}(input);\n"
             f"            }}")
 
@@ -171,7 +179,8 @@ def make_variant(urp, lit, v):
             if v["fragment"]:
                 fragment_include, fragment_apply = v["fragment"]
                 includes += f"#include \"{fragment_include}\"\n            "
-                body = template.format(name=wrapper, call=f"{fragment_apply}(input.positionCS);")
+                setup = "UNITY_SETUP_INSTANCE_ID(input);\n                " if v.get("instanced") else ""
+                body = template.format(name=wrapper, call=f"{setup}{fragment_apply}(input.positionCS);")
             else:
                 body = template.format(name=wrapper, call="@@").replace("                @@\n", "")
             if forward:

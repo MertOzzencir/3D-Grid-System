@@ -584,6 +584,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         holder.localPosition = start;
         holder.localRotation = rotation;
         GameObject visual = Instantiate(woodPrefab.Visual.gameObject, holder, false);
+        WoodInstancer.Register(visual); // GPU instancing ile çizilir
 
         // Collider görselin gerçek sınırlarında (parmaklar ve raycast'ler yüzeye otursun). Görsel yoksa hücre boyunda kutu.
         var box = gameObject.AddComponent<BoxCollider>();

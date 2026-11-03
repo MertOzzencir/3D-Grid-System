@@ -21,6 +21,12 @@ public class WoodMerger : MonoBehaviour
     [SerializeField] private float targetReleasePixels = 150f;
     [Tooltip("Yan parçaların ana oduna bağlandığı yere sarılan ip")]
     [SerializeField] private WoodRope rope = new WoodRope();
+    [Header("GPU instancing (1×1 odunlar)")]
+    [Tooltip("Açıksa bütün 1×1 odunlar WoodInstancer ile instanced çizilir; kapalıysa kendi renderer'larıyla")]
+    [SerializeField] private bool woodInstancing = true;
+    [Tooltip("'Village/Wood Instanced Lit' (WoodInstancedLit.shader). Build'de atanmış olmalı (Shader.Find build'de " +
+             "bulamaz); boşsa editörde adından bulunur.")]
+    [SerializeField] private Shader instancedWoodShader;
     [Tooltip("Kol ile derinlik odunu arasındaki 45° çivi (prototip; model atanabilir)")]
     [SerializeField] private WoodNail nail = new WoodNail();
     [Tooltip("Odun elde tutulurken çevresindeki hücrelerin 3 boyutlu göstergesi")]
@@ -57,10 +63,21 @@ public class WoodMerger : MonoBehaviour
     private void Awake()
     {
         if (Instance == null) Instance = this;
+        if (instancedWoodShader == null) instancedWoodShader = Shader.Find("Village/Wood Instanced Lit");
+        instancer = new GameObject("Wood Instancer").AddComponent<WoodInstancerDriver>();
+        instancer.Shader = instancedWoodShader;
+        instancer.Enabled = woodInstancing;
     }
+
+    private WoodInstancerDriver instancer;
 
     private void Update()
     {
+        if (instancer != null)
+        {
+            instancer.Shader = instancedWoodShader;
+            instancer.Enabled = woodInstancing;
+        }
         heldGrid.Tick(Time.deltaTime);
         // Birleştirirken / sökerken kamera hedef odunu yavaşça ortalar (E / Q onun etrafında döner)
         IWoodSlotView active = WoodMergeTarget.Active != null ? WoodMergeTarget.Active : (IWoodSlotView)WoodDetachTarget.Active;
