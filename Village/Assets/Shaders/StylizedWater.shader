@@ -7,6 +7,9 @@
 //   5) Hafif Gerstner-benzeri dalga (vertex; sık mesh için WaterSurface.cs)
 // Gerekli: URP Asset'te Depth Texture ve Opaque Texture açık olmalı (PC_RPAsset'te açık).
 // Doku kullanmaz; tüm desenler dünya uzayında üretilir, yan yana konan su parçaları dikişsiz birleşir.
+// Toon (ToonStyle açık, _VillageToon = 1; kullanıcı: su arka planda sırıtıyordu): suyun rengi dünyadaki objeler gibi ışık
+// alır (ToonCore.hlsl: güneşin rengi / şiddeti, ortam ışığı, gölgede ToonShadowAlbedo, sert gölge kenarı), tepecik yamaçları
+// ve tepeleri yumuşak geçiş yerine sert bantlı, güneş yansıması tam sert, köpük de ışık alır. _ToonLighting 0 → eski görünüm.
 Shader "Village/Stylized Water"
 {
     Properties
@@ -65,6 +68,11 @@ Shader "Village/Stylized Water"
         _ShoreWaveSpeed ("Geliş Hızı", Float) = 0.25
         _ShoreWaveWidth ("Çizgi Kalınlığı", Range(0.01, 0.6)) = 0.18
         _ShoreWaveBreakup ("Çizgi Dağınıklığı", Range(0, 1)) = 0.45
+
+        [Header(Toon)]
+        _ToonLighting ("Toon Işığı (0 = eski görünüm, 1 = dünyadaki objeler gibi ışık alır)", Range(0, 1)) = 1
+        _ToonRippleBand ("Toon Yamaç Eşiği (yamaç bandının başladığı eğim)", Range(0, 1)) = 0.15
+        _ToonCrest ("Toon Tepe Eşiği", Range(0, 1)) = 0.85
 
         [Header(Dalga)]
         _WaveHeight ("Dalga Yüksekliği", Float) = 0.06
@@ -158,7 +166,23 @@ Shader "Village/Stylized Water"
                 float _WaveHeight;
                 float _WaveLength;
                 float _WaveSpeed;
+
+                half _ToonLighting;
+                half _ToonRippleBand;
+                half _ToonCrest;
             CBUFFER_END
+
+            #include "ToonCore.hlsl"
+
+            // Toon: renk (albedo gibi) dünyadaki objeler gibi ışık alır; su yüzeyi yukarı bakar (normal düz kabul)
+            half3 ToonWaterLight(half3 albedo, Light light, half3 ambient)
+            {
+                half tone;
+                ToonLit(light, half3(0, 1, 0), tone);
+                half3 lit = ambient * albedo * _VillageToonAmbient
+                          + light.color * light.distanceAttenuation * lerp(ToonShadowAlbedo(albedo), albedo, tone);
+                return lerp(albedo, lit, _ToonLighting);
+            }
 
             // Gece (DayCycle.cs gönderir, global): suyun rengi gece tonuna çarpılır. Ayarlanmamışsa 0 = etkisiz.
             float _NightDarken;
@@ -281,6 +305,8 @@ Shader "Village/Stylized Water"
                 float t = _Time.y;
                 float3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 Light mainLight = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
+                bool toon = _VillageToon > 0.5;
+                half3 ambient = SampleSH(half3(0, 1, 0));
 
                 // 1) Tepecikler: iki katman, farklı sıklık/yön; ikincisi biraz döndürülmüş ki hücreler hizalanmasın
                 float2 flow = AngleToDirection(_RippleDirection) * _RippleSpeed * t;
@@ -333,9 +359,29 @@ Shader "Village/Stylized Water"
 
                 // 3) Tepecik ışığı: düz yüzeye göre güneşe daha çok bakan yamaç açık, daha az bakan koyu
                 float slopeLight = (dot(normalWS, mainLight.direction) - mainLight.direction.y) * _SlopeContrast;
-                water.rgb = lerp(water.rgb, _ShadeColor.rgb, saturate(-slopeLight) * _ShadeColor.a);
-                water.rgb = lerp(water.rgb, _LitColor.rgb, saturate(slopeLight) * _LitColor.a);
-                water.rgb = lerp(water.rgb, _CrestColor.rgb, smoothstep(0.75, 1.0, crestHeight) * _CrestColor.a);
+                if (toon)
+                {
+                    // Toon: yamaçlar ve tepe sert bantlı (dünyadaki objelerin ışık-gölge geçişi gibi)
+                    water.rgb = lerp(water.rgb, _ShadeColor.rgb, ToonStepAA(-slopeLight, _ToonRippleBand) * _ShadeColor.a);
+                    water.rgb = lerp(water.rgb, _LitColor.rgb, ToonStepAA(slopeLight, _ToonRippleBand) * _LitColor.a);
+                    water.rgb = lerp(water.rgb, _CrestColor.rgb, ToonStepAA(crestHeight, _ToonCrest) * _CrestColor.a);
+                }
+                else
+                {
+                    water.rgb = lerp(water.rgb, _ShadeColor.rgb, saturate(-slopeLight) * _ShadeColor.a);
+                    water.rgb = lerp(water.rgb, _LitColor.rgb, saturate(slopeLight) * _LitColor.a);
+                    water.rgb = lerp(water.rgb, _CrestColor.rgb, smoothstep(0.75, 1.0, crestHeight) * _CrestColor.a);
+                }
+
+                // Bulut gölgesi (güneşin cookie'si, bkz. CloudShadows.cs): toon'da güneş ışığına girer
+                half3 cloudShadow = 1.0;
+                #if defined(_LIGHT_COOKIES)
+                    cloudShadow = SampleMainLightCookie(input.positionWS);
+                #endif
+
+                Light toonLight = mainLight;
+                toonLight.color *= cloudShadow;
+                if (toon) water.rgb = ToonWaterLight(water.rgb, toonLight, ambient);
 
                 half3 color = lerp(sceneColor, water.rgb, water.a);
 
@@ -347,14 +393,12 @@ Shader "Village/Stylized Water"
                 half fresnel = 0.02 + 0.98 * pow(1.0 - saturate(dot(normalWS, viewDirWS)), 5.0);
                 color = lerp(color, sky, saturate(fresnel * _ReflectionStrength * 2.0));
 
-                color *= lerp(1.0, mainLight.shadowAttenuation, _ShadowStrength);
-
-                // Bulut gölgesi (güneşin cookie'si, bkz. CloudShadows.cs): hem renk hem güneş yansıması kararır
-                half3 cloudShadow = 1.0;
-                #if defined(_LIGHT_COOKIES)
-                    cloudShadow = SampleMainLightCookie(input.positionWS);
-                #endif
-                color *= cloudShadow;
+                // Gölge ve bulut gölgesi: toon'da ışığın içinde (ToonWaterLight), eskisinde rengi karartır
+                if (!toon)
+                {
+                    color *= lerp(1.0, mainLight.shadowAttenuation, _ShadowStrength);
+                    color *= cloudShadow;
+                }
                 mainLight.shadowAttenuation *= cloudShadow.r;
 
                 // 4) Kıyı köpüğü: temasta ince dolu çizgi + dışa doğru parça parça sönen bant
@@ -382,12 +426,16 @@ Shader "Village/Stylized Water"
                 float3 halfDirWS = SafeNormalize(mainLight.direction + viewDirWS);
                 float specularSoft = pow(saturate(dot(normalWS, halfDirWS)), _SpecularPower);
                 float specularHard = smoothstep(0.3, 0.5, specularSoft);
-                float specular = lerp(specularSoft, specularHard, _SpecularHardness) * _SpecularStrength;
+                float specular = lerp(specularSoft, specularHard, toon ? 1.0 : _SpecularHardness) * _SpecularStrength;
                 color += _SpecularColor.rgb * mainLight.color * specular * mainLight.shadowAttenuation * (1.0 - foam);
 
-                color = lerp(color, lerp(_FoamColor.rgb, _ShoreWaveColor.rgb, saturate(shoreWave - contactLine)), foam);
+                half3 foamColor = lerp(_FoamColor.rgb, _ShoreWaveColor.rgb, saturate(shoreWave - contactLine));
+                if (toon) foamColor = ToonWaterLight(foamColor, toonLight, ambient); // köpük de ışık / gölge alır
+                color = lerp(color, foamColor, foam);
 
-                color = lerp(color, color * _NightTint.rgb, saturate(_NightDarken));
+                // Gece tonu: toon'da su zaten güneş / ortam ışığıyla kararıyor (DayCycle), ışık payı kadar azalır
+                half night = saturate(_NightDarken) * (toon ? 1.0 - _ToonLighting : 1.0);
+                color = lerp(color, color * _NightTint.rgb, night);
                 color = MixFog(color, input.fogFactor);
                 return half4(color, 1);
             }
