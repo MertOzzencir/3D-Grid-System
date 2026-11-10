@@ -11,6 +11,7 @@ public class SaveFile
     public List<EntitySave> bases = new List<EntitySave>();
     public List<EntitySave> placeables = new List<EntitySave>();
     public List<ItemSave> inventory = new List<ItemSave>();
+    public float dayTime = -1f; // gün saati (DayCycle, 0..1); -1 = kayıtta yok (eski kayıt)
 }
 
 // Grid'deki bir obje: ne (id), nerede (hücre), hangi yöne (rotasyon), ve gerekiyorsa kendi durumu

@@ -1,0 +1,1356 @@
+using System.Collections;
+using UnityEngine;
+
+// Pet kedi (2×1: kafa + gövde). Base karolarında gezer, oturur, uyur; eldivenle sevilir.
+//   sol tık kafa → pat-pat (HeadPat)      sol tık kıç → şaplak, kıçını kaldırıp yeri tırmalar (ButtSlap)
+//   sağ tık basılı → göbek modu: sırtüstü döner, eldivenle göbeği okşanır (BellyRub); fazla okşanırsa
+//   arka ayaklarıyla tekmeler (BunnyKick) ve kaçar.
+//   balık (Fish) görüşte ve zıplama menzilinde (elde ya da yerde) → ele zıplama gibi izler, çömelir, zıplar, kapıp
+//   hızlıca yer: besleme barı (CatFeeding) bir dilim dolar. Kediyi balıkla yönetirsin (sol tıkla besleme yok). Midesi doluyken
+//   kıçına vurdukça şaplak barı dolar; her dolunca bir kaka (ağaç tohumu, CatPoop) bırakır, bir dilim gider.
+// Animasyonlar CreatureAnimator ile isimden oynatılır; model gelmeden yer tutucu (iki kutu) kendini kurar ve
+// tepkileri basit kutu hareketleriyle gösterir.
+// Grid'de "yürüyen placeable": build menüsünden konur, kayıtla gelir (ISaveState: kafanın yönü + sevgi), durduğu iki
+// hücreye (gövde = origin, kafa) başka obje konamaz. Sahneye elle konan kedi grid'e girmez, kaydedilmez (sadece test için).
+[RequireComponent(typeof(GridWalker))]
+[DefaultExecutionOrder(60)] // CatRig'den (50) sonra: sırtüstü yere oturtma kemiklerin son pozuyla yapılır
+public class Cat : Creature, ISaveState
+{
+    [Header("Gezinme")]
+    [SerializeField] private int wanderRadius = 5;
+    [SerializeField] private Vector2 idleSeconds = new Vector2(2f, 5f);
+    [SerializeField] private Vector2 sitSeconds = new Vector2(4f, 9f);
+    [SerializeField] private Vector2 sleepSeconds = new Vector2(8f, 16f);
+
+    [Header("Sevgi")]
+    [Tooltip("0..1, sevildikçe artar (ileride davranışları etkileyecek)")]
+    [SerializeField, Range(0f, 1f)] private float affection = 0.5f;
+    [Tooltip("Göbek okşanırken birikir; bu sınırı geçerse tekmeler ve kaçar")]
+    [SerializeField] private float overpetLimit = 6f;
+    [Tooltip("Okşama miktarı (ekran yüksekliği cinsinden mouse yolu) başına aşırı sevilme artışı")]
+    [SerializeField] private float overpetPerRub = 1f;
+    [Tooltip("Aşırı sevilmenin saniyede sönme miktarı")]
+    [SerializeField] private float overpetDecay = 0.4f;
+    [Tooltip("Okşama başına sevgi artışı")]
+    [SerializeField] private float affectionPerRub = 0.02f;
+
+    [Tooltip("Besleme: balık → dilimli bar → sindirince kaka (ağaç tohumu)")]
+    [SerializeField] private CatFeeding feeding = new CatFeeding();
+
+    [Header("Görüş")]
+    [Tooltip("Kedinin önünde eldiveni gördüğü toplam açı (derece). Bunun dışında (arkada, yanda) kalan eldivene bakmaz.")]
+    [SerializeField, Range(30f, 270f)] private float lookFieldOfView = 160f;
+
+    [Header("Tepkiler")]
+    [SerializeField] private float headPatSeconds = 1.2f;
+    [SerializeField] private float buttSlapSeconds = 2.2f;
+    [SerializeField] private float bunnyKickSeconds = 0.9f;
+    [SerializeField] private int runAwayRadius = 8;
+
+    [Header("Oyun: ele zıplama")]
+    [Tooltip("Boş el (base üstünde) görüşe her girdiğinde: kafayla takip → çömelip kıç sallama → elin hücresine zıplama")]
+    [SerializeField] private bool pounceAtHand = true;
+    [Tooltip("Çömelmeden önce eli kafasıyla izleme süresi (saniye, aralıktan rastgele)")]
+    [SerializeField] private Vector2 pounceWatchSeconds = new Vector2(0.6f, 1.2f);
+    [Tooltip("Çömelip kıç sallama süresi (saniye)")]
+    [SerializeField] private float pounceCrouchSeconds = 1.1f;
+    [Tooltip("Süre dolunca el zıplanamaz bir yerdeyse (dolu hücre, çok uzak) bu kadar daha çömelik bekler, sonra vazgeçer")]
+    [SerializeField] private float pounceWaitSeconds = 1.5f;
+    [Tooltip("En uzak zıplama (kafa hücresinden yatay, hücre)")]
+    [SerializeField] private float maxLeapDistance = 3.5f;
+    [Tooltip("Yayın yüksekliği (birim); uzaklık arttıkça biraz artar")]
+    [SerializeField] private float leapHeight = 0.45f;
+    [Tooltip("Zıplama süresi = taban + hücre başına ek (saniye)")]
+    [SerializeField] private float leapBaseSeconds = 0.3f;
+    [SerializeField] private float leapSecondsPerCell = 0.08f;
+    [Tooltip("İnişten sonra çömelip doğrulma süresi (saniye)")]
+    [SerializeField] private float landSeconds = 0.4f;
+    [Tooltip("Bir oyun bitince yenisi için en az bekleme (saniye)")]
+    [SerializeField] private float pounceCooldown = 1f;
+
+    [Header("Oyun: eli yakalama")]
+    [Tooltip("İnişte el, kafanın indiği hücreye yataydan bu kadar yakınsa yakalanır")]
+    [SerializeField] private float catchRadius = 0.7f;
+    [Tooltip("Eldiveni ağzında tutup kemirme süresi; bu sürede oyuncu hiçbir şeyle etkileşemez (kamera serbest)")]
+    [SerializeField] private float caughtSeconds = 3.5f;
+    [Tooltip("Ağız: eldivenin avucunun tutulduğu nokta, kafa kemiğine göre (kedinin eksenlerinde: x sağ, y yukarı, z ileri)")]
+    [SerializeField] private Vector3 mouthOffset = new Vector3(0f, -0.08f, 0.22f);
+    [Tooltip("Eldivenin ağızdaki duruşuna ek dönüş (derece). Varsayılan: parmaklar kedinin sağına ve aşağı sarkar, avuç kedinin yüzüne bakar.")]
+    [SerializeField] private Vector3 mouthGloveRotation = Vector3.zero;
+
+    [Header("Balık yeme")]
+    [Tooltip("Balık kafanın hücresine bu kadar (birim) yakınsa zıplamaz, yürüyüp yer")]
+    [SerializeField] private float nearFishDistance = 1.5f;
+    [Tooltip("Balığı ağzında kemirme süresi (saniye); sonunda balık küçülüp kaybolur")]
+    [SerializeField] private float eatSeconds = 1.2f;
+    [Tooltip("Kemirme temposu (eldivene göre kat): balığı hızlı yer")]
+    [SerializeField] private float eatChewSpeed = 2.2f;
+    [Tooltip("Balığın ağızdaki yeri ve dönüşü (ağız noktasına göre; Play'deyken yeni beslemede görünür)")]
+    [SerializeField] private Vector3 fishMouthOffset = Vector3.zero;
+    [SerializeField] private Vector3 fishMouthRotation = new Vector3(0f, 90f, 0f);
+
+    [Header("Dokunma (el üstündeyken, tuşa basmadan)")]
+    [Tooltip("Elin değdiği yerin içeri göçmesi (birim)")]
+    [SerializeField] private float touchDepth = 0.035f;
+    [Tooltip("Göçmenin yayıldığı yarıçap (birim)")]
+    [SerializeField] private float touchRadius = 0.2f;
+    [Tooltip("El gezinirken yüzeyin gidiş yönüne sürüklenmesi (hız başına), en fazla touchDragMax")]
+    [SerializeField] private float touchDrag = 0.02f;
+    [SerializeField] private float touchDragMax = 0.025f;
+    [Tooltip("Basma / bırakma ve takip yumuşaklığı")]
+    [SerializeField] private float touchSharpness = 12f;
+
+    [Header("Şaplak")]
+    [Tooltip("Kıça şaplakta vurulan nokta jöle gibi titrer. Kedinin materyali 'Village/Creature Jiggle Lit' olmalı.")]
+    [SerializeField] private CreatureJiggle slapJiggle = new CreatureJiggle();
+
+    [Header("Eldiven hareketi")]
+    [SerializeField] private float patLift = 0.15f;
+    [SerializeField] private float patDuration = 0.28f;
+    [SerializeField] private float slapLift = 0.25f;
+    [SerializeField] private float slapDuration = 0.16f;
+
+    [Header("Model")]
+    [Tooltip("Kedi modeli (FBX). Atanırsa yer tutucu yerine kurulur: gözler kafaya, etkileşim bölgeleri kemiklere bağlanır.")]
+    [SerializeField] private GameObject modelPrefab;
+    [Tooltip("Göz shader'ı (Village/Cat Eyes). Referansla tutulur ki build'e girsin.")]
+    [SerializeField] private Shader eyeShader;
+    [Tooltip("Modelin kedi köküne (kafa ile gövde hücresinin ortası, yerde) göre yeri. Origin kafa hücresindeyse +0.5 ileri.")]
+    [SerializeField] private Vector3 modelOffset = new Vector3(0f, 0f, 0.5f);
+    [SerializeField] private Vector3 modelRotation = Vector3.zero;
+    [Tooltip("Açılışta modeli patilerin uçları (leg_*_end) yere değecek kadar indirir; Blender'daki origin yüksekliği önemsiz olur")]
+    [SerializeField] private bool groundToPaws = true;
+    [Tooltip("Mesh'ten kemik collider'ı uydururken yarıçapın alındığı dilim: 0.85 = vertex'lerin %85'i içeride. " +
+             "Collider görselden büyükse düşür, parmaklar mesh'e gömülüyorsa artır.")]
+    [SerializeField, Range(0.5f, 1f)] private float colliderFitPercentile = 0.85f;
+    [Tooltip("Yedek kutu bölgelerin (mesh okunamazsa) genişliği ve yüksekliği")]
+    [SerializeField] private Vector2 bodyZoneSize = new Vector2(0.75f, 0.65f);
+
+    [Header("Yer tutucu (model yokken)")]
+    [SerializeField] private bool buildPlaceholder = true;
+    [SerializeField] private Color placeholderColor = new Color(0.95f, 0.65f, 0.35f);
+
+    private GridWalker walker;
+    private GloveCursor glove;
+    private CatRig rig;
+    private CatEyes eyes;
+    private Renderer bodyRenderer; // gövde (en büyük skinned mesh): şaplak titreşimi buna
+    private Transform visual;     // model ya da yer tutucunun kökü: göbek modunda döner
+    private Transform headBox, bodyBox;
+    private float overpet;
+    private float bellyLift = 0.6f;
+    private readonly System.Collections.Generic.List<Collider> bodyColliders = new System.Collections.Generic.List<Collider>(); // bacak ve kuyruk hariç // sırtüstü dönünce sırt yere otursun diye kaldırma (mesh'ten ölçülür)
+    private Vector3 lastMouse;
+    private bool handInSight;
+    private Transform mouth; // eldivenin ağızda tutulduğu nokta (kafa kemiğinin child'ı)
+
+    // Dokunma çukuru (global shader değerleri, tek el): şu an onu süren kedi
+    private static Cat touchOwner;
+    private static readonly int TouchPointId = Shader.PropertyToID("_TouchPoint");
+    private static readonly int TouchDirId = Shader.PropertyToID("_TouchDir");
+    private static readonly int TouchDragId = Shader.PropertyToID("_TouchDrag");
+    private float touchAmount;
+    private Vector3 touchPoint, touchNormal = Vector3.up, touchDragOffset, lastGlovePoint;
+    private Vector3Int? restoredHeadOffset; // kayıttan: gövde hücresinden kafa hücresine
+    private float lastPounceTime = float.MinValue;
+    private int hoveredZones; // mouse kedinin bölgelerinden birinin üstündeyse > 0 (besleme barı görünür)
+    private Fish fishInSight;  // zıplanabilecek balık (görüşte, menzilde, kedi yiyebilir)
+
+    public GridWalker Walker => walker;
+    public float Affection => affection;
+
+    protected override void Awake()
+    {
+        base.Awake();
+        walker = GetComponent<GridWalker>();
+        if (modelPrefab != null) BuildModel();
+        else if (buildPlaceholder && GetComponentInChildren<CreatureZone>() == null) BuildPlaceholder();
+    }
+
+    // Prosedürel katman ve gözler için ruh hali (durumlar girerken söyler)
+    private void SetMood(CatMood mood)
+    {
+        if (rig != null) rig.Mood = mood;
+        if (eyes != null) eyes.Mood = mood;
+    }
+
+    protected override void Update()
+    {
+        // Base'ler kayıttan yüklenene kadar yerleşmeyi dene
+        if (!walker.IsPlaced)
+        {
+            // Grid'e yerleşen kedi OnPlaced'da yerini alır; sahneye elle konmuşsa (base'ler yüklenene kadar) yakına yerleşir
+            if (PlacedFootprint != null || !walker.TryPlaceNear(transform.position)) return;
+        }
+        if (CurrentState == null) ChooseNext();
+
+        overpet = Mathf.Max(0f, overpet - overpetDecay * Time.deltaTime);
+        bool holdingFish = InteractableController.Instance != null && InteractableController.Instance.Held is Fish;
+        feeding.Tick(this, holdingFish || hoveredZones > 0);
+        base.Update();
+
+        // Kafa ve gözler eldivene bakar: yakındaysa (CatRig / CatEyes kendi mesafesine bakar) ve görüş alanındaysa
+        // Kemirirken bakmaz: eldiven zaten ağzında, kafa ona dönmeye çalışırsa kendi kendini kovalar
+        Transform lookTarget = !(CurrentState is CaughtState) && Glove != null && CanSee(Glove.transform.position) ? Glove.transform : null;
+        // Balığa zıplarken (izleme, çömelme, havada) ya da yürürken kafa ve gözler hep balığa
+        Fish pounceFish = CurrentState is PounceState pounce ? pounce.Fish
+                        : CurrentState is ApproachFishState approach ? approach.Fish : null;
+        if (pounceFish != null) lookTarget = pounceFish.transform;
+        if (rig != null)
+        {
+            rig.LookTarget = lookTarget;
+            rig.ForceLook = pounceFish != null;
+        }
+        if (eyes != null) eyes.LookTarget = lookTarget;
+
+        // Görüşte ve menzilde balık varsa ona zıplar (elden önce: kediyi balıkla yönetirsin). Elden farkı: görüşte kalan
+        // balık da tekrar tetikler (bir tane yedikten sonra yığının kalanına da atlasın); aralık pounceCooldown
+        fishInSight = FindFishInSight();
+        if (fishInSight != null && CanStartPounce(false))
+        {
+            // Bir hücre yakındaysa zıplamaz: yürüyüp (gerekirse) yer
+            if (FishDistance(fishInSight) <= nearFishDistance) ChangeState(new ApproachFishState(this, fishInSight));
+            else ChangeState(new PounceState(this, fishInSight));
+            return;
+        }
+
+        // El görüşe her yeni girdiğinde oyun başlar (görüşte kalan el tekrar tetiklemez)
+        bool wasInSight = handInSight;
+        handInSight = IsHandInSight();
+        if (handInSight && !wasInSight && CanStartPounce(true)) ChangeState(new PounceState(this, null));
+    }
+
+    // Görüş alanında, zıplama menzilinde en yakın balık (kedi yiyebiliyorsa; menzil dışındakini umursamaz)
+    private Fish FindFishInSight()
+    {
+        if (feeding.IsFull || !CanEat || !walker.IsPlaced) return null;
+        Fish best = null;
+        float bestDistance = float.MaxValue;
+        Vector3 head = GridWalker.FeetPosition(walker.HeadCell);
+        foreach (Fish fish in Fish.All)
+        {
+            if (fish == null || !CanSee(fish.transform.position)) continue;
+            Vector3 offset = fish.transform.position - head;
+            offset.y = 0f;
+            float distance = offset.magnitude;
+            if (distance > maxLeapDistance + 0.5f || distance >= bestDistance) continue;
+            best = fish;
+            bestDistance = distance;
+        }
+        return best;
+    }
+
+    // Balığın kafanın hücresinden yatay uzaklığı
+    private float FishDistance(Fish fish)
+    {
+        Vector3 offset = fish.transform.position - GridWalker.FeetPosition(walker.HeadCell);
+        offset.y = 0f;
+        return offset.magnitude;
+    }
+
+    // Balığı yer: besleme barı bir dilim dolar, kopyası ağzına, yığından bir tane gider. Bar doluysa false.
+    private bool EatFish(Fish fish)
+    {
+        if (fish == null || !feeding.TryFeed()) return false;
+        ChangeState(new EatFishState(this, fish.VisualRoot));
+        fish.Eat(); // yığından bir tane (elde ya da yerde)
+        return true;
+    }
+
+    // Balık hâlâ görüşte ve menzilde mi (izlerken / çömelirken)
+    private bool FishStillInSight(Fish fish) => fish != null && FindFishInSight() == fish;
+
+    // İnişte balık kafanın dibinde mi (yakalar)
+    private bool FishInCatchReach(Fish fish)
+    {
+        if (fish == null) return false;
+        Vector3 offset = fish.transform.position - GridWalker.FeetPosition(walker.HeadCell);
+        offset.y = 0f;
+        return offset.magnitude < 1.2f;
+    }
+
+    // Balığa zıplama hücreleri: balığın hücresi boşsa (elde tutulan balık) oraya, doluysa (yerdeki balık) balığın kediye
+    // en yakın boş komşusuna, balığa bakarak
+    private bool TryGetFishLeapTarget(Fish fish, out Vector3Int head, out Vector3Int body)
+    {
+        head = body = default;
+        if (fish == null) return false;
+        Vector3Int cell = Vector3Int.RoundToInt(fish.transform.position);
+        if (walker.IsWalkable(cell)) return TryGetLeapCells(cell, out head, out body);
+
+        var candidates = new System.Collections.Generic.List<Vector3Int>();
+        foreach (Vector3Int direction in new[] { Vector3Int.right, Vector3Int.left, Vector3Int.forward, Vector3Int.back })
+            candidates.Add(cell + direction);
+        candidates.Sort((a, b) => (GridWalker.FeetPosition(a) - transform.position).sqrMagnitude
+                                  .CompareTo((GridWalker.FeetPosition(b) - transform.position).sqrMagnitude));
+        foreach (Vector3Int candidate in candidates)
+        {
+            // Kedinin şu an durduğu hücre de olabilir (zaten dibindeyse yerinde zıplar)
+            if (candidate == walker.HeadCell)
+            {
+                head = walker.HeadCell;
+                body = walker.BodyCell;
+                return true;
+            }
+            if (walker.IsWalkable(candidate) && TryGetLeapCells(candidate, out head, out body)) return true;
+        }
+        return false;
+    }
+
+    // Boş el base üstünde, görüş alanında ve bakma mesafesinde
+    private bool IsHandInSight()
+    {
+        if (Glove == null || !Glove.OnBase || !CanSee(Glove.SurfacePoint)) return false;
+        Vector3 eye = rig != null && rig.Head != null ? rig.Head.position : transform.position;
+        float radius = rig != null ? rig.LookRadius : 3.5f;
+        return Vector3.Distance(Glove.SurfacePoint, eye) < radius;
+    }
+
+    // Sadece gezinirken / beklerken / otururken; uyurken, sevilirken ya da tepki verirken değil.
+    // atHand: ele zıplama oyunu (pounceAtHand ile kapatılabilir); balığa zıplama hep açık
+    private bool CanStartPounce(bool atHand)
+    {
+        if ((atHand && !pounceAtHand) || Time.time - lastPounceTime < pounceCooldown) return false;
+        return CurrentState is WanderState || CurrentState is TimedState timed && timed.Name != "Sleep";
+    }
+
+    // Elin altındaki hücre zıplanabilir mi: boş (base ve placeable yok), altında base, en fazla bir kat fark,
+    // menzil içinde ve kedinin kendi hücreleri değil. Gövde, iniş hücresinin kediye en yakın komşusuna konur
+    // (kedi zıpladığı yöne bakarak iner).
+    private bool TryGetLeapTarget(out Vector3Int head, out Vector3Int body)
+    {
+        head = body = default;
+        if (!handInSight) return false;
+        return TryGetLeapCells(Vector3Int.RoundToInt(Glove.SurfacePoint + Vector3.up * 0.5f), out head, out body);
+    }
+
+    // İniş hücresi (kafa) cell, gövde onun kediye en yakın boş komşusu
+    private bool TryGetLeapCells(Vector3Int cell, out Vector3Int head, out Vector3Int body)
+    {
+        head = body = default;
+        Vector3Int from = walker.HeadCell;
+        if (cell == walker.HeadCell || cell == walker.BodyCell || Mathf.Abs(cell.y - from.y) > 1) return false;
+        if (new Vector2(cell.x - from.x, cell.z - from.z).magnitude > maxLeapDistance) return false;
+        if (!walker.IsWalkable(cell)) return false;
+
+        float best = float.MaxValue;
+        foreach (Vector3Int direction in new[] { Vector3Int.right, Vector3Int.left, Vector3Int.forward, Vector3Int.back })
+        {
+            Vector3Int candidate = cell + direction;
+            if (!walker.IsWalkable(candidate)) continue;
+            float distance = (GridWalker.FeetPosition(candidate) - transform.position).sqrMagnitude;
+            if (distance >= best) continue;
+            best = distance;
+            body = candidate;
+        }
+        if (best == float.MaxValue) return false;
+        head = cell;
+        return true;
+    }
+
+    // Sırtüstüyken her kare: gövde collider'larının en alçak noktası tam yere gelsin (kıvrılma, nefes, okşanırken
+    // kıpırdanma ne olursa olsun sırt yerde). Yükseklik yumuşakça takip edilir.
+    private void LateUpdate()
+    {
+        UpdateTouch();
+
+        // Yakalanmış eldiven ağza oturur (CatRig kemikleri pozladıktan sonra, GloveFingers'tan önce)
+        if (CurrentState is CaughtState && Glove != null)
+        {
+            Transform anchor = mouth != null ? mouth : transform;
+            Glove.FollowCapture(anchor.position, anchor.rotation * Quaternion.Euler(mouthGloveRotation));
+        }
+
+        if (!(CurrentState is BellyState) || visual == null || bodyColliders.Count == 0) return;
+
+        float lowest = float.MaxValue;
+        foreach (Collider body in bodyColliders)
+            if (body != null) lowest = Mathf.Min(lowest, LowestPoint(body));
+        if (lowest == float.MaxValue) return;
+
+        float correction = transform.position.y - lowest; // + ise gömülmüş, - ise havada
+        Vector3 position = visual.localPosition;
+        position.y += correction * (1f - Mathf.Exp(-20f * Time.deltaTime));
+        visual.localPosition = position;
+    }
+
+    // El kedinin üstündeyken (tuşa basmadan; yakalanmış / bottaki el hariç) değdiği yer hafifçe göçer, el gezinirken
+    // yüzey gidiş yönüne sürüklenir (Jiggle.hlsl, global). Basma ve bırakma yumuşak; el kalkınca çukur dolar.
+    // Glove LateUpdate'i (0) bu kareki yüzeyi bulduktan sonra çalışır (Cat: 60).
+    private void UpdateTouch()
+    {
+        GloveCursor g = Glove;
+        bool touching = g != null && !g.IsCaptured && !g.IsRiding && g.SurfaceCollider != null &&
+                        g.SurfaceCollider.transform.IsChildOf(transform) &&
+                        !Input.GetMouseButton(0) && !Input.GetMouseButton(1);
+        if (touching) touchOwner = this;
+        if (touchOwner != this) return;
+
+        float k = 1f - Mathf.Exp(-touchSharpness * Time.deltaTime);
+        if (touching)
+        {
+            Vector3 point = g.SurfacePoint;
+            if (touchAmount <= 0.001f) { touchPoint = point; lastGlovePoint = point; } // yeni dokunuş: atlamasın
+            touchPoint = Vector3.Lerp(touchPoint, point, k);
+            touchNormal = Vector3.Slerp(touchNormal, g.SurfaceNormal, k).normalized;
+
+            // Sürüklenme: elin yüzey boyunca hızı yönünde, sınırlı
+            Vector3 moved = Vector3.ProjectOnPlane(point - lastGlovePoint, touchNormal) / Mathf.Max(Time.deltaTime, 0.0001f);
+            lastGlovePoint = point;
+            touchDragOffset = Vector3.Lerp(touchDragOffset, Vector3.ClampMagnitude(moved * touchDrag, touchDragMax), k);
+        }
+        else touchDragOffset = Vector3.Lerp(touchDragOffset, Vector3.zero, k);
+        touchAmount = Mathf.Lerp(touchAmount, touching ? 1f : 0f, k);
+
+        if (!touching && touchAmount < 0.01f)
+        {
+            touchAmount = 0f;
+            touchOwner = null;
+            Shader.SetGlobalVector(TouchPointId, Vector4.zero); // etkisiz
+            return;
+        }
+        Shader.SetGlobalVector(TouchPointId, new Vector4(touchPoint.x, touchPoint.y, touchPoint.z, touchRadius));
+        Shader.SetGlobalVector(TouchDirId, -touchNormal * (touchDepth * touchAmount));
+        Shader.SetGlobalVector(TouchDragId, touchDragOffset * touchAmount);
+    }
+
+    private static float LowestPoint(Collider body)
+    {
+        Transform t = body.transform;
+        float scale = t.lossyScale.x;
+        switch (body)
+        {
+            case SphereCollider sphere:
+                return t.TransformPoint(sphere.center).y - sphere.radius * scale;
+            case CapsuleCollider capsule:
+                Vector3 center = t.TransformPoint(capsule.center);
+                Vector3 axis = t.TransformDirection(capsule.direction == 0 ? Vector3.right : capsule.direction == 1 ? Vector3.up : Vector3.forward);
+                float half = Mathf.Max(0f, capsule.height * 0.5f - capsule.radius) * scale;
+                return Mathf.Min((center + axis * half).y, (center - axis * half).y) - capsule.radius * scale;
+            default:
+                return body.bounds.min.y;
+        }
+    }
+
+    // Görüş alanı: kafadan hedefe yatay yön, kedinin baktığı yönden en fazla lookFieldOfView/2 sapabilir.
+    // Arkada (ya da tam yanda) kalan eldiveni görmez, ona dönmeye çalışmaz.
+    private bool CanSee(Vector3 point)
+    {
+        Vector3 eye = rig != null && rig.Head != null ? rig.Head.position : transform.position;
+        Vector3 toTarget = Vector3.ProjectOnPlane(point - eye, transform.up);
+        if (toTarget.sqrMagnitude < 0.0001f) return true; // tam tepesinde
+        return Vector3.Angle(transform.forward, toTarget) <= lookFieldOfView * 0.5f;
+    }
+
+    // --- Grid ve kayıt ---
+
+    // Gövde hücresi (origin) + kafa hücresi. Yerleşikken yürüyüşten, yerleşmeden önce kayıttan ya da rotasyondan
+    // (Deg0'da kafa +Z'de). Kafa bir kat yukarıda/aşağıda olabilir (merdiven çıkarken), bu yüzden SO'nun maskesi kullanılmaz.
+    public override GridFootprint GetFootprint()
+    {
+        Vector3Int head = walker != null && walker.IsPlaced ? walker.HeadCell - walker.BodyCell
+                        : restoredHeadOffset ?? GridMaskRotator.RotateOffset(Vector3Int.forward, Rotation);
+        return new GridFootprint(new[] { Vector3Int.zero, head });
+    }
+
+    // Grid'e konunca (build menüsü ya da kayıt): yürüyüş modülü bu iki hücreden başlar
+    public override void OnPlaced(Vector3Int origin)
+    {
+        base.OnPlaced(origin);
+        walker.Place(origin + PlacedFootprint.FilledCells()[1], origin);
+    }
+
+    [System.Serializable]
+    private class SaveState
+    {
+        public Vector3Int head; // gövde hücresinden kafa hücresine
+        public float affection;
+        public int fed;         // besleme barının dolu dilimleri
+        public float slaps;     // şaplak barı
+    }
+
+    public string CaptureState() => JsonUtility.ToJson(new SaveState
+    {
+        head = walker.IsPlaced ? walker.HeadCell - walker.BodyCell : Vector3Int.forward,
+        affection = affection,
+        fed = feeding.Fed,
+        slaps = feeding.Slaps,
+    });
+
+    public void RestoreState(string state)
+    {
+        SaveState saved = JsonUtility.FromJson<SaveState>(state);
+        if (saved == null) return;
+        if (saved.head != Vector3Int.zero) restoredHeadOffset = saved.head;
+        affection = Mathf.Clamp01(saved.affection);
+        feeding.Restore(saved.fed, saved.slaps);
+    }
+
+    // --- Davranış seçimi ---
+
+    private void ChooseNext()
+    {
+        float roll = Random.value;
+        if (roll < 0.45f) ChangeState(new WanderState(this, wanderRadius));
+        else if (roll < 0.7f) ChangeState(new TimedState(this, "Idle", idleSeconds));
+        else if (roll < 0.9f) ChangeState(new TimedState(this, "SitIdle", sitSeconds));
+        else ChangeState(new TimedState(this, "Sleep", sleepSeconds));
+    }
+
+    private GloveCursor Glove => glove != null ? glove : glove = FindFirstObjectByType<GloveCursor>();
+
+    // --- Etkileşim (CreatureZone'dan) ---
+
+    // Yemeğe ara verilmez: yiyorken, göbek modunda, tekmelerken, havadayken ya da eldiven ağzındayken balık almaz
+    private bool CanEat => !(CurrentState is EatFishState || CurrentState is BellyState || CurrentState is BunnyKickState ||
+                             CurrentState is CaughtState || (CurrentState is PounceState pounce && pounce.Airborne));
+
+    public override void OnZoneHover(CreatureZoneType zone, bool entered)
+        => hoveredZones = Mathf.Max(0, hoveredZones + (entered ? 1 : -1));
+
+    public override void OnZoneClicked(CreatureZoneType zone, RaycastHit hit)
+    {
+        if (CurrentState is BellyState || CurrentState is BunnyKickState) return;
+        if (CurrentState is PounceState pounce && pounce.Airborne) return; // havadayken yakalanmaz
+
+        if (zone == CreatureZoneType.Head)
+        {
+            Glove?.PlayPress(patLift, patDuration);
+            affection = Mathf.Clamp01(affection + 0.05f);
+            ChangeState(new ReactionState(this, "HeadPat", headPatSeconds, CatMood.Happy, PlaceholderHeadPat()));
+            // Klip yoksa prosedürel yedek: kafa ezilip yaylanır
+            if (rig != null && Animator != null && !Animator.Has("HeadPat")) rig.PlayHeadPat();
+        }
+        else if (zone == CreatureZoneType.Rear)
+        {
+            Glove?.PlayPress(slapLift, slapDuration);
+            ChangeState(new ReactionState(this, "ButtSlap", buttSlapSeconds, CatMood.Alert, PlaceholderButtSlap()));
+            feeding.OnSlap(this); // midesi doluysa şaplak barı dolar, dolunca sıçar
+            // Gözler pat-pat'teki gibi mutlu kısılır (kuyruk ve nefes Alert'te kalır)
+            if (eyes != null) eyes.Mood = CatMood.Happy;
+            // Vurulan nokta jöle gibi titrer (içeri göçüp sekerek söner); kıç kalkmaz, patiler oynamaz
+            if (bodyRenderer != null) StartCoroutine(slapJiggle.Play(new[] { bodyRenderer }, hit.point, -hit.normal));
+            // Klip yoksa prosedürel yedek: kafa tatlı tatlı sağa sola sallanır
+            if (rig != null && Animator != null && !Animator.Has("ButtSlap")) rig.PlayHeadShake();
+        }
+    }
+
+    public override bool OnZoneHoldBegin(CreatureZoneType zone)
+    {
+        if (CurrentState is BunnyKickState) return false;
+        if (CurrentState is PounceState pounce && pounce.Airborne) return false;
+        lastMouse = Input.mousePosition;
+        ChangeState(new BellyState(this));
+        return true;
+    }
+
+    // Göbek okşama: eldiven kedinin üstündeyken mouse'un katettiği yol okşama sayılır
+    public override bool OnZoneHoldTick(CreatureZoneType zone)
+    {
+        if (!(CurrentState is BellyState)) return false;
+
+        Vector3 mouse = Input.mousePosition;
+        float rub = (mouse - lastMouse).magnitude / Mathf.Max(Screen.height, 1);
+        lastMouse = mouse;
+        if (!IsMouseOverMe()) rub = 0f;
+
+        affection = Mathf.Clamp01(affection + rub * affectionPerRub);
+        overpet += rub * overpetPerRub;
+        if (overpet < overpetLimit) return true;
+
+        // Fazla sevildi: tekmeler, sağ tık bırakılmış sayılır
+        overpet = 0f;
+        ChangeState(new BunnyKickState(this, bunnyKickSeconds));
+        return false;
+    }
+
+    public override void OnZoneHoldEnd(CreatureZoneType zone)
+    {
+        if (CurrentState is BellyState) ChangeState(new ReactionState(this, "RollBack", 0.5f, CatMood.Idle, PlaceholderRoll(false)));
+    }
+
+    private bool IsMouseOverMe()
+    {
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        return Physics.Raycast(ray, out RaycastHit hit) && hit.collider.transform.IsChildOf(transform);
+    }
+
+    // --- Durumlar ---
+
+    // Rastgele yakın bir hücreye yürür, varınca sonraki davranışı seçer
+    private class WanderState : CreatureState<Cat>
+    {
+        private readonly int radius;
+        public WanderState(Cat owner, int radius) : base(owner) { this.radius = radius; }
+
+        public override void Enter()
+        {
+            for (int attempt = 0; attempt < 12; attempt++)
+            {
+                Vector3Int head = owner.walker.HeadCell;
+                var target = head + new Vector3Int(Random.Range(-radius, radius + 1), Random.Range(-1, 2), Random.Range(-radius, radius + 1));
+                if (target == head || !owner.walker.IsWalkable(target)) continue;
+                if (owner.walker.MoveTo(target))
+                {
+                    // Yürüyüş prosedürel; klip varsa (yoksa yok sayılır) Idle'ın kafa bakınması yine kapatılır
+                    owner.Animator?.Play("Walk");
+                    owner.SetMood(CatMood.Walk);
+                    return;
+                }
+            }
+            owner.ChangeState(new TimedState(owner, "Idle", owner.idleSeconds));
+        }
+
+        public override void Tick()
+        {
+            if (!owner.walker.IsMoving) owner.ChooseNext();
+        }
+    }
+
+    // Bir animasyonu belli süre oynatıp sonraki davranışı seçer (Idle, SitIdle, Sleep)
+    private class TimedState : CreatureState<Cat>
+    {
+        private readonly string animation;
+        private readonly float duration;
+        public override string Name => animation;
+
+        public TimedState(Cat owner, string animation, Vector2 seconds) : base(owner)
+        {
+            this.animation = animation;
+            duration = Random.Range(seconds.x, seconds.y);
+        }
+
+        public override void Enter()
+        {
+            owner.walker.Stop();
+            // Klibi olmayan durumlar Idle'a düşer (örn. SitIdle henüz yoksa)
+            bool hasClip = owner.Animator == null || owner.Animator.Has(animation);
+            owner.Animator?.Play(hasClip ? animation : "Idle");
+            owner.SetMood(animation == "Sleep" ? CatMood.Sleep : CatMood.Idle);
+        }
+
+        public override void Tick()
+        {
+            if (owner.StateTime >= duration) owner.ChooseNext();
+        }
+    }
+
+    // Tek seferlik tepki (pat, şaplak, geri dönme): animasyon + yer tutucu hareketi, bitince devam
+    private class ReactionState : CreatureState<Cat>
+    {
+        private readonly string animation;
+        private readonly float duration;
+        private readonly CatMood mood;
+        private readonly IEnumerator placeholder;
+        private Coroutine routine;
+        public override string Name => animation;
+
+        public ReactionState(Cat owner, string animation, float duration, CatMood mood, IEnumerator placeholder) : base(owner)
+        {
+            this.animation = animation;
+            this.duration = duration;
+            this.mood = mood;
+            this.placeholder = placeholder;
+        }
+
+        public override void Enter()
+        {
+            owner.walker.Stop();
+            owner.Animator?.Play(animation, true);
+            owner.SetMood(mood);
+            if (placeholder != null && owner.visual != null) routine = owner.StartCoroutine(placeholder);
+        }
+
+        public override void Tick()
+        {
+            if (owner.StateTime >= duration) owner.ChooseNext();
+        }
+
+        public override void Exit()
+        {
+            if (routine != null) owner.StopCoroutine(routine);
+            owner.ResetPlaceholderPose();
+        }
+    }
+
+    // Ele zıplama oyunu: izle (kafa eli takip eder) → çömel, kıç salla → elin hücresine zıpla → in, doğrul.
+    // Zıplama anında el zıplanamaz bir yerdeyse çömelik bekler (el boş bir hücreye gelirse zıplar), süre dolunca vazgeçer.
+    // Klip yoksa her şey CatRig'de prosedürel; "Crouch" / "Pounce" klipleri gelirse oynar.
+    private class PounceState : CreatureState<Cat>
+    {
+        private enum Phase { Watch, Crouch, Leap, Land }
+        private Phase phase;
+        private float phaseTime;
+        private readonly float watchDuration;
+        private readonly Fish fish; // null: ele zıplama oyunu
+
+        public bool Airborne => phase == Phase.Leap;
+        public Fish Fish => fish != null ? fish : null; // yok edildiyse null
+        public override string Name => $"Pounce.{phase}";
+
+        public PounceState(Cat owner, Fish target) : base(owner)
+        {
+            fish = target;
+            watchDuration = Random.Range(owner.pounceWatchSeconds.x, owner.pounceWatchSeconds.y);
+            if (fish != null) watchDuration *= 0.5f; // balığa daha hevesli
+        }
+
+        // Hedef hâlâ orada mı (el görüşte / balık görüşte ve menzilde)
+        private bool TargetInSight => fish != null ? owner.FishStillInSight(fish) : owner.handInSight;
+
+        public override void Enter()
+        {
+            owner.walker.Stop(); // o anki adım biter, sonra izlemeye başlar
+            owner.Animator?.Play("Idle");
+            owner.SetMood(CatMood.Hunt);
+        }
+
+        public override void Tick()
+        {
+            phaseTime += Time.deltaTime;
+            switch (phase)
+            {
+                case Phase.Watch:
+                    if (owner.walker.IsMoving) { phaseTime = 0f; return; }
+                    if (!TargetInSight) { owner.ChooseNext(); return; } // hedef gitti, ilgisi dağıldı
+                    if (phaseTime >= watchDuration) Begin(Phase.Crouch);
+                    break;
+
+                case Phase.Crouch:
+                    if (owner.rig != null)
+                    {
+                        owner.rig.Crouch = 1f;
+                        owner.rig.Wiggle = phaseTime > owner.pounceCrouchSeconds * 0.35f ? 1f : 0f;
+                    }
+                    if (phaseTime < owner.pounceCrouchSeconds) return;
+                    Vector3Int head = default, body = default;
+                    bool target = fish != null
+                        ? TargetInSight && owner.TryGetFishLeapTarget(fish, out head, out body)
+                        : owner.TryGetLeapTarget(out head, out body);
+                    if (target && Leap(head, body)) return;
+                    if (phaseTime >= owner.pounceCrouchSeconds + owner.pounceWaitSeconds) owner.ChooseNext();
+                    break;
+
+                case Phase.Leap:
+                    if (owner.rig != null) owner.rig.LeapProgress = owner.walker.JumpProgress;
+                    if (owner.walker.IsJumping) return;
+                    // Balık hâlâ dibindeyse kapıp yer
+                    if (fish != null && owner.FishInCatchReach(fish) && owner.EatFish(fish)) return;
+                    // El hâlâ oradaysa yakaladı: ağzına alıp kemirir
+                    if (fish == null && owner.HandInCatchReach())
+                    {
+                        owner.ChangeState(new CaughtState(owner));
+                        return;
+                    }
+                    // İniş: kısa bir çömelme (yaylanma), sonra doğrulur
+                    if (owner.rig != null)
+                    {
+                        owner.rig.LeapProgress = -1f;
+                        owner.rig.Crouch = 0.7f;
+                        owner.rig.Wiggle = 0f;
+                    }
+                    Begin(Phase.Land);
+                    break;
+
+                case Phase.Land:
+                    if (owner.rig != null && phaseTime > 0.12f) owner.rig.Crouch = 0f;
+                    if (phaseTime >= owner.landSeconds) owner.ChangeState(new TimedState(owner, "Idle", owner.idleSeconds));
+                    break;
+            }
+        }
+
+        private void Begin(Phase next)
+        {
+            phase = next;
+            phaseTime = 0f;
+            if (next == Phase.Crouch) owner.Animator?.Play("Crouch");
+        }
+
+        // İniş hücreleri kalkıştan önce grid'de doldurulur (GridWalker.JumpTo); doldurulamazsa zıplamaz
+        private bool Leap(Vector3Int head, Vector3Int body)
+        {
+            Vector3Int from = owner.walker.HeadCell;
+            float distance = new Vector2(head.x - from.x, head.z - from.z).magnitude;
+            if (!owner.walker.JumpTo(head, body, owner.leapBaseSeconds + distance * owner.leapSecondsPerCell,
+                                     owner.leapHeight + distance * 0.06f)) return false;
+            owner.Animator?.Play("Pounce", true);
+            if (owner.rig != null)
+            {
+                owner.rig.Wiggle = 0f;
+                owner.rig.LeapProgress = 0f;
+            }
+            Begin(Phase.Leap);
+            return true;
+        }
+
+        public override void Exit()
+        {
+            owner.lastPounceTime = Time.time;
+            if (owner.rig == null) return;
+            owner.rig.Crouch = 0f;
+            owner.rig.Wiggle = 0f;
+            owner.rig.LeapProgress = -1f;
+        }
+    }
+
+    // Eli yakaladı: eldiven ağzında (GloveCursor.BeginCapture, her kare Cat.LateUpdate ağza oturtur), kedi çömelik
+    // ön patileriyle sarılıp kemirir, arada kafasını sallar. Bu sürede oyuncu girişi kilitli (InputManager.SetLocked),
+    // kamera serbest. Süre dolunca bırakır; eldiven yumuşakça mouse'a döner. Klip ("ChewGlove") gelirse o oynar.
+    private class CaughtState : CreatureState<Cat>
+    {
+        public CaughtState(Cat owner) : base(owner) { }
+
+        public override void Enter()
+        {
+            owner.walker.Stop();
+            owner.Animator?.Play("ChewGlove");
+            owner.SetMood(CatMood.Hunt);
+            if (owner.eyes != null) owner.eyes.Mood = CatMood.Happy; // keyifli, gözler kısık
+            if (owner.rig != null)
+            {
+                owner.rig.Crouch = 0.8f;
+                owner.rig.Chew = true;
+            }
+            InputManager.SetLocked(owner, true);
+            owner.Glove?.BeginCapture();
+        }
+
+        public override void Tick()
+        {
+            if (owner.StateTime >= owner.caughtSeconds) owner.ChangeState(new TimedState(owner, "Idle", owner.idleSeconds));
+        }
+
+        public override void Exit()
+        {
+            owner.ReleaseGlove();
+            owner.lastPounceTime = Time.time;
+            if (owner.rig == null) return;
+            owner.rig.Chew = false;
+            owner.rig.Crouch = 0f;
+        }
+    }
+
+    // Yakındaki balığa (nearFishDistance) zıplamadan: ağzının dibindeyse hemen yer, değilse balığın yanına yürüyüp yer.
+    // Balık giderse ya da ulaşamazsa (yol yok, süre doldu) vazgeçer.
+    private class ApproachFishState : CreatureState<Cat>
+    {
+        private const float GiveUpSeconds = 3f;
+        private readonly Fish fish;
+        private bool walking;
+
+        public ApproachFishState(Cat owner, Fish target) : base(owner) { fish = target; }
+
+        public Fish Fish => fish != null ? fish : null; // yok edildiyse null
+
+        public override void Tick()
+        {
+            if (fish == null || owner.StateTime > GiveUpSeconds) { owner.ChooseNext(); return; }
+            if (owner.FishInCatchReach(fish))
+            {
+                if (owner.walker.IsMoving) owner.walker.Stop(); // o anki adım biter
+                else if (!owner.EatFish(fish)) owner.ChooseNext();
+                return;
+            }
+            if (walking)
+            {
+                if (!owner.walker.IsMoving) owner.ChooseNext(); // vardı ama balık kaçtı
+                return;
+            }
+            // Balığın yanına (balığın hücresi boşsa oraya): zıplamadaki gibi kediye en yakın boş komşu
+            if (!owner.TryGetFishLeapTarget(fish, out Vector3Int head, out _) || !owner.walker.MoveTo(head))
+            {
+                owner.ChooseNext();
+                return;
+            }
+            walking = true;
+            owner.Animator?.Play("Walk");
+            owner.SetMood(CatMood.Walk);
+        }
+    }
+
+    // Balık yeme: eldiveni kemirmenin kısa ve hızlı hali. Balığın görünüşünün kopyası ağızda durur, kedi çömelip hızlı
+    // hızlı kemirir (rig.ChewTimeScale), sürenin sonunda balık küçülüp kaybolur. Giriş kilitlenmez. Klip ("EatFish")
+    // gelirse o oynar.
+    private class EatFishState : CreatureState<Cat>
+    {
+        private const float ShrinkSeconds = 0.25f;
+        private readonly Transform source;
+        private Transform fish;
+        private Vector3 fishScale;
+
+        public EatFishState(Cat owner, Transform fishVisual) : base(owner) { source = fishVisual; }
+
+        public override void Enter()
+        {
+            owner.walker.Stop();
+            owner.Animator?.Play("EatFish");
+            owner.SetMood(CatMood.Hunt);
+            if (owner.eyes != null) owner.eyes.Mood = CatMood.Happy;
+            if (owner.rig != null)
+            {
+                owner.rig.Crouch = 0.8f;
+                owner.rig.Chew = true;
+                owner.rig.ChewTimeScale = owner.eatChewSpeed;
+            }
+            if (source == null) return;
+            Transform mouth = owner.mouth != null ? owner.mouth : owner.transform;
+            // Elindeki balığın boyunda ağza (dünya ölçeği korunur)
+            fish = Instantiate(source.gameObject).transform;
+            fish.name = "Eaten Fish";
+            fish.SetParent(mouth, true);
+            fish.SetLocalPositionAndRotation(owner.fishMouthOffset, Quaternion.Euler(owner.fishMouthRotation));
+            fishScale = fish.localScale;
+        }
+
+        public override void Tick()
+        {
+            float left = owner.eatSeconds - owner.StateTime;
+            if (fish != null && left < ShrinkSeconds)
+                fish.localScale = fishScale * Mathf.Clamp01(left / ShrinkSeconds);
+            if (left <= 0f) owner.ChangeState(new TimedState(owner, "Idle", owner.idleSeconds));
+        }
+
+        public override void Exit()
+        {
+            if (fish != null) Destroy(fish.gameObject);
+            if (owner.rig == null) return;
+            owner.rig.Chew = false;
+            owner.rig.Crouch = 0f;
+            owner.rig.ChewTimeScale = 1f;
+        }
+    }
+
+    // Göbek modu: sırtüstü, sağ tık basılı oldukça okşanır
+    private class BellyState : CreatureState<Cat>
+    {
+        private Coroutine routine;
+        public BellyState(Cat owner) : base(owner) { }
+
+        public override void Enter()
+        {
+            owner.walker.Stop();
+            owner.Animator?.Play("RollToBelly");
+            owner.SetMood(CatMood.Happy);
+            if (owner.rig != null) owner.rig.BellyUp = true; // gövde karna doğru kıvrılır, kafa yerden kalkar
+            // Klip yoksa: model (ya da yer tutucu) bütün olarak sırtüstü döner
+            if (owner.visual != null && (owner.Animator == null || !owner.Animator.Has("RollToBelly")))
+                routine = owner.StartCoroutine(owner.PlaceholderRoll(true));
+        }
+
+        public override void Tick()
+        {
+            // Dönme bitince göbek açık bekleme; okşanıyorsa okşanma animasyonu
+            if (owner.StateTime > 0.5f) owner.Animator?.Play(owner.IsMouseOverMe() ? "BellyRub" : "BellyIdle");
+        }
+
+        public override void Exit()
+        {
+            if (owner.rig != null) owner.rig.BellyUp = false;
+            if (routine != null) owner.StopCoroutine(routine);
+        }
+    }
+
+    // Fazla sevildi: arka ayaklarla tekme, sonra uzağa kaçar
+    private class BunnyKickState : CreatureState<Cat>
+    {
+        private readonly float duration;
+        private Coroutine routine;
+        public BunnyKickState(Cat owner, float duration) : base(owner) { this.duration = duration; }
+
+        public override void Enter()
+        {
+            owner.Animator?.Play("BunnyKick", true);
+            owner.SetMood(CatMood.Angry);
+            if (owner.visual != null) routine = owner.StartCoroutine(owner.PlaceholderBunnyKick());
+        }
+
+        public override void Tick()
+        {
+            if (owner.StateTime < duration) return;
+            owner.ResetPlaceholderPose();
+            owner.ChangeState(new WanderState(owner, owner.runAwayRadius)); // kaçış
+        }
+
+        public override void Exit()
+        {
+            if (routine != null) owner.StopCoroutine(routine);
+            owner.ResetPlaceholderPose();
+        }
+    }
+
+    // --- Gerçek model ---
+
+    // Modeli yerleştirir; gözleri kafa kemiğine takar (FBX'te kökte geliyorlar), etkileşim bölgelerini kemiklere bağlar
+    // (sırtüstü dönünce bölgeler de döner), animasyon köprüsünü, prosedürel katmanı ve gözleri kurar.
+    private void BuildModel()
+    {
+        visual = new GameObject("Visual").transform;
+        visual.SetParent(transform, false);
+
+        Transform model = Instantiate(modelPrefab, visual).transform;
+        model.localPosition = modelOffset;
+        model.localRotation = Quaternion.Euler(modelRotation);
+        if (groundToPaws) GroundToPaws(model);
+
+        Transform head = FindBone(model, "Head");
+        Renderer leftEye = AttachToBone(FindBone(model, "Left_Eyes"), head);
+        Renderer rightEye = AttachToBone(FindBone(model, "Right_Eyes"), head);
+
+        // Collider'lar mesh'ten ölçülür (kemik başına kapsül/küre); olmazsa kaba yedek kutular
+        if (!BuildFittedColliders(model))
+        {
+            AddHeadZone(head, FindBone(model, "Head_end"));
+            AddBodyZone(FindBone(model, "Root_BottomBody"), FindBone(model, "MiddleBody"), CreatureZoneType.Rear);
+            AddBodyZone(FindBone(model, "MiddleBody"), FindBone(model, "UpperBody"), CreatureZoneType.Body);
+        }
+
+        CreatureAnimator creatureAnimator = GetComponent<CreatureAnimator>();
+        if (creatureAnimator == null) creatureAnimator = gameObject.AddComponent<CreatureAnimator>();
+        creatureAnimator.Setup(model.GetComponentInChildren<UnityEngine.Animator>());
+        SetAnimator(creatureAnimator);
+
+        rig = GetComponent<CatRig>();
+        if (rig == null) rig = gameObject.AddComponent<CatRig>();
+        rig.Setup(transform, model);
+
+        eyes = GetComponent<CatEyes>();
+        if (eyes == null) eyes = gameObject.AddComponent<CatEyes>();
+        eyes.Setup(transform, head, leftEye, rightEye, eyeShader);
+
+        mouth = CreateMouth(head != null ? head : transform);
+    }
+
+    // Ağız noktası: kafaya göre mouthOffset (kedinin eksenlerinde, rest pozunda). Yönü: parmaklar (Z) kedinin sağına ve
+    // aşağı, avuç (Y) kedinin yüzüne doğru (geri) bakar.
+    private Transform CreateMouth(Transform parent)
+    {
+        var anchor = new GameObject("Mouth").transform;
+        anchor.SetParent(parent, false);
+        anchor.position = parent.position + transform.rotation * mouthOffset;
+        Vector3 fingers = (transform.right - transform.up * 0.6f).normalized;
+        anchor.rotation = Quaternion.LookRotation(fingers, -transform.forward);
+        return anchor;
+    }
+
+    private void OnDisable()
+    {
+        // Kemirirken kedi silinirse / kapanırsa eldiven ve giriş takılı kalmasın
+        if (CurrentState is CaughtState) ReleaseGlove();
+    }
+
+    private void ReleaseGlove()
+    {
+        Glove?.EndCapture();
+        InputManager.SetLocked(this, false);
+    }
+
+    // İnişte el kafanın indiği hücrede mi (boş el, base üstünde)
+    private bool HandInCatchReach()
+    {
+        if (Glove == null || !Glove.OnBase) return false;
+        Vector3 offset = Glove.SurfacePoint - GridWalker.FeetPosition(walker.HeadCell);
+        offset.y = 0f;
+        return offset.magnitude < catchRadius;
+    }
+
+    // En alttaki pati ucunu (rest pozunda) kedi kökünün yüksekliğine (yer) indirir
+    private void GroundToPaws(Transform model)
+    {
+        float lowest = float.MaxValue;
+        foreach (Transform t in model.GetComponentsInChildren<Transform>(true))
+            if (t.name.StartsWith("leg_") && t.name.EndsWith("_end")) lowest = Mathf.Min(lowest, t.position.y);
+        if (lowest == float.MaxValue) return;
+
+        model.position += Vector3.up * (transform.position.y - lowest);
+    }
+
+    private static Transform FindBone(Transform model, string boneName)
+    {
+        foreach (Transform t in model.GetComponentsInChildren<Transform>(true))
+            if (t.name == boneName) return t;
+        Debug.LogWarning($"Cat: modelde '{boneName}' bulunamadı", model);
+        return null;
+    }
+
+    private static Renderer AttachToBone(Transform part, Transform bone)
+    {
+        if (part == null) return null;
+        if (bone != null) part.SetParent(bone, true);
+        return part.GetComponent<Renderer>();
+    }
+
+    // Mesh'ten collider: rest pozu bir kez fırınlanır, her vertex en çok bağlı olduğu kemiğe atanır.
+    // Her kemiğin vertex bulutuna kapsül (neredeyse yuvarlaksa küre) uydurulur: eksen = bulutun uzanma yönü (PCA),
+    // yarıçap = eksene uzaklıkların collider Fit Percentile dilimi (taşkın birkaç vertex şişirmesin).
+    // Collider'lar kemiklerin child'ı: animasyonu, yürüyüşü, sırtüstü dönmeyi her karede kendiliğinden takip eder.
+    private bool BuildFittedColliders(Transform model)
+    {
+        SkinnedMeshRenderer skin = null;
+        foreach (SkinnedMeshRenderer candidate in model.GetComponentsInChildren<SkinnedMeshRenderer>())
+            if (skin == null || candidate.sharedMesh.vertexCount > skin.sharedMesh.vertexCount) skin = candidate;
+        bodyRenderer = skin;
+        if (skin == null || skin.sharedMesh == null || skin.bones.Length == 0) return false;
+
+        Mesh mesh = skin.sharedMesh;
+        if (!mesh.isReadable)
+        {
+            Debug.LogWarning("Cat: kedi mesh'i okunamıyor; FBX import ayarlarında Model → Read/Write'ı aç. Kaba kutu collider'lar kullanılıyor.", this);
+            return false;
+        }
+        var baked = new Mesh();
+        skin.BakeMesh(baked, true);
+        Vector3[] vertices = baked.vertices;
+        BoneWeight[] weights = mesh.boneWeights;
+        Destroy(baked);
+        if (weights.Length != vertices.Length) return false;
+
+        // Kemik → dünyadaki vertex'leri. Breath (karın) MiddleBody'ye sayılır: karın ayrı collider olmasın.
+        Transform[] bones = skin.bones;
+        Transform middle = System.Array.Find(bones, b => b != null && b.name == "MiddleBody");
+        var groups = new System.Collections.Generic.Dictionary<Transform, System.Collections.Generic.List<Vector3>>();
+        Transform skinTransform = skin.transform;
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            Transform bone = bones[weights[i].boneIndex0];
+            if (bone == null) continue;
+            if (bone.name == "Breath" && middle != null) bone = middle;
+            if (!groups.TryGetValue(bone, out var list)) groups[bone] = list = new System.Collections.Generic.List<Vector3>();
+            list.Add(skinTransform.position + skinTransform.rotation * vertices[i]);
+        }
+
+        // Sırtın yerden yüksekliği: ters dönünce sırt tam yere otursun
+        float backTop = 0f;
+        foreach (var pair in groups)
+        {
+            string boneName = pair.Key.name;
+            if (boneName != "Root_BottomBody" && boneName != "MiddleBody" && boneName != "UpperBody") continue;
+            foreach (Vector3 p in pair.Value) backTop = Mathf.Max(backTop, p.y - transform.position.y);
+        }
+        if (backTop > 0.05f) bellyLift = backTop;
+
+        int built = 0;
+        foreach (var pair in groups)
+            if (pair.Value.Count >= 12 && FitCollider(pair.Key, pair.Value)) built++;
+        return built > 0;
+    }
+
+    private bool FitCollider(Transform bone, System.Collections.Generic.List<Vector3> points)
+    {
+        // Ağırlık merkezi ve uzanma yönü (kovaryansın en büyük öz vektörü, kuvvet yinelemesiyle)
+        Vector3 center = Vector3.zero;
+        foreach (Vector3 p in points) center += p;
+        center /= points.Count;
+
+        float xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+        foreach (Vector3 p in points)
+        {
+            Vector3 d = p - center;
+            xx += d.x * d.x; xy += d.x * d.y; xz += d.x * d.z;
+            yy += d.y * d.y; yz += d.y * d.z; zz += d.z * d.z;
+        }
+        Vector3 axis = new Vector3(1f, 0.7f, 0.3f).normalized;
+        for (int iteration = 0; iteration < 24; iteration++)
+        {
+            axis = new Vector3(xx * axis.x + xy * axis.y + xz * axis.z,
+                               xy * axis.x + yy * axis.y + yz * axis.z,
+                               xz * axis.x + yz * axis.y + zz * axis.z);
+            if (axis.sqrMagnitude < 1e-12f) { axis = Vector3.up; break; }
+            axis.Normalize();
+        }
+
+        // Eksen boyunca uzanma ve eksenden uzaklıklar
+        float min = float.MaxValue, max = float.MinValue;
+        var radial = new float[points.Count];
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector3 d = points[i] - center;
+            float along = Vector3.Dot(d, axis);
+            min = Mathf.Min(min, along);
+            max = Mathf.Max(max, along);
+            radial[i] = (d - axis * along).magnitude;
+        }
+        System.Array.Sort(radial);
+        float radius = Mathf.Max(0.02f, radial[Mathf.Clamp(Mathf.RoundToInt(radial.Length * colliderFitPercentile) - 1, 0, radial.Length - 1)]);
+        float length = max - min;
+        Vector3 middlePoint = center + axis * ((min + max) * 0.5f);
+
+        var zone = new GameObject($"{bone.name} Collider");
+        zone.transform.SetParent(bone, false);
+        zone.transform.SetPositionAndRotation(middlePoint, Quaternion.LookRotation(axis, Mathf.Abs(Vector3.Dot(axis, transform.up)) > 0.95f ? transform.forward : transform.up));
+        float scale = Mathf.Max(bone.lossyScale.x, 0.0001f);
+
+        // Neredeyse yuvarlak (kafa gibi): küre; uzunsa kapsül
+        if (length < radius * 2.6f)
+        {
+            var sphere = zone.AddComponent<SphereCollider>();
+            sphere.radius = Mathf.Max(radius, length * 0.5f) / scale;
+        }
+        else
+        {
+            var capsule = zone.AddComponent<CapsuleCollider>();
+            capsule.direction = 2; // yerel Z = eksen
+            capsule.radius = radius / scale;
+            capsule.height = Mathf.Max(length, radius * 2f) / scale;
+        }
+
+        zone.AddComponent<CreatureZone>().Setup(ZoneForBone(bone.name), this);
+        if (!bone.name.StartsWith("leg") && !bone.name.StartsWith("tail")) bodyColliders.Add(zone.GetComponent<Collider>());
+        return true;
+    }
+
+    // Kafa → kafa bölgesi; kalça ve kuyruk → kıç bölgesi (şaplak); gerisi gövde
+    private static CreatureZoneType ZoneForBone(string boneName)
+    {
+        if (boneName == "Head") return CreatureZoneType.Head;
+        if (boneName == "Root_BottomBody" || boneName.StartsWith("tail")) return CreatureZoneType.Rear;
+        return CreatureZoneType.Body;
+    }
+
+    // Kafa: kafa kemiğinden ucuna uzanan küre
+    private void AddHeadZone(Transform head, Transform headEnd)
+    {
+        if (head == null || headEnd == null) return;
+        var zone = new GameObject("Head Zone");
+        zone.transform.SetParent(head, false);
+        zone.transform.position = (head.position + headEnd.position) * 0.5f;
+        var sphere = zone.AddComponent<SphereCollider>();
+        sphere.radius = Vector3.Distance(head.position, headEnd.position) * 0.55f / Mathf.Max(head.lossyScale.x, 0.0001f);
+        zone.AddComponent<CreatureZone>().Setup(CreatureZoneType.Head, this);
+    }
+
+    // Gövde parçası: iki kemik arasında, gövdeyle aynı yönde kutu
+    private void AddBodyZone(Transform from, Transform to, CreatureZoneType type)
+    {
+        if (from == null || to == null) return;
+        Vector3 axis = to.position - from.position;
+        var zone = new GameObject($"{type} Zone");
+        zone.transform.SetParent(from, false);
+        zone.transform.SetPositionAndRotation((from.position + to.position) * 0.5f, Quaternion.LookRotation(axis, transform.up));
+        var box = zone.AddComponent<BoxCollider>();
+        float scale = Mathf.Max(from.lossyScale.x, 0.0001f);
+        box.size = new Vector3(bodyZoneSize.x, bodyZoneSize.y, axis.magnitude + bodyZoneSize.x * 0.3f) / scale;
+        zone.AddComponent<CreatureZone>().Setup(type, this);
+    }
+
+#if UNITY_EDITOR
+    // Modelin FBX'indeki bütün animasyon kliplerini animasyon köprüsünün listesine yazar.
+    // Döngüler: Idle, Walk, SitIdle, Sleep, BellyIdle, BellyRub; diğerleri tek sefer.
+    [ContextMenu("Kedi: klipleri modelden doldur")]
+    private void FillClipsFromModel()
+    {
+        if (modelPrefab == null)
+        {
+            Debug.LogWarning("Önce Model Prefab'ı ata", this);
+            return;
+        }
+
+        string path = UnityEditor.AssetDatabase.GetAssetPath(modelPrefab);
+        var clips = new System.Collections.Generic.List<AnimationClip>();
+        foreach (Object asset in UnityEditor.AssetDatabase.LoadAllAssetsAtPath(path))
+            if (asset is AnimationClip clip && !clip.name.StartsWith("__preview__")) clips.Add(clip);
+
+        var loops = new System.Collections.Generic.HashSet<string> { "Idle", "Walk", "SitIdle", "Sleep", "BellyIdle", "BellyRub" };
+        CreatureAnimator creatureAnimator = GetComponent<CreatureAnimator>();
+        if (creatureAnimator == null) creatureAnimator = UnityEditor.Undo.AddComponent<CreatureAnimator>(gameObject);
+        UnityEditor.Undo.RecordObject(creatureAnimator, "Kedi klipleri");
+        creatureAnimator.EditorSetClips(clips.ToArray(), loops.Contains);
+        UnityEditor.EditorUtility.SetDirty(creatureAnimator);
+        Debug.Log($"Cat: {clips.Count} klip yazıldı: {string.Join(", ", clips.ConvertAll(c => c.name))}", this);
+    }
+#endif
+
+    // --- Yer tutucu (model yokken): iki kutu + bölgeler ---
+
+    private void BuildPlaceholder()
+    {
+        visual = new GameObject("Placeholder Visual").transform;
+        visual.SetParent(transform, false);
+
+        bodyBox = MakeBox("Body (Rear Zone)", new Vector3(0f, 0.32f, -0.3f), new Vector3(0.65f, 0.55f, 1.2f), CreatureZoneType.Rear);
+        headBox = MakeBox("Head (Head Zone)", new Vector3(0f, 0.55f, 0.55f), new Vector3(0.5f, 0.45f, 0.45f), CreatureZoneType.Head);
+    }
+
+    private Transform MakeBox(string boxName, Vector3 position, Vector3 size, CreatureZoneType zone)
+    {
+        GameObject box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        box.name = boxName;
+        box.transform.SetParent(visual, false);
+        box.transform.localPosition = position;
+        box.transform.localScale = size;
+        box.GetComponent<Renderer>().material.color = placeholderColor;
+        box.AddComponent<CreatureZone>().Setup(zone, this);
+        return box.transform;
+    }
+
+    private void ResetPlaceholderPose()
+    {
+        if (visual == null) return;
+        visual.localRotation = Quaternion.identity;
+        visual.localPosition = Vector3.zero;
+        if (headBox != null) headBox.localScale = new Vector3(0.5f, 0.45f, 0.45f);
+        if (bodyBox != null) bodyBox.localRotation = Quaternion.identity;
+    }
+
+    // Pat-pat: kafa ezilip yaylanır
+    private IEnumerator PlaceholderHeadPat()
+    {
+        if (headBox == null) yield break; // modelde prosedürel katman yapıyor
+        Vector3 rest = new Vector3(0.5f, 0.45f, 0.45f);
+        for (float t = 0f; t < 0.6f; t += Time.deltaTime)
+        {
+            float squash = Mathf.Sin(t / 0.6f * Mathf.PI) * Mathf.Exp(-t * 3f) * 0.35f;
+            headBox.localScale = new Vector3(rest.x * (1f + squash), rest.y * (1f - squash), rest.z * (1f + squash));
+            yield return null;
+        }
+        headBox.localScale = rest;
+    }
+
+    // Şaplak: kıç havaya kalkar, gövde ileri geri "tırmalama" ritmiyle sallanır
+    private IEnumerator PlaceholderButtSlap()
+    {
+        if (bodyBox == null) yield break;
+        for (float t = 0f; t < buttSlapSeconds; t += Time.deltaTime)
+        {
+            float raise = Mathf.Min(1f, t / 0.25f) * Mathf.Min(1f, (buttSlapSeconds - t) / 0.3f);
+            float knead = Mathf.Sin(t * 18f) * 3f * raise;
+            bodyBox.localRotation = Quaternion.Euler(-20f * raise + knead, 0f, 0f);
+            yield return null;
+        }
+        bodyBox.localRotation = Quaternion.identity;
+    }
+
+    // Sırtüstü dönme (ve geri)
+    private IEnumerator PlaceholderRoll(bool toBelly)
+    {
+        Quaternion from = visual.localRotation;
+        Quaternion to = toBelly ? Quaternion.Euler(0f, 0f, 180f) : Quaternion.identity;
+        // Collider'lar varsa sırtüstü yüksekliği her kare yere oturtma belirler (LateUpdate); bu rutin sadece döndürür
+        bool moveHeight = !toBelly || bodyColliders.Count == 0;
+        Vector3 lift = toBelly ? Vector3.up * bellyLift : Vector3.zero;
+        Vector3 startPosition = visual.localPosition;
+        for (float t = 0f; t < 0.45f; t += Time.deltaTime)
+        {
+            float k = Mathf.SmoothStep(0f, 1f, t / 0.45f);
+            visual.localRotation = Quaternion.Slerp(from, to, k);
+            if (moveHeight) visual.localPosition = Vector3.Lerp(startPosition, lift, k);
+            yield return null;
+        }
+        visual.localRotation = to;
+        if (moveHeight) visual.localPosition = lift;
+    }
+
+    // Tekme: sırtüstüyken hızlı titrer, sonra döner
+    private IEnumerator PlaceholderBunnyKick()
+    {
+        // Yer tutucuda gövde kutusu, modelde bütün model titrer (klip gelene kadar)
+        Vector3 rest = visual.localPosition;
+        for (float t = 0f; t < bunnyKickSeconds; t += Time.deltaTime)
+        {
+            float shake = Mathf.Sin(t * 40f);
+            if (bodyBox != null) bodyBox.localRotation = Quaternion.Euler(shake * 12f, 0f, 0f);
+            else visual.localPosition = rest + Vector3.forward * (shake * 0.05f);
+            yield return null;
+        }
+        visual.localPosition = rest;
+    }
+}

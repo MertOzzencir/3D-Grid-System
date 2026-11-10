@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fca9e232c77ebe1449c1bbd8e3cfff7c, type: 3}
+  m_Name: Cat
+  m_EditorClassIdentifier: Assembly-CSharp::GridPlaceableSO
+  Name: Cat
+  Icon: {fileID: 21300000, guid: 9c63b51755ec8c845b857cc73a35d606, type: 3}
+  saveId: 
+  size: {x: 1, y: 1, z: 2}
+  layers:
+  - cells: 0101
+  layoutSize: {x: 1, y: 1, z: 2}
+  legacySize: {x: 0, y: 0}
+  legacyMask: 
+  Prefab: {fileID: 4565040748264274294, guid: 671bfa39d9b0a6c4c84a3ba620df6727, type: 3}

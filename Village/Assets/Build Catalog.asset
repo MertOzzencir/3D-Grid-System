@@ -13,6 +13,12 @@ MonoBehaviour:
   m_Name: Build Catalog
   m_EditorClassIdentifier: Assembly-CSharp::BuildCatalogSO
   Categories:
+  - Name: Cages
+    Items:
+    - {fileID: 11400000, guid: d5d479f84e134644af4dc3a27ceb6a3c, type: 2}
+  - Name: Humans
+    Items:
+    - {fileID: 11400000, guid: 0d8236bfbf8f402eb2a5e8962f084f10, type: 2}
   - Name: 'Wood '
     Items:
     - {fileID: 11400000, guid: 5f5daab105376b0469679cbd768b4f69, type: 2}

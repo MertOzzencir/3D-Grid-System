@@ -1,0 +1,92 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &5535817674965956897
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6858773253790983737}
+  - component: {fileID: 1901678103772131005}
+  m_Layer: 0
+  m_Name: Fish
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6858773253790983737
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5535817674965956897}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1901678103772131005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5535817674965956897}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d2a68ba0e7741ceb093906b0cf0d770, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Fish
+  data: {fileID: 11400000, guid: de94be7d129949f3aeb560b50f7b11b9, type: 2}
+  rotation: 1
+  followSpeed: 14
+  model: {fileID: 919132149155446097, guid: 3ac31f54535032f488b8aa665f514c9a, type: 3}
+  modelOffset: {x: 0, y: -0.3, z: 0}
+  modelRotation: {x: 0, y: 0, z: 0}
+  modelScale: {x: 1, y: 1, z: 1}
+  placeholderShader: {fileID: 4800000, guid: 926dc37fc1464f3ca97c9a9d7b9666f3, type: 3}
+  hopDuration: 0.45
+  hopHeight: 0.8
+  count: 1
+  collectRadius: 0.35
+  collectFlyDuration: 0.18
+  labelHeight: 0.45
+  labelSize: 2.5
+  placeholderColor: {r: 0.45, g: 0.7, b: 0.85, a: 1}
+  eyes:
+    enabled: 1
+    eyePosition: {x: 0.1, y: 0.1, z: 0.1}
+    eyeAngle: 28.1
+    frameRotation: {x: -91.5, y: 0, z: 90}
+    eyeRotation: {x: -44.24, y: 0, z: 0}
+    eyeSize: 0.1
+    pupilSize: 0.06
+    bulge: 0.45
+    eyeColor: {r: 1, g: 1, b: 1, a: 1}
+    pupilColor: {r: 0.05, g: 0.05, b: 0.06, a: 1}
+    gravity: 1
+    shake: 1
+    damping: 1
+    bounce: 0.242
+    derpPull: 20.4
+  flop:
+    enabled: 1
+    headBone: head
+    upperTailBone: uppertail
+    tailBone: tail
+    heldFrequency: 6
+    upperTailAngle: 22
+    tailAngle: 35
+    headAngle: 8
+    tailLag: 0.18
+    flopInterval: {x: 2, y: 5}
+    flopDuration: 0.6
+    flopFrequency: 9
+    hopHeight: 0.12
