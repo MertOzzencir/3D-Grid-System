@@ -5,6 +5,12 @@ Kullanıcıyla Türkçe konuşulur; kod yorumları Türkçe. Commit mesajları (
 Oyun tasarımı (sistemler, ana döngü, kararlar, açık sorular) `DESIGN.md`'de: tasarım konuşmadan önce oku, karar çıkınca güncelle, konuşulanı tekrarlatma.
 Sistem haritası (interaktif): `Docs/system-map.html` (yayında: https://claude.ai/artifact/XtrW1tA3empgpHFkahkkcR). Sistem eklenince, durumu ya da bağlantısı değişince içindeki `NODES` / `EDGES` güncellenir ve aynı adrese yeniden yayınlanır.
 
+## Denenip geri alınan yön (2026-11-10)
+İmparatorluk / robot otomasyonu + tower defense yönü denendi (eski sistemler silindi, karakter, sağ tıkla dönen kamera,
+E / nişan / kullan etkileşimi, alanla kazan matkap, 27 parçalı kazılabilir blok, kollu otomasyon prototipi yazıldı),
+kullanıcı çok uğraştıracağı için vazgeçti: `main` köy oyununun `07c1b74` haline geri alındı. O iş `robot-automation`
+dalında (tek commit) duruyor; bir parçası lazım olursa oradan alınır.
+
 ## Çalışma şekli
 - Büyük değişikliklerden önce tasarım konuşulur; kullanıcı "kodu değiştirme" dediyse sadece anlat. Karar soruları somut örnekli, seçenekli sorulur.
 - Açıklamalar sistem düzeyinde (class/metod isimleriyle) tercih edilir.
