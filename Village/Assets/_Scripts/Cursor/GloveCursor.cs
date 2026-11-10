@@ -207,6 +207,16 @@ public class GloveCursor : MonoBehaviour
         palmLocalRotation = Quaternion.Inverse(transform.rotation) * palmContact.rotation;
     }
 
+    // Eldiveni olmayan sahnede (ör. Blueprint) Windows imleci her zaman görünsün: önceki bir sahneden / oturumdan gizli
+    // kalmış olabilir (kullanıcı: Blueprint sahnesinde imleç yoktu)
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void ShowCursorWithoutGlove()
+    {
+        if (FindAnyObjectByType<GloveCursor>() != null) return;
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
+    }
+
     private void OnEnable()
     {
         Cursor.visible = false;

@@ -2,14 +2,12 @@ using UnityEngine;
 
 // Tek parça odun. Uzunluğu grid yüksekliğidir (SO Size.y). Katmanlar için bkz. WoodLayout.
 // Katmanları her zaman boştur; bir katmana odun eklenince MergedWood'a dönüşür.
-public class Wood : SourceBase, IInteractable, IStickyToolTarget, IBlueprintPiece, IWoodStack
+public class Wood : SourceBase, IInteractable, IStickyToolTarget, IWoodStack
 {
     [SerializeField] private float followSpeed;
 
     public int Length => GetData().Size.y;
 
-    public string BlueprintSignature => $"Wood:{Length}";
-    public int BlueprintRotationSteps => 0; // dik tek odun her yönde aynı
 
     // --- IWoodStack ---
     public int BaseLength => Length;

@@ -19,6 +19,93 @@ domuzları besler, domuza hizmet ederek sistemde yükselmeye ve sevdiği kızı 
 - Oyuncu inşa menüsü yapıldı (alt bar + kategoriler, hep açık).
 - Açık: ton, son, para biriminin adı ve akışı, blueprint'lerin bu temadaki yeri, sci-fi parodi fikri kalıyor mu.
 
+## Yön (2026-11-10): İmparatorluk, robotlar, otomasyon + tower defense
+Kullanıcı oyunun gidişatını değiştirdi. **Domuz ve işçi teması çıkıyor** (aşağıdaki "Oyunun özü (2026-11-06)" park
+edildi, referans için duruyor). Mevcut yazılmış sistemler kullanılabilir.
+- **Tür:** otomasyon + tower defense.
+- **Tema:** Warhammer 40K tarzı bir İmparatorluk. İmparatorluk bir gezegeni ele geçirmiş; gezegende robot otomasyonuna
+  uygun kaynaklar var. Gezegen neredeyse etkisiz hale getirilmiş ama hâlâ düşmanlar var.
+- **Amaç:** otomasyonla İmparatorluğa hizmet edecek robotlar üretmek.
+- **Bizim taraf:** robotlar. **Düşman:** organik ve evrimsel; farklı özelliklerini kullanarak ana üssü kırmaya çalışır.
+- **Kaybetme:** ana üs oksijen kaynağının merkezi; düşman onu kırarsa oyun kaybedilir. (Eski cozy / cezasız ilkesi bu
+  yönde geçerli değil.)
+- **Zorluk eğrisi:** erken oyunda tower defense az ve zorlamaz; orta ve geç oyunda yeni zorluklar gelir.
+- **Robotlar (2026-11-10):** ürün; araçlarla İmparatorluğa götürülür. Savunmada da kullanmak düşünüldü ama oyunu gerçek
+  zamanlı stratejiye çevirir, robotları kule gibi kullanmak zor (kullanıcı). Şimdilik ürün.
+- **Mevcut içerik:** odun, eldiven ve ağaç sistemi belki kullanılır; kedi ve blueprint sistemine gerek kalmadı gibi.
+- **Düşman dalgaları:** neyle geleceği sonra; sayısı, yeni keşfedilen malzemelerle yapılan ürünlere meydan okuyacak
+  şekilde belirlenir. Oyuncu ne kadar düşmanla yüzleşeceğini önceden bilmeli (bir kalıba oturtulacak).
+- **Oyuncu (karar, 2026-11-10):** eldiven yerine gerçek bir **karakter**.
+- **Oksijen (karar, 2026-11-10):** Astroneer tarzı oksijen mantığı (kullanıcı sevdi): üs oksijenin merkezi, karakter
+  oksijenle dolaşır; ayrıntısı (ip ile menzil uzatma vb.) açık.
+- **Atmosfer (karar, 2026-11-10):** gezegeni aydınlatan bir yıldız yok; etraf neredeyse göz gözü görmeyecek kadar
+  karanlık. Yavaşça etrafımızı saran karanlık bir alanda hem düşmana karşı savaşıp hem üretim yapıyoruz.
+- Toon ışığından büyük ihtimalle vazgeçilecek; tema neredeyse tamamen değişiyor, şimdiye kadar yapılanların çoğu gidecek
+  (kullanıcı). Önce ana döngü, sonra ilişkiler.
+- **Ana döngü (2026-11-10, kullanıcı onayladı):**
+  - Üretim döngüsü: keşfet (karakter, oksijen menzili, karanlık) → topla → otomatikleştir → robot üret → araçla
+    İmparatorluğa gönder → İmparatorluk karşılığında yeni teknoloji / malzeme verir → daha uzağa keşif.
+  - Tehdit döngüsü: her yeni malzeme bir sonraki düşman dalgasını büyütür (sayısı önceden belli) → fabrika kule ve mermi
+    üretir → oksijen çekirdeği savunulur.
+  - Gerilim: fabrikanın çıktısı ikiye bölünür (İmparatorluğa robot mu, kendi savunman mı).
+  - **İmparatorluğun karşılığı:** robot gönderdikçe İmparatorluk yeni fethettiği yerlerde yeni teknolojiler keşfeder ve
+    bizimle paylaşır.
+  - **Kaybetmek:** oyun baştan başlar (son kayıttan değil; yoksa kaybetmenin anlamı kalmaz).
+  - **Karanlık:** keşfi sınırlayan ve düşmana avantaj sağlayan bir mekanik.
+  - Muhtemelen kalacak kod: grid, yerleştirme, taşıma, birleştirme, instancing, kayıt.
+- **Otomasyon sistemi (karar, 2026-11-10):** Astroneer'daki gibi **kollarla** yapılır; geniş alanlara yayılmaz, küçük
+  bir alanda parçaların birbiriyle etkileşimi. Önce **madencilik**: Satisfactory tarzı (oyuncu maden kırmakla uğraşmaz,
+  madenci makinesi çıkarır). Kollarla kaynaklar dağıtılır, işlenir, robot birleştirilir. Şimdilik bu kadar basit;
+  sonra otomasyona zorluklar ve onları aşan yeni parçalar eklenebilir.
+  - İlk zincir: yatak → madenci → kol → eritici → kol → montaj → robot.
+  - **Kol (karar, 2026-11-10):** Factorio gibi grid tabanlı; her döngüde arkasındaki makinenin yuvasından bir parça alır,
+    önündeki makinenin yuvasına koyar (bitişik hücre). İleride upgrade ile bütün çevresini tarayan kol.
+  - **Parçalar yerde beklemez (karar):** sadece yuvadan yuvaya aktarılır (yerde bekleyen parçalar performans sorunu
+    olabilir).
+  - **Filtre (karar):** ayrı bir filtre ayarı değil, farklı kol türleriyle doğal olarak: ör. sadece kaynak (ham madde)
+    taşıyan kol, büyük parçaları taşıyan endüstriyel kol.
+
+## Oyunun özü (2026-11-06, PARK EDİLDİ 2026-11-10)
+
+**Kararlar:**
+1. **Tema:** domuz bir Trump metaforu (karikatür, gerçek isim / yüz yok); siyasi ama agresif değil, gülümseten. Mesaj:
+   kapital sahipleri emekçinin emeğini sömürür, emekçi onların gözünde değersizdir. Ana tema: domuzu beslemek / memnun etmek.
+2. **Çağ:** ilk çağ (antik dönem). Tekerlek gibi şeyler liderin yasağı.
+3. **İlerleme:** upgrade'ler lider fermanı / reform olarak gösterilir (ör. lider "artık tekerlek kullanılabilir" emri çıkarır).
+4. **Tasarım ilkesi:** küçük şakalar yapıp onları oyun mekaniğine çevirmek.
+5. **Mekanik:** Astroneer + Minecraft redstone ilhamı; oyuncu kendi sistemini kurar, sistemin bir anlamı olur.
+6. **İşçiler makine parçasıdır:** ör. yan yana dizilen işçiler bir konveyör gibi çalışır (ilk çağ otomasyonunun özü bu).
+   Yanında birkaç mekanik parça da olacak (detayı sistem konuşulurken).
+7. **İnşa kalır:** mevcut build sistemi (blueprint tamamlama) atılmaz; işi işçiler yapar, işçilere bunu yaptıran sistemi
+   oyuncu kurar (ör. odun kesme hattı).
+8. **Ayrı bir para yok; para birimi işçilerin kendisi.** Sahip olduğun işçi kadar güçlüsün. Mesaj: emekçinin varlığının
+   bir anlamı yok, yeri kolayca doldurulabilir. İşçiler otomasyonun ilk adımlarını sağlar; tam otomasyondan sonra
+   işçilerin geldiği yer yok edilir: oyuncu, onların değerinin hiçbir zaman kendileri değil sadece emekleri olduğunu
+   kendi kurduğu sistemle yaşar.
+   **İşçi harcanan / yok edilebilen bir currency** (mesajın anlamı bundan gelir).
+9. **Cozy, kaybetme baskısı yok:** ölüm / ceza anlamsız (Satisfactory gibi). Anlam, kurulan sistemin ne kadar düzenli olduğu.
+10. **Sömürü** belki işçilerin açlığıyla anlatılır (kesin değil).
+11. **Oyuncu liderin hizmetkârı:** eldiven domuza (ya da seçilen dönemin liderine) hizmet eden el; oyuncu bu hizmeti
+    sağlar, bir bakıma kötü adam oyuncunun kendisi.
+12. **Mesaj her an ortada:** cozy his ile sömürü sürekli yan yana; mesaj belli bir sahnede verilmez.
+13. **Otomasyon kuralı (2026-11-06, kullanıcı):** elden ele + komut kartları karışımı. Temel: işçiler yan yana dizilip
+    konveyör gibi elden ele aktarır; işçinin ne yapacağı komut kartlarıyla belirlenir (al, ver, kes, bekle...). Kartlar
+    tematik olarak **beyin yıkama** (liderin propagandası).
+14. **İşçi hayat döngüsü (kullanıcı):** yeni işçi gelme hızı halkın **lidere inancı** ile doğru orantılı; **nüfus sınırı**
+    var; her işçinin bir **psikolojik barı** (hayata inanma eğrisi) var, biterse işçi yok olur (harcanan currency).
+
+**Açık (sonra konuşulacak):** lidere inanç ile hayata inanç ayrı barlar mı, birbirini etkiliyor mu (ör. beyin
+yıkamak biri artırıp öbürünü düşürür mü); hayata inanç neyle düşer / çıkar (çalışma, açlık, kart?), sadece düşüyor mu;
+nüfus sınırı neye bağlı (sabit mi, kafes sayısı gibi bir şeye mi); işçinin yok oluşunun gösterimi (intihar gibi
+okunabilir; sönme / gözlerin boşalması / sessizce gitme gibi cozy tonu bozmayan gösterim, kullanıcının kararı); komut
+kartlarının listesi; mekanik parçalar neler; açlık nasıl işler; domuzu beslemek / memnun etmek oyunda nasıl
+yapılır; oyuncunun elleri ne yapar (kurmak, ilk seferi elle yapmak, düzeltmek); altyapı ile anıtı kim kurar; ilk prototip
+dilimi.
+
+Notlar: benzer oyunlar (Hydroneer, Timberborn, Medieval Engineers) modern / orta çağ; ilk çağ ve işçi-konveyör farkımız.
+Konuşma sırasında önerilmiş ama karar verilmemiş fikirler (fermanların domuza yarayan kancası, trickle-down, anıtta domuzun
+adı, Heron düzenekleri, ıslak kum yolu, kum torbası saati, kedinin Mısır'da kutsallığı) gerektiğinde buradan hatırlanır.
+
 ## Yön değişikliği (2026-11-01): oyunun kalbi inşa
 
 Kullanıcı: en eğlenceli kısım blueprint'leri tamamlamak; oyuncu huzur bulsun. Tarla bulmacası ve yemek oyunun yapısına

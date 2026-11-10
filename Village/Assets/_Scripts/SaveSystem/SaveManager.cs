@@ -55,8 +55,6 @@ public class SaveManager : MonoBehaviour
             foreach (var pair in InventoryManager.Instance.sources)
                 file.inventory.Add(new ItemSave(pair.Key.SaveId, pair.Value));
 
-        if (DayCycle.Instance != null) file.dayTime = DayCycle.Instance.Time01;
-
         SaveStorage.Write(slotName, JsonUtility.ToJson(file, true));
         Debug.Log($"Kaydedildi: {SaveStorage.PathFor(slotName)} ({file.bases.Count} base, {file.placeables.Count} placeable)", this);
     }
@@ -105,8 +103,6 @@ public class SaveManager : MonoBehaviour
         if (savePlaceables)
             foreach (EntitySave save in file.placeables)
                 Spawn<GridPlaceable>(save, GridManager.Instance.PlaceablePlaceOn);
-
-        if (file.dayTime >= 0f && DayCycle.Instance != null) DayCycle.Instance.Time01 = file.dayTime;
 
         if (saveInventory && InventoryManager.Instance != null)
             LoadInventory(file.inventory);

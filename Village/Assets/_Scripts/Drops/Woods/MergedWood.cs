@@ -11,7 +11,7 @@ using UnityEngine;
 // Yan yana parçaların arası (ekleri parçaların boyunca uzanan) bağlanmaz. Bant, aynı düzlemdeki ana oduna bağlanma ipiyle
 // birleşip tek halka olur. Kol ile ondan çıkan derinlik odunu arasına ayrıca 45° çivi (WoodNail).
 // Baltayla sökme şimdilik kapalı (kullanıcı: yeni sisteme göre sonra yazılacak; WoodDetachTarget eski kol yapısına göre).
-public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlueprintPiece, IWoodStack, ISaveState
+public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IWoodStack, ISaveState
 {
     // Bir hücredeki 1×1: yeri (pivota göre, döndürülmemiş) ve uzandığı yön (yukarı = dik; yapıştığı yüzün yönü)
     public struct Cell
@@ -60,8 +60,6 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     private WoodMergeTarget mergeTarget;
     private WoodDetachTarget detachTarget;
     private GridFootprint[] footprints; // rotasyon başına bir kez hesaplanır
-    private string signature;           // şekil değişmedikçe aynı
-    private int signatureSteps;
     // İp parçalara bölünür (kullanıcı: tek mesh her birleştirmede baştan kuruluyordu, spike): kenar paylaşan değme yüzleri
     // bir parça (ana odunun bağlantısı + ona değen bantlar, her ayrı bant). Parça yüzlerine göre anahtarlanır: değişmeyen
     // parça yerinde kalır, sadece yeni / değişen parça kurulur ve sarılarak gelir.
@@ -193,55 +191,6 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         nailRoot.Play(freshNails, WoodMerger.Instance.Nail.Animation);
     }
 
-    // Döndürmeden bağımsız: aynı şeklin her yöndeki hali aynı imzayı verir, ayna görüntüsü farklı verir. Sadece dik sütunsa
-    // aynı boydaki dik odunun yerine geçer ("Wood:2" slot'u)
-    public string BlueprintSignature
-    {
-        get
-        {
-            if (signature == null)
-                signature = IsStack ? $"Wood:{baseLength}" : "MergedWood:" + CanonicalSignature(cells, out signatureSteps);
-            return signature;
-        }
-    }
-
-    // Standart hale gelmek için kaç adım döndürüldüğü (imzayla birlikte hesaplanır)
-    public int BlueprintRotationSteps
-    {
-        get
-        {
-            _ = BlueprintSignature;
-            return signatureSteps;
-        }
-    }
-
-    // 4 dönüşün (pivot etrafında, F→R yönünde) imzasından sıralamada en küçüğü; parçanın yönü eksen olarak (x / y / z)
-    private static string CanonicalSignature(List<Cell> shape, out int steps)
-    {
-        string best = null;
-        steps = 0;
-        var parts = new List<string>();
-        for (int k = 0; k < WoodLayout.SideCount; k++)
-        {
-            parts.Clear();
-            foreach (Cell cell in shape)
-            {
-                Vector3Int p = GridMaskRotator.RotateOffset(cell.Position, (GridMaskRotator.Rotation)k);
-                Vector3Int a = GridMaskRotator.RotateOffset(cell.Axis, (GridMaskRotator.Rotation)k);
-                char axis = a.y != 0 ? 'y' : a.x != 0 ? 'x' : 'z';
-                parts.Add($"{p.x},{p.y},{p.z}{axis}");
-            }
-            parts.Sort(string.CompareOrdinal);
-            string candidate = string.Join(";", parts);
-            if (best == null || string.CompareOrdinal(candidate, best) < 0)
-            {
-                best = candidate;
-                steps = k;
-            }
-        }
-        return best;
-    }
-
     private void Awake()
     {
         drag = new GridDragMotor(this, followSpeed);
@@ -293,7 +242,6 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         baseLength = 0;
         while (occupied.Contains(new Vector3Int(0, baseLength, 0))) baseLength++;
         footprints = null;
-        signature = null;
 
         // Her yeni hücreye bir 1×1, uzandığı yöne yatırılmış (dik olanlar dik)
         Wood prefab = catalog.GetWood(1);
