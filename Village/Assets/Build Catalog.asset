@@ -13,13 +13,6 @@ MonoBehaviour:
   m_Name: Build Catalog
   m_EditorClassIdentifier: Assembly-CSharp::BuildCatalogSO
   Categories:
-  - Name: Automation
-    Items:
-    - {fileID: 11400000, guid: fdbd48ee82f82ba4e883265ee67a515c, type: 2}
-    - {fileID: 11400000, guid: 772a9ff4618e8824cac8123294c44cec, type: 2}
-    - {fileID: 11400000, guid: c4c209de2295dd746bfa15d008065b09, type: 2}
-    - {fileID: 11400000, guid: d14ea0564cf8eea4d85cf7568cae96cd, type: 2}
-    - {fileID: 11400000, guid: 19e18af6afa367a48896cf77da3178fd, type: 2}
   - Name: 'Wood '
     Items:
     - {fileID: 11400000, guid: 5f5daab105376b0469679cbd768b4f69, type: 2}
