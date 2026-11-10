@@ -47,8 +47,37 @@ public class GridDragMotor
 
     public void Tick()
     {
+        // Karakter varsa obje onun elinde durur; sadece hazırlıkta (sağ tık basılı, InteractableController.IsAiming)
+        // menzildeki hedeflere (örn. matkabın kazdığı blok) gider
+        PlayerCharacter player = PlayerCharacter.Instance;
+        if (player != null && !InteractableController.IsAiming)
+        {
+            ClearTarget();
+            FollowTowards(player.HoldPoint, owner.GridRotation);
+            return;
+        }
+
         // Yapışkan hedef: kilit bırakılmadıkça ray ile yeni hedef aranmaz (mouse collider'dan çıksa da)
         if (TryKeepStickyTarget()) return;
+
+        if (player != null)
+        {
+            float reach = owner is IToolReach tool ? tool.Reach : player.Reach;
+            if (TryFindTarget(out RaycastHit near, out IToolTarget nearTarget) && player.InReach(near.point, reach))
+            {
+                if (currentTarget != null && currentTarget != nearTarget) currentTarget.OnToolTargetExit();
+                currentTarget = nearTarget;
+                Vector3 targetPosition = nearTarget.GetToolTargetPosition(interactable, out bool accepted);
+                if (accepted)
+                {
+                    FollowTowards(targetPosition, nearTarget.GetToolTargetRotation());
+                    return;
+                }
+            }
+            ClearTarget();
+            FollowTowards(player.HoldPoint, owner.GridRotation);
+            return;
+        }
 
         if (!TryRaycast(out RaycastHit hit, out IToolTarget target))
         {
@@ -126,7 +155,14 @@ public class GridDragMotor
         currentTarget = null;
 
         Vector3 dropPos = lastValidGridPosition;
-        if (TryRaycast(out RaycastHit hit, out _))
+        PlayerCharacter player = PlayerCharacter.Instance;
+        if (player != null)
+        {
+            // Karakterin önündeki hücre
+            Vector3 front = GridManager.Instance.GetGridWorldPosition(player.FrontDropPoint + RotationShift, out bool onGrid);
+            dropPos = onGrid ? front : dragStartPosition;
+        }
+        else if (TryRaycast(out RaycastHit hit, out _))
         {
             Vector3 gridPos = GridManager.Instance.GetGridWorldPosition(hit.point + HoverOffset + RotationShift, out bool onGrid);
             if (onGrid) dropPos = gridPos;
@@ -196,6 +232,29 @@ public class GridDragMotor
         }
 
         return found;
+    }
+
+    // Mouse'un altındaki hedef; tam üstünde değilse (birkaç piksel kaçırınca) mouse ışını etrafında kalın bir küreyle
+    // tekrar aranır (TargetTolerance), en yakın hedef alınır
+    private const float TargetTolerance = 0.35f;
+
+    private bool TryFindTarget(out RaycastHit hit, out IToolTarget target)
+    {
+        if (TryRaycast(out hit, out target) && target != null) return true;
+
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        int count = Physics.SphereCastNonAlloc(ray, TargetTolerance, hitBuffer, 500f);
+        System.Array.Sort(hitBuffer, 0, count, ByDistance);
+        for (int i = 0; i < count; i++)
+        {
+            if (hitBuffer[i].transform.IsChildOf(Transform)) continue;
+            if (!hitBuffer[i].collider.TryGetComponent(out IToolTarget candidate)) continue;
+            hit = hitBuffer[i];
+            if (hit.distance <= 0f) hit.point = hitBuffer[i].collider.ClosestPoint(ray.origin); // küre başta içindeyse
+            target = candidate;
+            return true;
+        }
+        return false;
     }
 
     private void ClearTarget()

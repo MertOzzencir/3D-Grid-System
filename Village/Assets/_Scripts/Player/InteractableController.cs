@@ -3,6 +3,10 @@ using UnityEngine;
 
 // Ne zaman tutulur / tıklanır / hover olur. Eldiven varsa hedef eldivenin altındaki obje (GloveCursor.TargetCollider:
 // avucun en çok kapladığı etkileşimli collider): el neyin üstündeyse onunla etkileşilir. Eldiven yoksa mouse ışını.
+// Karakter varsa (PlayerCharacter) sadece onun menzilindeki objelere dokunulur.
+// Tuşlar (kullanıcı 2026-11-10): E mouse'un altındaki objeyi alır (ele geçer, bırakana kadar elde kalır), elde bir şey
+// varken E bırakır. Elde bir şey varken sağ tık basılı = hazırlık (IsAiming: alet / parça hedefe gider), o sırada sol tık
+// kullanır (kazmak, makineye koymak). Elde bir şey yokken sol tık tıklama (IClickable), sağ tık kamerayı döndürür.
 public class InteractableController : MonoBehaviour
 {
     public static InteractableController Instance;
@@ -23,6 +27,9 @@ public class InteractableController : MonoBehaviour
     public bool IsMouseFlicking => mouseSpeed > flickReleaseSpeed;
 
     public bool IsHolding => currentInteracted != null;
+
+    // Elde bir şey varken sağ tık basılı: alet / parça hedefini arar (GridDragMotor)
+    public static bool IsAiming { get; private set; }
     public IInteractable Held => currentInteracted;
 
     void Awake()
@@ -35,7 +42,8 @@ public class InteractableController : MonoBehaviour
 
         if (currentInteracted == null)
         {
-            if (tryingToInteract)
+            // Sağ tıkla kamera döndürülürken sürüklenen mouse'un altındaki objeler tutulmasın
+            if (tryingToInteract && !CameraController.IsDragRotating)
             {
                 TryToInteract(true);
             }
@@ -73,6 +81,7 @@ public class InteractableController : MonoBehaviour
 
             foreach (var hit in hits)
             {
+                if (!InReach(hit)) continue;
                 if (hit.collider.TryGetComponent(out IInteractable interacted))
                 {
                     currentInteracted = interacted;
@@ -90,6 +99,7 @@ public class InteractableController : MonoBehaviour
 
     private void CancelInteract()
     {
+        IsAiming = false;
         // Elde bir şey olmasa da sıfırlanmalı: yoksa boşluğa sağ tıklayıp bırakınca Update,
         // mouse'un altından geçen her objeyi tıklamadan tutmaya çalışır
         tryingToInteract = false;
@@ -110,6 +120,7 @@ public class InteractableController : MonoBehaviour
     public void Release(IInteractable current)
     {
         if (current != currentInteracted) return;
+        IsAiming = false;
         currentInteracted = null;
         tryingToInteract = false;
         heldByLeft = false;
@@ -144,9 +155,32 @@ public class InteractableController : MonoBehaviour
             return;
         }
 
-        if (obj)
+        // Sol tık sadece hazırlıkta (sağ tık basılıyken) kullanır
+        if (obj && IsAiming)
             currentInteracted.Interact(out bool f);
     }
+
+    // Sağ tık: elde bir şey varken hazırlık (basılı kaldıkça); elde bir şey yokken kamerayı döndürür (CameraController)
+    private void OnRight(bool pressed)
+    {
+        IsAiming = pressed && currentInteracted != null && !heldByLeft;
+    }
+
+    // E: elde bir şey varsa bırakır, yoksa mouse'un altındaki (menzildeki) objeyi alır
+    private void OnEquip()
+    {
+        if (currentInteracted != null)
+        {
+            if (!heldByLeft) CancelInteract();
+            return;
+        }
+        TryToInteract(true);
+        tryingToInteract = false; // tek seferlik deneme (eskiden sağ tık basılıyken her kare deneniyordu)
+        if (currentInteracted != null) SetHovered(null);
+    }
+
+    // Karakter yoksa her şey menzilde
+    private static bool InReach(RaycastHit hit) => PlayerCharacter.Instance == null || PlayerCharacter.Instance.InReach(hit.point);
 
     // Eldiven sahnede ve açık: hedefi o seçer
     private static bool UsesGlove(out GloveCursor glove)
@@ -165,7 +199,7 @@ public class InteractableController : MonoBehaviour
         }
 
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out RaycastHit hit) && hit.collider.TryGetComponent(out IClickable clickable))
+        if (Physics.Raycast(ray, out RaycastHit hit) && InReach(hit) && hit.collider.TryGetComponent(out IClickable clickable))
             clickable.OnClicked(hit);
     }
 
@@ -191,7 +225,7 @@ public class InteractableController : MonoBehaviour
         else
         {
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out RaycastHit hit))
+            if (Physics.Raycast(ray, out RaycastHit hit) && InReach(hit))
                 hit.collider.TryGetComponent(out target);
         }
         SetHovered(target);
@@ -218,7 +252,8 @@ public class InteractableController : MonoBehaviour
 
     void OnEnable()
     {
-        InputManager.OnMouseRight += TryToInteract;
+        InputManager.OnMouseRight += OnRight;
+        InputManager.OnE += OnEquip;
         InputManager.OnMouseLeft += FinishInteract;
         InputManager.OnR += RotateHeld;
     }
@@ -231,7 +266,8 @@ public class InteractableController : MonoBehaviour
         CancelInteract();
         SetHovered(null); // build mode'a girince önizleme kalmasın
 
-        InputManager.OnMouseRight -= TryToInteract;
+        InputManager.OnMouseRight -= OnRight;
+        InputManager.OnE -= OnEquip;
         InputManager.OnMouseLeft -= FinishInteract;
         InputManager.OnR -= RotateHeld;
     }

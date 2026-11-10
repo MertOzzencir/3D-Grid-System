@@ -9,7 +9,7 @@ using UnityEngine.UI;
 // kategorileri), içinde o sekmenin yapıları kart olarak (ikon + ad). Geliştirici build mode'undan (PlacementController,
 // Space) ayrı; o açıkken bu bar gizlenir.
 // Karta tıklayınca yapı seçilir: yarı saydam önizlemesi (PlacementGhost) mouse'un hücresini takip eder, konabilecek yerde
-// yeşilimsi, konamayacak yerde kırmızımsı. R kendi ortası etrafında döndürür, sol tık koyar (seçim kalır, art arda konabilir), sağ tık / Esc ya da
+// yeşilimsi, konamayacak yerde kırmızımsı. R kendi ortası etrafında döndürür, sol tık koyar (seçim kalır, art arda konabilir), kısa sağ tık / Esc ya da
 // aynı karta tekrar tıklamak bırakır. Seçiliyken obje tutma ve aletler kapalıdır, eldiven gizlenir.
 // Arayüz kodla kurulur: sahnede bu component'in olması ve kataloğun verilmesi yeter (EventSystem sahnede zaten var).
 public class PlayerBuildMenu : MonoBehaviour
@@ -357,9 +357,17 @@ public class PlayerBuildMenu : MonoBehaviour
             Destroy(instance.gameObject);
     }
 
+    // Sağ tık seçimi bırakır, ama sadece kısa tıkta: sağ tıkla sürükleyip kamerayı döndürünce seçim kalır
+    private Vector3 rightPressMouse;
+
     private void OnMouseRight(bool pressed)
     {
-        if (pressed) ClearSelection();
+        if (pressed)
+        {
+            rightPressMouse = Input.mousePosition;
+            return;
+        }
+        if ((Input.mousePosition - rightPressMouse).magnitude < 6f) ClearSelection();
     }
 
     // Baktığı objenin üstü, yoksa bu objenin yüksekliğindeki düzlem (geliştirici menüsüyle aynı kural)

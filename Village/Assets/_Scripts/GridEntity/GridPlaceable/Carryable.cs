@@ -180,6 +180,14 @@ public abstract class Carryable : GridPlaceable, IInteractable, ISaveState
 
     public virtual void ContractCancel() => Drag.Cancel();
 
+    // Yığına dışarıdan eşya eklenir (örn. matkapla kazılan cevher aynı yığına düşer)
+    public void AddToStack(int amount)
+    {
+        count += amount;
+        UpdateLabel();
+        Punch();
+    }
+
     // Yığından bir eşya kullanıldı (örn. kedi bir balık yedi): biri azalır, bitince yok olur (true)
     protected bool UseOne()
     {

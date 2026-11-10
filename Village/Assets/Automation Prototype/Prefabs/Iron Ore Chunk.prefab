@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &9013643654464000709
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 327004018431299771}
+  - component: {fileID: 6686966408013660194}
+  m_Layer: 0
+  m_Name: Iron Ore Chunk
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &327004018431299771
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9013643654464000709}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6686966408013660194
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9013643654464000709}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f6d4dc0e717d7a48af18448d7bdc88d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OreChunk
+  data: {fileID: 11400000, guid: e41b2965fb4cd5243b28055e49e14289, type: 2}
+  rotation: 0
+  followSpeed: 14
+  model: {fileID: 0}
+  modelOffset: {x: 0, y: 0, z: 0}
+  modelRotation: {x: 0, y: 0, z: 0}
+  modelScale: {x: 1, y: 1, z: 1}
+  placeholderShader: {fileID: 4800000, guid: 926dc37fc1464f3ca97c9a9d7b9666f3, type: 3}
+  hopDuration: 0.45
+  hopHeight: 0.8
+  count: 1
+  collectRadius: 0.35
+  collectFlyDuration: 0.18
+  labelHeight: 0.45
+  labelSize: 2.5
+  item: {fileID: 11400000, guid: d20320d0c8989224f8b35bb903f95ff3, type: 2}

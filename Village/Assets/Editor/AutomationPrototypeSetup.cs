@@ -3,8 +3,8 @@ using UnityEditor;
 using UnityEngine;
 
 // Village → Otomasyon Prototipini Kur: otomasyon prototipinin bütün asset'lerini tek seferde kurar (gri kutu prefab'lar,
-// parça verileri, yerleştirme verileri), oyuncu build menüsüne "Automation" sekmesini, geliştirici build mode'unun Base
-// menüsüne maden yatağını ve hepsini SaveRegistry'ye ekler. Klasör zaten varsa dokunmaz (yeniden kurmak için klasörü sil).
+// parça verileri, yerleştirme verileri), oyuncu build menüsüne "Automation" sekmesini ekler ve hepsini SaveRegistry'ye
+// yazar. Klasör zaten varsa sorar: yeniden kurarken eski klasörü siler, menüdeki ve kayıttaki eski girişleri temizler.
 public static class AutomationPrototypeSetup
 {
     private const string Root = "Assets/Automation Prototype";
@@ -14,36 +14,57 @@ public static class AutomationPrototypeSetup
     {
         if (AssetDatabase.IsValidFolder(Root))
         {
-            EditorUtility.DisplayDialog("Otomasyon prototipi", $"{Root} zaten var. Yeniden kurmak için klasörü silip tekrar çalıştır.", "Tamam");
-            return;
+            if (!EditorUtility.DisplayDialog("Otomasyon prototipi",
+                    $"{Root} zaten var. Silinip baştan kurulsun mu? (Kayıtta duran prototip objeleri aynı adlarla yeniden bağlanır.)",
+                    "Yeniden kur", "Vazgeç"))
+                return;
+            AssetDatabase.DeleteAsset(Root);
+            CleanReferences();
         }
+        materials.Clear();
         AssetDatabase.CreateFolder("Assets", "Automation Prototype");
         foreach (string sub in new[] { "Items", "Materials", "Prefabs", "Data" })
             AssetDatabase.CreateFolder(Root, sub);
+
+        Shader lit = Shader.Find("Village/Lit") ?? Shader.Find("Universal Render Pipeline/Lit");
 
         // Parçalar
         ItemSO ore = Item("Iron Ore", new Color(0.45f, 0.32f, 0.26f));
         ItemSO ingot = Item("Iron Ingot", new Color(0.78f, 0.8f, 0.84f));
         ItemSO robot = Item("Robot", new Color(0.2f, 0.75f, 0.95f));
 
-        // Maden yatağı (base)
-        GameObject depositGo = NewRoot("Ore Deposit");
-        Box(depositGo, "Rock", Vector3.zero, new Vector3(0.98f, 1f, 0.98f), Mat("Deposit", new Color(0.3f, 0.26f, 0.24f)));
-        for (int i = 0; i < 4; i++)
-            Box(depositGo, "Ore " + i, new Vector3((i % 2 - 0.5f) * 0.45f, 0.53f, (i / 2 - 0.5f) * 0.45f), Vector3.one * 0.18f, Mat("Ore", ore.Color));
-        depositGo.AddComponent<BoxCollider>().size = Vector3.one;
-        OreDeposit deposit = depositGo.AddComponent<OreDeposit>();
-        Set(deposit, "ore", ore);
-        GridBaseSO depositData = SaveEntity<GridBaseSO, OreDeposit>(depositGo, "Ore Deposit", "Iron Deposit");
+        // Cevher topağı: matkapla kazılınca yere düşer, elle makineye götürülür (yığınlanır)
+        GameObject chunkGo = NewRoot("Iron Ore Chunk");
+        OreChunk chunk = chunkGo.AddComponent<OreChunk>();
+        Set(chunk, "item", ore);
+        Set(chunk, "placeholderShader", lit);
+        GridPlaceableSO chunkData = SaveEntity<GridPlaceableSO, OreChunk>(chunkGo, "Iron Ore Chunk", "Iron Ore");
 
-        // Madenci
-        GameObject minerGo = NewRoot("Miner");
-        Box(minerGo, "Body", new Vector3(0f, -0.15f, 0f), new Vector3(0.8f, 0.7f, 0.8f), Mat("Miner", new Color(0.95f, 0.75f, 0.2f)));
-        Box(minerGo, "Drill", new Vector3(0f, -0.45f, 0f), new Vector3(0.3f, 0.12f, 0.3f), Mat("Dark", new Color(0.2f, 0.2f, 0.22f)));
-        Collider(minerGo, new Vector3(0f, -0.15f, 0f), new Vector3(0.8f, 0.7f, 0.8f));
-        Miner miner = minerGo.AddComponent<Miner>();
-        Set(miner, "stackHeight", 0.3f);
-        GridPlaceableSO minerData = SaveEntity<GridPlaceableSO, Miner>(minerGo, "Miner", "Miner");
+        // Kazılabilir maden bloğu: zemin (base) türü, 27 parça (kodla kurulur)
+        GameObject depositGo = NewRoot("Iron Deposit");
+        depositGo.AddComponent<BoxCollider>().size = Vector3.one;
+        MineableDeposit deposit = depositGo.AddComponent<MineableDeposit>();
+        Set(deposit, "chunkData", chunkData);
+        Set(deposit, "rockMaterial", Mat("Iron Rock", Color.Lerp(ore.Color, new Color(0.25f, 0.22f, 0.2f), 0.4f)));
+        GridBaseSO depositData = SaveEntity<GridBaseSO, MineableDeposit>(depositGo, "Iron Deposit", "Iron Deposit");
+
+        // Matkap: elde tutulan alet, ucu aşağı bakar
+        GameObject drillGo = NewRoot("Drill");
+        var drillVisual = new GameObject("Visual").transform;
+        drillVisual.SetParent(drillGo.transform, false);
+        Cylinder(drillVisual, "Body", new Vector3(0f, 0.15f, 0f), new Vector3(0.18f, 0.35f, 0.18f), Mat("Drill Body", new Color(0.9f, 0.6f, 0.15f)));
+        Cylinder(drillVisual, "Handle", new Vector3(0f, 0.42f, 0f), new Vector3(0.08f, 0.2f, 0.08f), Mat("Dark", new Color(0.2f, 0.2f, 0.22f)));
+        Cylinder(drillVisual, "Bit", new Vector3(0f, -0.12f, 0f), new Vector3(0.07f, 0.22f, 0.07f), Mat("Drill Bit", new Color(0.75f, 0.78f, 0.82f)));
+        Collider(drillGo, new Vector3(0f, 0.15f, 0f), new Vector3(0.3f, 0.7f, 0.3f));
+        Drill drill = drillGo.AddComponent<Drill>();
+        Set(drill, "VisualTransform", drillVisual);
+        Set(drill, "cooldown", 0.3f);
+        Set(drill, "swing.windUpAngle", -6f);
+        Set(drill, "swing.strikeAngle", 4f);
+        Set(drill, "swing.windUpDuration", 0.06f);
+        Set(drill, "swing.strikeDuration", 0.04f);
+        Set(drill, "swing.returnDuration", 0.08f);
+        GridPlaceableSO drillData = SaveEntity<GridPlaceableSO, Drill>(drillGo, "Drill", "Drill");
 
         // Eritici: 1 cevher → 1 külçe
         GameObject smelterGo = NewRoot("Smelter");
@@ -74,7 +95,7 @@ public static class AutomationPrototypeSetup
         SetList(pad, "accepts", new Object[] { robot });
         GridPlaceableSO padData = SaveEntity<GridPlaceableSO, ShippingPad>(padGo, "Imperial Shipping", "Imperial Shipping");
 
-        // Kol: arkasından alır, önüne koyar (ön = +Z)
+        // Kol: girişinden alır, çıkışına koyar (yönler oyunda tıklayarak ayarlanır)
         GameObject armGo = NewRoot("Arm");
         Cylinder(armGo.transform, "Base", new Vector3(0f, -0.38f, 0f), new Vector3(0.4f, 0.12f, 0.4f), Mat("Arm", new Color(0.55f, 0.55f, 0.6f)));
         var pivot = new GameObject("Pivot").transform;
@@ -94,17 +115,17 @@ public static class AutomationPrototypeSetup
         var catalog = AssetDatabase.LoadAssetAtPath<BuildCatalogSO>("Assets/Build Catalog.asset");
         if (catalog != null)
         {
-            Undo.RecordObject(catalog, "Otomasyon prototipi");
+            catalog.Categories.RemoveAll(c => c.Name == "Automation");
             catalog.Categories.Insert(0, new BuildCatalogSO.Category
             {
                 Name = "Automation",
-                Items = new List<GridEntitySOBase> { minerData, armData, smelterData, assemblerData, padData }
+                Items = new List<GridEntitySOBase> { drillData, armData, smelterData, assemblerData, padData }
             });
             EditorUtility.SetDirty(catalog);
         }
         else Debug.LogWarning("Assets/Build Catalog.asset bulunamadı; Automation sekmesi eklenmedi.");
 
-        // Geliştirici build mode'u: Base menüsüne maden yatağı
+        // Geliştirici build mode'u: Base menüsüne maden bloğu
         var baseMenu = AssetDatabase.LoadAssetAtPath<GridBasePlacementMenuSO>("Assets/SOData/GridPlacementMenu/Base.asset");
         if (baseMenu != null)
         {
@@ -112,7 +133,7 @@ public static class AutomationPrototypeSetup
             baseMenu.Entities.Add(depositData);
             EditorUtility.SetDirty(baseMenu);
         }
-        else Debug.LogWarning("Base yerleştirme menüsü bulunamadı; maden yatağı eklenmedi.");
+        else Debug.LogWarning("Base yerleştirme menüsü bulunamadı; maden bloğu eklenmedi.");
 
         // Kayıt listesi
         var registry = AssetDatabase.LoadAssetAtPath<SaveRegistrySO>("Assets/SOData/SaveRegistry.asset");
@@ -120,7 +141,7 @@ public static class AutomationPrototypeSetup
         {
             var serialized = new SerializedObject(registry);
             SerializedProperty entities = serialized.FindProperty("entities");
-            foreach (GridEntitySOBase data in new GridEntitySOBase[] { depositData, minerData, armData, smelterData, assemblerData, padData })
+            foreach (GridEntitySOBase data in new GridEntitySOBase[] { chunkData, depositData, drillData, armData, smelterData, assemblerData, padData })
             {
                 entities.arraySize++;
                 entities.GetArrayElementAtIndex(entities.arraySize - 1).objectReferenceValue = data;
@@ -131,11 +152,39 @@ public static class AutomationPrototypeSetup
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         EditorUtility.DisplayDialog("Otomasyon prototipi",
-            "Kuruldu.\n\n• Maden yatağı: Space (build mode) → Base menüsü\n• Madenci, kol, eritici, montaj, gönderim: alt bardaki Automation sekmesi\n\n" +
-            "Zincir: yatak + madenci → kol → eritici → kol → montaj → kol → gönderim. Kolun önü +Z (R ile döner).", "Tamam");
+            "Kuruldu. Makineler alt bardaki Automation sekmesinde, Iron Deposit build mode'un (Space) Base menüsünde.\n\n" +
+            "• E ile Drill'i al, sağ tık basılıyken bloğa nişan al, sol tıkla kaz\n" +
+            "• Düşen cevheri E ile al, sağ tık basılıyken eriticiye nişan al, sol tıkla içine koy\n" +
+            "• Kollar: sol tık çıkış, Shift + sol tık giriş yönü", "Tamam");
     }
 
     // --- Yardımcılar ---
+
+    // Silinen eski prototip asset'lerinin menü ve kayıttaki boş kalan girişleri
+    private static void CleanReferences()
+    {
+        var catalog = AssetDatabase.LoadAssetAtPath<BuildCatalogSO>("Assets/Build Catalog.asset");
+        if (catalog != null)
+        {
+            catalog.Categories.RemoveAll(c => c.Name == "Automation");
+            EditorUtility.SetDirty(catalog);
+        }
+        var baseMenu = AssetDatabase.LoadAssetAtPath<GridBasePlacementMenuSO>("Assets/SOData/GridPlacementMenu/Base.asset");
+        if (baseMenu != null && baseMenu.Entities != null)
+        {
+            baseMenu.Entities.RemoveAll(e => e == null);
+            EditorUtility.SetDirty(baseMenu);
+        }
+        var registry = AssetDatabase.LoadAssetAtPath<SaveRegistrySO>("Assets/SOData/SaveRegistry.asset");
+        if (registry != null)
+        {
+            var serialized = new SerializedObject(registry);
+            SerializedProperty entities = serialized.FindProperty("entities");
+            for (int i = entities.arraySize - 1; i >= 0; i--)
+                if (entities.GetArrayElementAtIndex(i).objectReferenceValue == null) entities.DeleteArrayElementAtIndex(i);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+    }
 
     private static ItemSO Item(string name, Color color)
     {
@@ -203,6 +252,7 @@ public static class AutomationPrototypeSetup
             case float f: property.floatValue = f; break;
             case int i: property.intValue = i; break;
             case string s: property.stringValue = s; break;
+            case Vector3 v: property.vector3Value = v; break;
         }
         serialized.ApplyModifiedPropertiesWithoutUndo();
     }

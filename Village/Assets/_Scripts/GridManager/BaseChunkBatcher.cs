@@ -7,6 +7,9 @@ using UnityEngine.Rendering;
 // build modu), static batching sadece sahnede baştan duranları birleştirir. Birleşen base'in kendi renderer'ları kapanır;
 // collider'ı ve GridBase'i yerinde kalır (eldiven, raycast'ler değişmez). Base eklenip silinince sadece o bölge kare
 // sonunda (Flush) yeniden kurulur. Mesh'lerin Read/Write'ı açık olmalı (CombineMeshes runtime'da okur).
+// Görüntüsü oyunda değişen base (örn. kazılan maden bloğu): birleştirilmez, kendi renderer'larıyla çizilir
+public interface IUnbatchedBase { }
+
 public class BaseChunkBatcher
 {
     private const int ChunkSize = 16;
@@ -24,7 +27,7 @@ public class BaseChunkBatcher
 
     public void Add(GridBase entity)
     {
-        if (entity == null || chunkOf.ContainsKey(entity)) return;
+        if (entity == null || entity is IUnbatchedBase || chunkOf.ContainsKey(entity)) return;
         Vector3 position = entity.transform.position;
         var key = new Vector2Int(Mathf.FloorToInt(position.x / ChunkSize), Mathf.FloorToInt(position.z / ChunkSize));
         if (!chunks.TryGetValue(key, out Chunk chunk)) chunks[key] = chunk = new Chunk();

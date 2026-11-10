@@ -1,18 +1,14 @@
 using System;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class CameraController : MonoBehaviour
 {
     public static event Action<CameraFacing> OnCameraRotation;
 
-    // Kameranın şu an baktığı yön (90° adımlar). Ağaç okları buna göre, ihtiyaç anında konumlanır.
+    // Kameranın şu an baktığı yön (en yakın 90° adım; serbest dönüşte açıya en yakın olan). Ağaç okları buna göre.
     public static CameraFacing CurrentFacing { get; private set; } = CameraFacing.Deg0;
 
-    private static readonly CameraFacing[] FacingSequence =
-    {
-        CameraFacing.Deg0, CameraFacing.DegNeg90, CameraFacing.DegNeg180, CameraFacing.Deg90
-    };
-    private int facingIndex = 0;
 
     [Header("Movement")]
     [SerializeField] private float speed;
@@ -24,8 +20,10 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float focusSharpness = 3f;
 
     [Header("Rotation")]
-    [SerializeField] private float rotationAngle = 90f;
-    [SerializeField] private float rotationSpeed = 200f;
+    [Tooltip("Sağ tık basılıyken sürükleme: mouse'un her pikseli kaç derece döndürür (kullanıcı: Q/E yerine sağ tık)")]
+    [SerializeField] private float dragDegreesPerPixel = 0.25f;
+    [Tooltip("Sürüklerken kamera hedef açıya bu hızla yetişir (yumuşatma)")]
+    [SerializeField] private float dragSharpness = 18f;
     [SerializeField] private float fallbackOrbitDistance = 10f;
     [Tooltip("Dönüş merkezi: ekranın ortasında görünen collider. Hangi layer'lar sayılsın")]
     [SerializeField] private LayerMask pivotMask = ~0;
@@ -52,6 +50,9 @@ public class CameraController : MonoBehaviour
 
     // Açıkken WASD kamerayı oynatmaz (örn. odun birleştirirken WASD bağlantı yerlerini gezer)
     public static bool MovementLocked { get; set; }
+
+    // Sağ tık sürüklenerek kamera döndürülüyor: bu sırada sağ tık obje tutmaz (InteractableController)
+    public static bool IsDragRotating { get; private set; }
     private static Vector3 lastFollowPosition;
 
     public static void Follow(Transform target)
@@ -72,28 +73,55 @@ public class CameraController : MonoBehaviour
 
     void Awake()
     {
-        CurrentFacing = FacingSequence[facingIndex]; // static: önceki Play oturumundan kalmasın
+        CurrentFacing = CameraFacing.Deg0; // static: önceki Play oturumundan kalmasın
         followTarget = null;
-        InputManager.OnE += RotateRight;
-        InputManager.OnQ += RotateLeft;
+        IsDragRotating = false;
         currentYaw = transform.eulerAngles.y;
+        startYaw = currentYaw;
 
         float t = Mathf.InverseLerp(minHeight, maxHeight, transform.position.y);
         pitch = Mathf.Lerp(minPitch, maxPitch, t);
         transform.rotation = Quaternion.Euler(pitch, currentYaw, 0);
     }
 
-    void OnDestroy()
-    {
-        InputManager.OnE -= RotateRight;
-        InputManager.OnQ -= RotateLeft;
-    }
-
     void LateUpdate()
     {
         HandleMovement();
+        HandleDrag();
         HandleRotation();
         HandleZoom();
+    }
+
+    private float startYaw;
+
+    // Sağ tık basılı + sürükle: kamera dönüş merkezinin etrafında serbestçe döner. Basıldığı anda elde obje varsa
+    // (sağ tık bir objeyi tuttuysa) dönmez. (Kullanıcı 2026-11-10: Q / E dönüşü kaldırıldı.)
+    private void HandleDrag()
+    {
+        Mouse mouse = Mouse.current;
+        if (mouse == null) return;
+        if (mouse.rightButton.wasPressedThisFrame && !IsHoldingSomething())
+        {
+            BeginOrbit();
+            targetYaw = currentYaw;
+            IsDragRotating = true;
+            isRotating = true;
+        }
+        if (IsDragRotating && !mouse.rightButton.isPressed) IsDragRotating = false;
+        if (IsDragRotating) targetYaw += mouse.delta.ReadValue().x * dragDegreesPerPixel;
+    }
+
+    private static bool IsHoldingSomething() => InteractableController.Instance != null && InteractableController.Instance.IsHolding;
+
+    private void UpdateFacing()
+    {
+        float relative = Mathf.DeltaAngle(startYaw, currentYaw);
+        int steps = Mathf.RoundToInt(relative / 90f);
+        int quarter = ((steps % 4) + 4) % 4;
+        var facing = (CameraFacing)(quarter switch { 0 => 0, 1 => 90, 2 => -180, _ => -90 });
+        if (facing == CurrentFacing) return;
+        CurrentFacing = facing;
+        OnCameraRotation?.Invoke(CurrentFacing);
     }
 
     private void HandleMovement()
@@ -145,14 +173,9 @@ public class CameraController : MonoBehaviour
         transform.position += currentVelocity * Time.deltaTime;
     }
 
-    // E sağa, Q sola 90°. Elde obje varken de çalışır (tutulan obje ayrıca R ile döner).
-    private void RotateRight() => StartRotation(1);
-    private void RotateLeft() => StartRotation(-1);
-
-    private void StartRotation(int direction)
+    // Dönüş merkezi ve yörünge uzaklığı (dönüş başında bir kez)
+    private void BeginOrbit()
     {
-        if (isRotating) return;
-
         lockedY = transform.position.y;
 
         // Dönüş merkezi ekranın ortasında gerçekten görünen nokta: kamera aynı yükseklik ve yatay uzaklıkta onun
@@ -193,20 +216,14 @@ public class CameraController : MonoBehaviour
         Vector3 flatCamPos = new Vector3(transform.position.x, 0, transform.position.z);
         Vector3 flatPivot = new Vector3(pivotPoint.x, 0, pivotPoint.z);
         currentOrbitDistance = Vector3.Distance(flatCamPos, flatPivot);
-
-        targetYaw = currentYaw - rotationAngle * direction;
-        isRotating = true;
-
-        facingIndex = (facingIndex + direction + FacingSequence.Length) % FacingSequence.Length;
-        CurrentFacing = FacingSequence[facingIndex];
-        OnCameraRotation?.Invoke(CurrentFacing);
     }
 
     private void HandleRotation()
     {
         if (!isRotating) return;
 
-        currentYaw = Mathf.MoveTowardsAngle(currentYaw, targetYaw, rotationSpeed * Time.deltaTime);
+        currentYaw = Mathf.LerpAngle(currentYaw, targetYaw, 1f - Mathf.Exp(-dragSharpness * Time.deltaTime));
+        UpdateFacing();
 
         Vector3 facing = Quaternion.Euler(0, currentYaw, 0) * Vector3.forward;
         Vector3 newPos = pivotPoint - facing * currentOrbitDistance;
@@ -215,7 +232,7 @@ public class CameraController : MonoBehaviour
         transform.position = newPos;
         transform.rotation = Quaternion.Euler(pitch, currentYaw, 0);
 
-        if (Mathf.Abs(Mathf.DeltaAngle(currentYaw, targetYaw)) < 0.05f)
+        if (!IsDragRotating && Mathf.Abs(Mathf.DeltaAngle(currentYaw, targetYaw)) < 0.05f)
         {
             currentYaw = targetYaw;
             isRotating = false;

@@ -21,8 +21,9 @@ public class ItemAmount
 
 // Otomasyon makinelerinin ortak tabanı: grid'de durur, elle taşınabilir (MovablePlaceable), merkezi saatle çalışır,
 // çıkış yuvasındaki parçaları üstünde küçük küpler olarak gösterir, üstünde durum yazısı (prototip) taşır.
-// Sadece grid'e yerleşikken çalışır (elde taşınırken durur).
-public abstract class Machine : MovablePlaceable, IItemPort, IAutomationTick
+// Sadece grid'e yerleşikken çalışır (elde taşınırken durur). Elde tutulan cevher topağı (OreChunk) makinenin üstüne
+// getirilip sol tıklanınca bir tanesi girişe girer (IToolTarget).
+public abstract class Machine : MovablePlaceable, IItemPort, IAutomationTick, IToolTarget
 {
     [Header("Görünüm (prototip)")]
     [Tooltip("Çıkış yuvasındaki parçalar bu yükseklikte (pivottan) küçük küpler olarak dizilir")]
@@ -89,6 +90,17 @@ public abstract class Machine : MovablePlaceable, IItemPort, IAutomationTick
         outputItem = item;
         outputCount += count;
     }
+
+    // --- IToolTarget: elle getirilen cevher topağı ---
+    public Vector3 GetToolTargetPosition(IInteractable interacted, out bool accept)
+    {
+        accept = interacted is OreChunk chunk && CanAccept(chunk.Item);
+        return transform.position + Vector3.up * 0.9f;
+    }
+
+    public Quaternion GetToolTargetRotation() => Quaternion.identity;
+    public void OnToolTargetExit() { }
+    public bool OnToolUsed(IInteractable tool) => tool is OreChunk chunk && chunk.GiveOne(this);
 
     // --- Görünüm ---
     private void CreateLabel()

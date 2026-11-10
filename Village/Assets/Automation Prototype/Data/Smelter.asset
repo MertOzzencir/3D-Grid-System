@@ -21,4 +21,4 @@ MonoBehaviour:
   layoutSize: {x: 1, y: 1, z: 1}
   legacySize: {x: 0, y: 0}
   legacyMask: 
-  Prefab: {fileID: 5304739746368224953, guid: 5886749df874db649a35f433dcebac98, type: 3}
+  Prefab: {fileID: 4320339735121259215, guid: 5886749df874db649a35f433dcebac98, type: 3}
