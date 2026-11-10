@@ -13,6 +13,27 @@ gölgeleri, kenar ışığı, rüzgâr, diorama render menüsü. Kalan: grid, ye
 ağaç + balta, eldiven (karakter gelince değişecek), toon ışık (muhtemelen gidecek), envanter, uçuşanlar, yaratık altyapısı
 (GridWalker / yol bulma: düşmanlar için), kayıt, kamera. Bu dosyada silinen sistemlerden kalan söz geçen yerler tarihsel.
 
+## Otomasyon (prototip, `_Scripts/Automation`, 2026-11-10)
+- **Parça** (`ItemSO`: ad + renk): sahnede obje değil, makinelerin yuvalarında sayı (kullanıcı: yerde bekleyen parça yok,
+  sadece yuvadan yuvaya). Görünüş: makinenin üstünde küçük renkli küpler, kolun elinde bir küp (`Machine.MaterialFor`).
+- **Saat** (`AutomationTicker`): tek sabit adım (`Step` 0.1 s), her adımda önce makineler sonra kollar, kayıt sırasıyla
+  (öngörülebilir, redstone gibi). Sahnede kurulum yok, ilk kayıtta `Automation Ticker` objesini kendisi yaratır.
+- **Makine** (`Machine : MovablePlaceable, IItemPort`): elle taşınır, sadece grid'e yerleşikken (`IsPlaced`) çalışır;
+  çıkış yuvası (`outputCapacity` 10) + üstünde durum yazısı (TMP, kameraya bakar). `Miner` (altındaki hücrede
+  `OreDeposit : GridBase` varsa `interval` saniyede 1 cevher), `Processor` (tarif: `inputs` → `output`, `craftSeconds`,
+  girdi yuvası tarifin `bufferCrafts` katı), `ShippingPad` (İmparatorluğa giden parçaları alır ve sayar; araçlar sonra).
+- **Kol** (`Arm`): giriş yönündeki komşu makinenin çıkışından alır, çıkış yönündekinin girişine koyar (kabul etmezse
+  elinde bekler); döngü bekle → al → dön → bırak → geri dön (`swingSeconds`). Yönler dört yönden herhangi biri,
+  kolun kendi dönüşüne göre (`inputSide` / `outputSide`; kullanıcı): boş elle sol tık çıkışı, Shift + sol tık girişi
+  saat yönünde çevirir, aynı yöne gelemezler; R ile kol dönünce ikisi birlikte döner. İşaretler: yeşil giriş, turuncu
+  çıkış. Yönler kayda girer (`ISaveState`). Komşu makine aynı katta yoksa bir üst / alt kata bakar (madenci yatağın
+  üstünde bir kat yukarıda). Makinelerin içindekiler henüz kaydedilmez.
+- **Kurulum:** `Village → Otomasyon Prototipini Kur` (`Editor/AutomationPrototypeSetup`): `Assets/Automation Prototype`
+  altında gri kutu prefab'lar, parça / yerleştirme verileri, malzemeler; build menüsüne "Automation" sekmesi, Base
+  menüsüne maden yatağı, SaveRegistry'ye hepsi. Klasör varsa dokunmaz (yeniden kurmak için klasörü sil).
+- Prototip zinciri: yatak + madenci → kol → eritici (1 cevher → 1 külçe, 2 s) → kol → montaj (3 külçe → 1 robot, 4 s)
+  → kol → gönderim.
+
 ## Çalışma şekli
 - Büyük değişikliklerden önce tasarım konuşulur; kullanıcı "kodu değiştirme" dediyse sadece anlat. Karar soruları somut örnekli, seçenekli sorulur.
 - Açıklamalar sistem düzeyinde (class/metod isimleriyle) tercih edilir.

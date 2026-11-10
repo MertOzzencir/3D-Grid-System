@@ -64,6 +64,8 @@ edildi, referans için duruyor). Mevcut yazılmış sistemler kullanılabilir.
     olabilir).
   - **Filtre (karar):** ayrı bir filtre ayarı değil, farklı kol türleriyle doğal olarak: ör. sadece kaynak (ham madde)
     taşıyan kol, büyük parçaları taşıyan endüstriyel kol.
+  - **Prototip (2026-11-10, çalışıyor):** madenci, kol, eritici, montaj, gönderim; gri kutular. Kolun giriş ve çıkışı
+    elle dört yönden herhangi birine ayarlanır (kullanıcı istedi). Ayrıntı CLAUDE.md "Otomasyon".
 
 ## Oyunun özü (2026-11-06, PARK EDİLDİ 2026-11-10)
 
