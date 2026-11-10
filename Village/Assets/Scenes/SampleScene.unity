@@ -2487,7 +2487,7 @@ MonoBehaviour:
     color: {r: 0.86, g: 0.74, b: 0.52, a: 1}
     thickness: 0.05625
     surface: 0.01
-    bandSpacing: 2
+    bandSpacing: 0
     cornerRadius: 0.6
     cornerPull: 0.1
     edgeBow: 0.04

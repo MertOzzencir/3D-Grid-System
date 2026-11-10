@@ -52,6 +52,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
     private readonly List<Cell> cells = new List<Cell>();
     private readonly HashSet<Vector3Int> occupied = new HashSet<Vector3Int>();
     private readonly Dictionary<Vector3Int, Renderer[]> pieceRenderers = new Dictionary<Vector3Int, Renderer[]>(); // sadece 1×1
+    private readonly Dictionary<Vector3Int, MeshFilter> pieceMeshes = new Dictionary<Vector3Int, MeshFilter>(); // uzun kütük için
     private readonly Dictionary<Vector3Int, Renderer[]> cellRenderers = new Dictionary<Vector3Int, Renderer[]>();  // + ip, çivi
     private Material woodMaterial;
     private int baseLength;
@@ -274,6 +275,7 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
         cells.Clear();
         occupied.Clear();
         pieceRenderers.Clear();
+        pieceMeshes.Clear();
         AddCells(shape, catalog);
     }
 
@@ -303,12 +305,33 @@ public class MergedWood : GridPlaceable, IInteractable, IStickyToolTarget, IBlue
             if (visual == null) continue;
             Renderer[] renderers = visual.GetComponentsInChildren<Renderer>();
             pieceRenderers[cell.Position] = renderers;
+            pieceMeshes[cell.Position] = visual.GetComponentInChildren<MeshFilter>();
             if (woodMaterial == null && renderers.Length > 0) woodMaterial = renderers[0].sharedMaterial;
         }
 
+        UpdateLongLogs(catalog);
         RebuildJoints();
         UpdateHiddenPieces();
         return fresh.Count;
+    }
+
+    // Uzun kütük (kullanıcı: odunlarda dual grid, şimdiki görünüşle): kendi yönünde uç uca dizili parçalar (ikisinin de
+    // ekseni aynı doğrultuda) tek kütük gibi görünür: aradaki uçlar açık (spiralsiz, düz gövde), spiral sadece kütüğün iki
+    // ucunda. Yan yana duranlar etkilenmez. Her eklemede bütün parçalar yeniden değerlendirilir (komşusu değişen değişir).
+    private void UpdateLongLogs(WoodCatalogSO catalog)
+    {
+        if (catalog == null || !catalog.HasPieceVariants) return;
+        var axisOf = new Dictionary<Vector3Int, Vector3Int>();
+        foreach (Cell cell in cells) axisOf[cell.Position] = cell.Axis;
+        foreach (Cell cell in cells)
+        {
+            if (!pieceMeshes.TryGetValue(cell.Position, out MeshFilter filter) || filter == null) continue;
+            // Parçanın yerel +Y'si (üst ucu) eksen yönünde (AddPiece: FromToRotation(up, Axis))
+            bool openTop = axisOf.TryGetValue(cell.Position + cell.Axis, out Vector3Int next) && Parallel(next, cell.Axis);
+            bool openBottom = axisOf.TryGetValue(cell.Position - cell.Axis, out Vector3Int previous) && Parallel(previous, cell.Axis);
+            Mesh mesh = catalog.PieceVariant(openBottom, openTop);
+            if (mesh != null && filter.sharedMesh != mesh) filter.sharedMesh = mesh;
+        }
     }
 
     // Görünmeyen parçalar çizilmez (kullanıcı: sahnede çok üçgen): dört yanı ve üstü dolu olan 1×1 hiçbir açıdan
